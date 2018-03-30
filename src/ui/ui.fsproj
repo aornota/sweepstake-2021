@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../shared/shared.fs" />
+    <Compile Include="../ui-render-bulma/render-common.fs" />
+    <Compile Include="../ui-render-bulma/render-bulma.fs" />
+    <Compile Include="../ui-theme-bulma/theme-common.fs" />
+    <Compile Include="../ui-theme-bulma/theme-default.fs" />
+    <Compile Include="../ui-theme-bulma/theme-dark.fs" />
+    <Compile Include="../ui-theme-bulma/theme-render-bulma.fs" />
+    <Compile Include="../ui-common/debug-messages.fs" />
+    <Compile Include="../ui-common/local-storage.fs" />
+    <Compile Include="ui-common.fs" />
+    <Compile Include="ui-state.fs" />
+    <Compile Include="ui-render.fs" />
+    <Compile Include="ui-app.fs" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

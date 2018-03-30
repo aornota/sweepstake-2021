@@ -1,0 +1,7 @@
+group server
+
+	FSharp.Core
+	Giraffe
+	Microsoft.AspNetCore
+	Microsoft.AspNetCore.StaticFiles
+	Microsoft.DotNet.Watcher.Tools

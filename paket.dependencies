@@ -1,0 +1,34 @@
+group build
+
+	source https://api.nuget.org/v3/index.json
+
+	nuget FAKE
+
+group server
+
+	source https://api.nuget.org/v3/index.json
+	storage:none
+
+	nuget FSharp.Core
+	nuget Giraffe ~> 1
+	nuget Microsoft.AspNetCore
+	nuget Microsoft.AspNetCore.StaticFiles
+	nuget Microsoft.AspNetCore.WebSockets
+	nuget TaskBuilder.fs 1.1.1
+
+	clitool Microsoft.DotNet.Watcher.Tools
+
+group ui
+
+	source https://api.nuget.org/v3/index.json
+	storage:none
+
+	nuget Elmish.Toastr
+	nuget Fable.Core
+	nuget Fable.Elmish.Debugger
+	nuget Fable.Elmish.React
+	nuget Fable.Elmish.HMR
+	nuget Fulma 1.0.0-beta-010
+    nuget Fulma.Extensions
+
+	clitool dotnet-fable

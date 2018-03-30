@@ -1,0 +1,7 @@
+.fake/
+bin/
+obj/
+node_modules/
+packages/
+paket-files/
+src/ui/public/

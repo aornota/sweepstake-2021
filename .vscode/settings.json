@@ -1,0 +1,20 @@
+{
+	"editor.detectIndentation": false,
+	"editor.fontSize": 13,
+	"files.exclude": {
+		".fake/":true,
+		".paket/":true,
+		"node_modules":true,
+		"packages/":true,
+		"paket-files/":true,
+		"src/**/bin":true,
+		"src/**/obj":true,
+		"src/ui/public/":true,
+		".gitignore":true,
+		"build.cmd":true,
+		"global.json":true,
+		"LICENSE.txt":true,
+		"paket.lock":true,
+		"yarn.lock":true
+	}
+}
