@@ -4,4 +4,5 @@ obj/
 node_modules/
 packages/
 paket-files/
+publish/
 src/ui/public/

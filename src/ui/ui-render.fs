@@ -17,6 +17,8 @@ let private renderHeader theme state dispatch =
     navbar theme navbarData [
         container (Some Fluid) [
             navbarBrand [
+                // TODO-NMB: Use different image?...
+                yield navbarItem [ image "public/resources/djnarration-24x24.png" (Some (FixedSize Square24)) ]
                 yield navbarItem [ para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = SemiBold } [ str SWEEPSTAKE_2018 ] ]
                 yield navbarBurger (fun _ -> dispatch ToggleNavbarBurger) state.NavbarBurgerIsActive ]
             navbarMenu theme navbarData state.NavbarBurgerIsActive [ 
