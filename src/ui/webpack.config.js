@@ -29,7 +29,6 @@ var babelOptions = fableUtils.resolveBabelOptions({
 });
 
 var isProduction = process.argv.indexOf("-p") >= 0;
-var port = "8088";
 console.log("Bundling for " + (isProduction ? "production" : "development") + "...");
 
 module.exports = {
@@ -41,15 +40,9 @@ module.exports = {
     filename: "./js/ui.js"
   },
   resolve: {
-    modules: [ resolve("../../node_modules/")]
+    modules: [ resolve("../../node_modules/") ]
   },
   devServer: {
-    proxy: {
-      '/api/*': {
-        target: 'http://localhost:' + port,
-        changeOrigin: true
-      }
-    },
     hot: true,
     inline: true
   },

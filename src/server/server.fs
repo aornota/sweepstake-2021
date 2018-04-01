@@ -1,48 +1,33 @@
-﻿module Aornota.Sweepstake2018.UI.App
+﻿module Aornota.Sweepstake2018.Server.Server
 
-//open Aornota.Sweepstake2018.Shared
+open Aornota.Sweepstake2018.Server.Ws
 
 open System
 open System.IO
-open System.Threading.Tasks
 
 open Microsoft.AspNetCore
 open Microsoft.AspNetCore.Builder
-open Microsoft.Extensions.DependencyInjection
 open Microsoft.AspNetCore.Hosting
+open Microsoft.Extensions.DependencyInjection
 
 open Giraffe
 
 let private uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
 let private port = 8088us
 
-let private random = Random ()
-
-let private api (fApi:unit -> 'a) next ctx = task {
-#if DEBUG
-    do! Async.Sleep (random.Next (250, 1250)) |> Async.StartAsTask
-#endif
-    let! apiResult = fApi ()
-    return! Successful.OK apiResult next ctx }
-
-let private initialize () : Task<unit> = task { return () }
-
-let webApp : HttpHandler =
-    route "/api/initialize" >=> api initialize
-
 let private configureApp (app:IApplicationBuilder) =
     app.UseStaticFiles () |> ignore
-    app.UseGiraffe webApp
+    app.UseWebSockets () |> ignore
+    app.UseMiddleware<WsMiddleware> () |> ignore
 
-let private configureServices (services:IServiceCollection) =
-    services.AddGiraffe () |> ignore
+let private configureServices (services:IServiceCollection) = services.AddGiraffe () |> ignore
 
 let private builder = WebHost.CreateDefaultBuilder ()
 
-builder.UseWebRoot (uiPath) |> ignore
-builder.UseContentRoot (uiPath) |> ignore
+builder.UseWebRoot uiPath |> ignore
+builder.UseContentRoot uiPath |> ignore
 builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
-builder.ConfigureServices (configureServices) |> ignore
+builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" port) |> ignore
 
 let private host = builder.Build ()

@@ -78,7 +78,7 @@ let private renderConnected theme (connection : Connection, messageUis, MessageI
         let notificationData, unconfirmed, errorText =
             match messageUi.MessageType with
             | Sent -> notificationLight, true, None
-            | SendFailed exn -> notificationDanger, false, Some exn.Message
+            | SendFailed errorText -> notificationDanger, false, Some errorText
             | Confirmed when messageUi.Message.FromNickname = connection.Nickname -> notificationDark, false, None
             | Confirmed -> notificationInfo, false, None
         let children = renderChildren messageUi.Message.FromNickname messageUi.Message.Contents messageUi.Timestamp unconfirmed errorText

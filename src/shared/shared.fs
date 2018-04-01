@@ -25,12 +25,13 @@ type UiWs =
     | DisconnectWs of connection : Connection
 
 type ServerWs =
-    | ConnectResultWs of result : Result<Connection, exn>
+    | ConnectResultWs of result : Result<Connection, string>
     | UserConnectedOtherWs of nickname : string
-    | SendMessageResultWs of Result<Message, MessageId * exn>
+    | SendMessageResultWs of result : Result<Message, MessageId * string>
     | SendMessageOtherWs of message : Message
-    | DisconnectResultWs of result : Result<Connection, exn>    
+    | DisconnectResultWs of result : Result<Connection, string>    
     | UserDisconnectedOtherWs of nickname : string
+    | OnReceiveErrorWs of errorText : string
 
 type Ws =
     | UiWs of uiWs : UiWs

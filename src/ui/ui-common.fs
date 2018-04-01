@@ -8,11 +8,13 @@ open Aornota.UI.Common.DebugMessages
 open Aornota.UI.Theme.Dark
 open Aornota.UI.Theme.Default
 
+open Elmish
+
 type Preferences = { UseDefaultTheme : bool }
 
 type MessageType =
     | Sent
-    | SendFailed of exn : exn
+    | SendFailed of errorText : string
     | Confirmed
 
 type MessageUi = {
@@ -26,17 +28,21 @@ type Input =
     | ToggleNavbarBurger
     | ReadPreferencesResult of result : Result<Preferences option, exn>
     | WritePreferencesResult of result : Result<unit, exn>
-    | InitializeWsResult of result : Result<UiWs -> Async<Input>, exn>
-    | WsNotInitialized of uiWs : UiWs
+    | OnWsOpen of sendUiWsCmd : (UiWs -> Cmd<Input>)
+    | OnWsError
+    | OnWsMessageError of exn : exn
+    | OnServerReceiveWsError of errorText : string
+    | OnSendUiWsNotInitialized of uiWs : UiWs
+    | OnSendUiWsNotOpen of uiWs : UiWs
     | NicknameTextChanged of nicknameText : string
     | Connect
-    | ConnectResult of result : Result<Connection, exn>
+    | ConnectResult of result : Result<Connection, string>
     | DismissMessage of messageId : MessageId
     | MessageTextChanged of messageText : string
     | SendMessage
-    | SendMessageResult of Result<Message, MessageId * exn>
+    | SendMessageResult of Result<Message, MessageId * string>
     | Disconnect
-    | DisconnectResult of result : Result<Connection, exn>
+    | DisconnectResult of result : Result<Connection, string>
     | SendMessageOther of message : Message
     | UserConnectedOther of nickname : string
     | UserDisconnectedOther of nickname : string
@@ -55,7 +61,7 @@ type State = {
     UseDefaultTheme : bool
     NavbarBurgerIsActive : bool
     Status : Status
-    SendWsCmdAsync : UiWs -> Async<Input> }
+    SendUiWsCmd : UiWs -> Cmd<Input> }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (pre-α)"
 

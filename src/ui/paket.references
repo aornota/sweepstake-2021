@@ -1,11 +1,12 @@
 group ui
 
 	Elmish.Toastr
-	FSharp.Core
+	Fable.Core
 	Fable.Elmish.Debugger
 	Fable.Elmish.React
 	Fable.Elmish.HMR
-	Fable.Core
-	dotnet-fable
+	FSharp.Core
 	Fulma
     Fulma.Extensions
+
+	dotnet-fable

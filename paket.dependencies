@@ -9,11 +9,13 @@ group server
 	source https://api.nuget.org/v3/index.json
 	storage:none
 
+    nuget Fable.JsonConverter
 	nuget FSharp.Core
 	nuget Giraffe ~> 1
 	nuget Microsoft.AspNetCore
 	nuget Microsoft.AspNetCore.StaticFiles
 	nuget Microsoft.AspNetCore.WebSockets
+    nuget Newtonsoft.Json
 	nuget TaskBuilder.fs 1.1.1
 
 	clitool Microsoft.DotNet.Watcher.Tools
