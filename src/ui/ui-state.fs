@@ -120,9 +120,9 @@ let transition input state =
         { state with DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, Cmd.none
     | InitializeWsResult (Ok sendWsCmdAsync) ->
         // TEMP-NMB: Auto-connect...
-        { state with Status = NotConnected (ConnectionId.Create (), "neph", None, None) ; SendWsCmdAsync = sendWsCmdAsync }, Cmd.ofMsg Connect
+        //{ state with Status = NotConnected (ConnectionId.Create (), "neph", None, None) ; SendWsCmdAsync = sendWsCmdAsync }, Cmd.ofMsg Connect
         // ...or not...
-        //{ state with Status = NotConnected (ConnectionId.Create (), String.Empty, None, None) ; SendWsCmdAsync = sendWsCmdAsync }, Cmd.none
+        { state with Status = NotConnected (ConnectionId.Create (), String.Empty, None, None) ; SendWsCmdAsync = sendWsCmdAsync }, Cmd.none
         // ...NMB-TEMP
     | InitializeWsResult (Error exn) ->
         let debugMessage = Some (debugMessage (errorText (sprintf "InitializeWsResult -> %s" exn.Message)))
@@ -152,20 +152,20 @@ let transition input state =
             match state.Status with
             | Connecting connection' when connection' = connection ->
                 // TEMP-NMB: Test data...
-                let messageUis = 
+                (*let messageUis = 
                     [
                         { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Hello?" } ; MessageType = Sent; Timestamp = DateTime.Now }
-                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Sorry.\nReally." } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-17.) }
-                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "(W*nking)" } ; MessageType = SendFailed (exn "Message '(W*nking)' is inappropriate") ; Timestamp = DateTime.Now.AddSeconds (-33.) }
-                        { Message = { MessageId = MessageId.Create () ; FromNickname = "bubbles" ; Contents = "(Lurking)" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-45.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Sorry\nReally" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-17.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "I am w*nking as I write this..." } ; MessageType = SendFailed (exn "Message 'I am w*nking as I write this...' is inappropriate") ; Timestamp = DateTime.Now.AddSeconds (-33.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = "bubbles" ; Contents = "Lurking" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-45.) }
                         { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Where's bubbles?" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-2.2) }
-                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = "buttercup" ; Contents = "Hi blossom!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-3.) }
-                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Yo." } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-5.8) }
-                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = "blossom" ; Contents = "Hiya!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-8.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = "buttercup" ; Contents = "Hi blossom!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-3.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Yo!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-5.8) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = "blossom" ; Contents = "Hiya!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-8.) }
                     ]
-                Connected (connection, messageUis, MessageId.Create (), String.Empty), successToastCmd "You have connected", None
+                Connected (connection, messageUis, MessageId.Create (), String.Empty), successToastCmd "You have connected", None*)
                 // ...or not...
-                //Connected (connection, [], String.Empty), successToastCmd "You have connected", None
+                Connected (connection, [], MessageId.Create (), String.Empty), successToastCmd "You have connected", None
                 // ...NMB-TEMP
             | Connecting connection' ->
                 state.Status, Cmd.none, Some (debugMessage (shouldNeverHappenText (sprintf "Connecting %A but ConnectResult (Ok _) is %A" connection' connection)))
