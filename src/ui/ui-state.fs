@@ -61,14 +61,15 @@ let private initializeWsSub dispatch =
             | OnReceiveErrorWs exn -> dispatch (OnServerReceiveWsError exn)
         with exn -> dispatch (OnWsMessageError exn)
 #if DEBUG
-    let url = "ws://localhost:8088/api/ws" // cf. port in ..\server\server.fs
+    let wsUrl = sprintf "ws://localhost:%i" WS_PORT
 #else
-    // TODO-NMB: Confirm "production" url (e.g. Azure app service?)...
-    let url = "wss://localhost:8088/api/ws"
+    // TODO-NMB: Confirm "production" wsUrl (e.g. Azure app service?)...
+    let wsUrl = sprintf "wss://localhost:%i" WS_PORT
 #endif
-    let ws = Brw.WebSocket.Create url
+    let wsApiUrl = sprintf "%s%s" wsUrl WS_API
+    let ws = Brw.WebSocket.Create wsApiUrl
     ws.onopen <- (fun _ -> dispatch (OnWsOpen (sendUiWsCmd ws)))
-    ws.onerror <- (fun _ -> dispatch OnWsError)
+    ws.onerror <- (fun _ -> dispatch (OnWsError wsApiUrl))
     ws.onmessage <- onWsMessage
     ()
 
@@ -136,11 +137,15 @@ let transition input state =
                 // ...NMB-TEMP
             | _ -> state.Status, state.SendUiWsCmd, Cmd.none, Some (debugMessage (shouldNeverHappenText "OnWsOpen input when Status is not InitializingWS"))
         { state with Status = status ; SendUiWsCmd = sendUiWsCmd ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
-    | OnWsError ->
+    | OnWsError wsApiUrl ->
         let status, cmd, debugMessage =
             match state.Status with
-            | InitializingWS -> ServiceUnavailable, errorToastCmd "Service is not available", Some (debugMessage (errorText "OnWsError input [Status is InitializingWS]"))
-            | _ -> state.Status, Cmd.none, Some (debugMessage (errorText "OnWsError input [Status is not InitializingWS]"))
+            | InitializingWS ->
+                let debugMessage = Some (debugMessage (errorText (sprintf "OnWsError input [Status is InitializingWS] -> %s" wsApiUrl)))
+                ServiceUnavailable, errorToastCmd "Service is not available", debugMessage
+            | _ ->
+                let debugMessage = Some (debugMessage (errorText (sprintf "OnWsError input [Status is not InitializingWS] -> %s" wsApiUrl)))
+                state.Status, Cmd.none, debugMessage
         { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
     | OnWsMessageError exn ->
         let debugMessage = Some (debugMessage (errorText (sprintf "OnWsMessageError -> %s" exn.Message)))

@@ -1,6 +1,7 @@
 ﻿module Aornota.Sweepstake2018.Server.Server
 
 open Aornota.Sweepstake2018.Server.Ws
+open Aornota.Sweepstake2018.Shared
 
 open System
 open System.IO
@@ -13,7 +14,6 @@ open Microsoft.Extensions.DependencyInjection
 open Giraffe
 
 let private uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
-let private port = 8088us
 
 let private configureApp (app:IApplicationBuilder) =
     app.UseStaticFiles () |> ignore
@@ -28,7 +28,7 @@ builder.UseWebRoot uiPath |> ignore
 builder.UseContentRoot uiPath |> ignore
 builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
-builder.UseUrls (sprintf "http://0.0.0.0:%i/" port) |> ignore
+builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
 let private host = builder.Build ()
 

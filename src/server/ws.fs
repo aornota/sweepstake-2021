@@ -111,7 +111,7 @@ let private wsAgent = WsAgent ()
 type WsMiddleware (next:RequestDelegate) =
     member __.Invoke (ctx:HttpContext) = 
         async {
-            if ctx.Request.Path = PathString ("/api/ws") then
+            if ctx.Request.Path = PathString (WS_API) then
                 match ctx.WebSockets.IsWebSocketRequest with
                 | true ->
 #if DEBUG

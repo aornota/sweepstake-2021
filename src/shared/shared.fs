@@ -36,3 +36,6 @@ type ServerWs =
 type Ws =
     | UiWs of uiWs : UiWs
     | ServerWs of serverWs : ServerWs
+
+let [<Literal>] WS_PORT = 8088us
+let [<Literal>] WS_API = "/api/ws"

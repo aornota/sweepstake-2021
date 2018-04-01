@@ -29,7 +29,7 @@ type Input =
     | ReadPreferencesResult of result : Result<Preferences option, exn>
     | WritePreferencesResult of result : Result<unit, exn>
     | OnWsOpen of sendUiWsCmd : (UiWs -> Cmd<Input>)
-    | OnWsError
+    | OnWsError of wsApiUrl : string
     | OnWsMessageError of exn : exn
     | OnServerReceiveWsError of errorText : string
     | OnSendUiWsNotInitialized of uiWs : UiWs
