@@ -39,16 +39,17 @@ let private writePreferencesCmd useDefaultTheme =
     let writePreferences useDefaultTheme = async { do writeJson APP_PREFERENCES_KEY (toJson { UseDefaultTheme = useDefaultTheme }) }
     Cmd.ofAsync writePreferences useDefaultTheme (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
 
+// Note: Causes mysterious JavaScript errors if defined within initializeWsCmd (below).
 let private sendWsCmdAsync ws uiWs = async {
     // TEMP-NMB: Snooze - and fake error...
     do! Async.Sleep (random.Next (250, 1250))
-    if (random.NextDouble () < 0.1) then failwith "Fake sendWsCmdAsync error! Even sadder"
+    if (random.NextDouble () < 0.1) then failwith "Fake sendWsCmdAsync error"
     // ...NMB-TEMP
     let input =
         match uiWs with
         | ConnectWs connection ->
             // TEMP-NMB: Fake error...
-            if connection.Nickname = "satan" then failwith "satan is a reserved nickname"
+            if connection.Nickname = "satan" then failwith "'satan' is a reserved nickname"
             // ...NMB-TEMP
             // TODO-NMB: Implement via ws...
             ConnectResult (Ok connection)
@@ -56,11 +57,11 @@ let private sendWsCmdAsync ws uiWs = async {
             // TEMP-NMB: Fake error...
             if (random.NextDouble () < 0.1) then failwith (sprintf "Message '%s' is inappropriate" message.Contents)
             // ...NMB-TEMP
-            // TODO-NMB: Implement via ws...
+            // TODO-NMB: Implement via ws [and using connectionId]...
             SendMessageResult (Ok message)
         | DisconnectWs connection ->
             // TEMP-NMB: Fake error...
-            if connection.Nickname = "god" then failwith "god cannot disconnect"
+            if connection.Nickname = "god" then failwith "'god' cannot disconnect"
             // ...NMB-TEMP
             // TODO-NMB: Implement via ws...
             DisconnectResult (Ok connection)
@@ -70,7 +71,7 @@ let private initializeWsCmd =
     let initializeWs () = async {
         // TEMP-NMB: Snooze - and fake error...
         do! Async.Sleep (random.Next (100, 500))
-        if (random.NextDouble () < 0.1) then failwith "Fake initializeWs error! Sad"
+        if (random.NextDouble () < 0.1) then failwith "Fake initializeWs error"
         // ...NMB-TEMP
         // TODO-NMB: Implement ws...
         let ws = ()
@@ -104,6 +105,7 @@ let transition input state =
         // TEMP-NMB: Test using "uninitialized" SendWsCmdAsync...
         //let cmd = sendWsCmd state.SendWsCmdAsync (ConnectWs { ConnectionId = ConnectionId.Create () ; Nickname = "uninitializedWs" }) (Error >> ConnectResult)
         //{ state with UseDefaultTheme = preferences.UseDefaultTheme ; Status = InitializingWS }, Cmd.batch [ cmd ; initializeWsCmd ]
+        // ...or not...
         { state with UseDefaultTheme = preferences.UseDefaultTheme ; Status = InitializingWS }, initializeWsCmd
         // ...NMB-TEMP
     | ReadPreferencesResult (Ok None) ->
@@ -150,18 +152,18 @@ let transition input state =
             match state.Status with
             | Connecting connection' when connection' = connection ->
                 // TEMP-NMB: Test data...
-                let messages = 
+                let messageUis = 
                     [
-                        Sent ({ MessageId = MessageId.Create () ; Nickname = connection.Nickname ; Contents = "Test self-message #5" }, DateTime.Now)
-                        SendFailed ({ MessageId = MessageId.Create () ; Nickname = connection.Nickname ; Contents = "Test self-message #4" }, DateTime.Now.AddSeconds (-17.))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = connection.Nickname ; Contents = "Test self-message #3" }, DateTime.Now.AddSeconds (-33.))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = "bubbles" ; Contents = "Test message #3" }, DateTime.Now.AddSeconds (-45.))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = connection.Nickname ; Contents = "Test self-message #2" }, DateTime.Now.AddMinutes (-2.2))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = "buttercup" ; Contents = "Test message #2" }, DateTime.Now.AddMinutes (-3.))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = connection.Nickname ; Contents = "Test self-message #1" }, DateTime.Now.AddMinutes (-5.8))
-                        Received ({ MessageId = MessageId.Create () ; Nickname = "blossom" ; Contents = "Test message #1" }, DateTime.Now.AddMinutes (-8.))
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Hello?" } ; MessageType = Sent; Timestamp = DateTime.Now }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Sorry.\nReally." } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-17.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "(W*nking)" } ; MessageType = SendFailed (exn "Message '(W*nking)' is inappropriate") ; Timestamp = DateTime.Now.AddSeconds (-33.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = "bubbles" ; Contents = "(Lurking)" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddSeconds (-45.) }
+                        { Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Where's bubbles?" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-2.2) }
+                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = "buttercup" ; Contents = "Hi blossom!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-3.) }
+                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = connection.Nickname ; Contents = "Yo." } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-5.8) }
+                        //{ Message = { MessageId = MessageId.Create () ; FromNickname = "blossom" ; Contents = "Hiya!" } ; MessageType = Confirmed; Timestamp = DateTime.Now.AddMinutes (-8.) }
                     ]
-                Connected (connection, messages, MessageId.Create (), String.Empty), successToastCmd "You have connected", None
+                Connected (connection, messageUis, MessageId.Create (), String.Empty), successToastCmd "You have connected", None
                 // ...or not...
                 //Connected (connection, [], String.Empty), successToastCmd "You have connected", None
                 // ...NMB-TEMP
@@ -175,7 +177,14 @@ let transition input state =
             | Connecting connection -> NotConnected (ConnectionId.Create (), connection.Nickname, None, Some exn.Message), None
             | _ -> state.Status, Some (debugMessage (shouldNeverHappenText "ConnectResult (Error _) input when Status is not Connecting"))        
         { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, Cmd.none
-    //| DismissMessage messageId -> // TODO-NMB: Silently ignore unknown messageId?...
+    | DismissMessage messageId -> // note: silently ignore unknown messageId
+        let status, debugMessage =
+            match state.Status with
+            | Connected (connection, messageUis, messageId', messageText) ->
+                let messageUis = messageUis |> List.filter (fun messageUi -> messageUi.Message.MessageId <> messageId)
+                Connected (connection, messageUis, messageId', messageText), None
+            | _ -> state.Status, Some (debugMessage (shouldNeverHappenText "DismissMessage input when Status is not Connected"))
+        { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, Cmd.none
     | MessageTextChanged messageText ->
         let status, debugMessage =
             match state.Status with
@@ -185,14 +194,38 @@ let transition input state =
     | SendMessage ->
         let status, cmd, debugMessage =
             match state.Status with
-            | Connected (connection, messages, messageId, messageText) ->
-                let message = { MessageId = messageId ; Nickname = connection.Nickname ; Contents = messageText }
+            | Connected (connection, messageUis, messageId, messageText) ->
+                let message = { MessageId = messageId ; FromNickname = connection.Nickname ; Contents = messageText }
                 let cmd = sendWsCmd state.SendWsCmdAsync (SendMessageWs (connection.ConnectionId, message)) (fun exn -> SendMessageResult (Error (messageId, exn)))
-                Connected (connection, Sent (message, DateTime.Now) :: messages, MessageId.Create (), String.Empty), cmd, None
+                Connected (connection, { Message = message ; MessageType = Sent ; Timestamp = DateTime.Now } :: messageUis, MessageId.Create (), String.Empty), cmd, None
             | _ -> state.Status, Cmd.none, Some (debugMessage (shouldNeverHappenText "SendMessage input when Status is not Connected"))
         { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
-    //| SendMessageResult (Ok message) -> // TODO-NMB: Change from Sent to Received...
-    //| SendMessageResult (Error (messageId, exn)) -> // TODO-NMB: Change from Sent to SendFailed...
+    | SendMessageResult (Ok message) ->
+        let status, debugMessage =
+            match state.Status with
+            | Connected (connection, messageUis, messageId, messageText) ->
+                let messageUis =
+                    messageUis
+                    |> List.map (fun messageUi ->
+                        match messageUi.MessageType with
+                        | Sent when messageUi.Message.MessageId = message.MessageId -> { messageUi with MessageType = Confirmed }
+                        | _ -> messageUi)
+                Connected (connection, messageUis, messageId, messageText), None
+            | _ -> state.Status, Some (debugMessage (shouldNeverHappenText "SendMessageResult (Ok _) input when Status is not Connected"))
+        { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, Cmd.none
+    | SendMessageResult (Error (messageId, exn)) ->
+        let status, debugMessage, cmd =
+            match state.Status with
+            | Connected (connection, messageUis, messageId', messageText) ->
+                let messageUis =
+                    messageUis
+                    |> List.map (fun messageUi ->
+                        match messageUi.MessageType with
+                        | Sent when messageUi.Message.MessageId = messageId -> { messageUi with MessageType = SendFailed exn }
+                        | _ -> messageUi)
+                Connected (connection, messageUis, messageId', messageText), None, errorToastCmd "Unable to send message"
+            | _ -> state.Status, Some (debugMessage (shouldNeverHappenText "SendMessageResult (Error _) input when Status is not Connected")), Cmd.none
+        { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
     | Disconnect ->
         let status, cmd, debugMessage =
             match state.Status with
@@ -217,7 +250,13 @@ let transition input state =
                 NotConnected (ConnectionId.Create (), connection.Nickname, None, None), errorToastCmd "An error occurred during disconnection", debugMessage
             | _ -> state.Status, Cmd.none, Some (debugMessage (shouldNeverHappenText "DisconnectResult (Error _) input when Status is not Disconnecting"))        
         { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
-    //| SendMessageOther message -> // TODO-NMB: Add to state.Messages...
+    | SendMessageOther message ->
+        let status, debugMessage =
+            match state.Status with
+            | Connected (connection, messageUis, messageId, messageText) ->
+                Connected (connection, { Message = message ; MessageType = Confirmed ; Timestamp = DateTime.Now } :: messageUis, messageId, messageText), None
+            | _ -> state.Status, Some (debugMessage (shouldNeverHappenText "SendMessageOther input when Status is not Connected"))
+        { state with Status = status ; DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, Cmd.none
     | UserConnectedOther nickname ->
         let cmd, debugMessage =
             match state.Status with
@@ -230,6 +269,6 @@ let transition input state =
             | Connected _ -> infoToastCmd (sprintf "%s has disconnected" nickname), None
             | _ -> Cmd.none, Some (debugMessage (shouldNeverHappenText "UserDisconnectedOther input when Status is not Connected"))
         { state with DebugMessages = state.DebugMessages |> addDebugMessageIfSome debugMessage }, cmd
-    // TEMP-NMB: Prevent warning for unmatched Input cases...
+    (* TEMP-NMB: Prevent warning for unmatched Input cases...
     | _ -> state, Cmd.none
-    // ...NMB-TEMP
+    ...NMB-TEMP *)

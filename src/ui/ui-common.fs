@@ -11,9 +11,14 @@ open Aornota.UI.Theme.Default
 type Preferences = { UseDefaultTheme : bool }
 
 type MessageType =
-    | Sent of message : Message * timestamp : DateTime
-    | SendFailed of message : Message * timestamp : DateTime
-    | Received of message : Message * timestamp : DateTime
+    | Sent
+    | SendFailed of exn : exn
+    | Confirmed
+
+type MessageUi = {
+    Message : Message
+    MessageType : MessageType
+    Timestamp : DateTime }
 
 type Input =
     | DismissDebugMessage of debugId : DebugId
@@ -42,7 +47,7 @@ type Status =
     | ServiceUnavailable
     | NotConnected of connectionId : ConnectionId * nicknameText : string * validationErrorText : string option * connectResultErrorText : string option
     | Connecting of connection : Connection
-    | Connected of connection : Connection * messages : MessageType list * messageId : MessageId * messageText : string
+    | Connected of connection : Connection * messageUis : MessageUi list * messageId : MessageId * messageText : string
     | Disconnecting of connection : Connection
 
 type State = {

@@ -16,7 +16,7 @@ type MessageId =
 
 type Message = {
     MessageId : MessageId
-    Nickname : string
+    FromNickname : string
     Contents : string }
 
 type UiWs =

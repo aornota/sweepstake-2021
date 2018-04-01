@@ -31,6 +31,8 @@ let bold text = Rct.b [] [ str text ]
 
 let italic text = Rct.i [] [ str text ]
 
+let br = Rct.br []
+
 let div divData children =
     let customClasses = [
         match divData.DivCustomClass with | Some divCustomClass -> yield divCustomClass | None -> ()

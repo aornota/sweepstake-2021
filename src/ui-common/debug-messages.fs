@@ -41,13 +41,13 @@ let renderDebugMessages theme source (debugMessages:DebugMessage list) dispatch 
         [
             columnContent [
                 yield! debugMessages
-                |> List.map (fun debugMessage ->
-                    let children = renderChildren theme (GreyscalePara GreyLighter) (sprintf "%s | Debug" source) debugMessage.DebugMessage
-                    [
-                        divVerticalSpace 10
-                        notification theme { notificationDark with OnDismissNotification = Some (fun _ -> dispatch debugMessage.DebugId) } children
-                    ])                   
-                |> List.collect id ]
+                    |> List.map (fun debugMessage ->
+                        let children = renderChildren theme (GreyscalePara GreyLighter) (sprintf "%s | Debug" source) debugMessage.DebugMessage
+                        [
+                            divVerticalSpace 10
+                            notification theme { notificationDark with OnDismissNotification = Some (fun _ -> dispatch debugMessage.DebugId) } children
+                        ])                   
+                    |> List.collect id ]
         ]
     | [] -> []
 #else
