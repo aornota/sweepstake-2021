@@ -15,7 +15,7 @@ type ContainerWidth = | Fluid | Widescreen | FullHD
 
 type Size = | Large | Medium | Normal | Small
 
-type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Branch | Database | Notes | File | Find
+type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Branch | Database | Notes | File | Find | User
 
 type IconData = {
     IconSize : Size
@@ -68,6 +68,7 @@ let icon iconData =
         | Notes -> "fa-pencil"
         | File -> "fa-file-o"
         | Find -> "fa-search"
+        | User -> "fa-user"
     Icon.icon [
         match size with Some size -> yield size | None -> ()
         match alignment with Some alignment -> yield alignment | None -> ()
@@ -146,4 +147,6 @@ let iconFile = { iconDefault with Icon = File }
 let iconFileSmall = { iconFile with IconSize = Small }
 let iconFind = { iconDefault with Icon = Find }
 let iconFindSmall = { iconFind with IconSize = Small }
+let iconUser = { iconDefault with Icon = User }
+let iconUserSmall = { iconUser with IconSize = Small }
 

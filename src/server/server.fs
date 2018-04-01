@@ -1,6 +1,6 @@
 ﻿module Aornota.Sweepstake2018.UI.App
 
-open Aornota.Sweepstake2018.Shared
+//open Aornota.Sweepstake2018.Shared
 
 open System
 open System.IO
@@ -25,10 +25,10 @@ let private api (fApi:unit -> 'a) next ctx = task {
     let! apiResult = fApi ()
     return! Successful.OK apiResult next ctx }
 
-let private initializeCounter () : Task<Counter> = task { return 42 }
+let private initialize () : Task<unit> = task { return () }
 
 let webApp : HttpHandler =
-    route "/api/initializeCounter" >=> api initializeCounter
+    route "/api/initialize" >=> api initialize
 
 let private configureApp (app:IApplicationBuilder) =
     app.UseStaticFiles () |> ignore

@@ -9,6 +9,7 @@ a.default:hover { color : #a000a0 }
 a.dark { color : #ffbfbf }
 a.dark:hover { color : #ff8f8f }
 
+div.centered /* sic */ { display : flex ; justify-content : center }
 div.default { color : #393939 ; background-color : white }
 div.dark { color : #c6c6c6 ; background-color : black }
 
@@ -23,15 +24,12 @@ hr.dark { background-color : #4c4c4c }
 .footer.dark.alternative { color : #d9d9d9 ; background-color : #4c4c4c /* custom $dark */ }
 
 .input.default { color : #393939 ; background-color : white ; border-color : #4c4c4c /* custom $dark */ }
+.input.is-danger.default { color : #393939 ; background-color : white ; border-color : #ff3860 /* default $danger */ }
 .input.dark { color : #c6c6c6 ; background-color : black ; border-color : #b3b3b3 /* custom $light */ }
+.input.is-danger.dark { color : #c6c6c6 ; background-color : black ; border-color : #ff3860 /* default $danger */ }
 
 .level:not(:last-child) { margin-bottom : 1.0rem }
 .level.hasContinuation:not(:last-child) { margin-bottom : 0.5rem }
-
-.media+.media.default { border-top-color : #b3b3b3 }
-.media+.media.dark { border-top-color : #4c4c4c }
-
-.media-content { overflow: hidden }
 
 .navbar-dropdown { border-top-width : 0px }
 .navbar-dropdown.default { background-color : #a0a0a0 }
@@ -69,3 +67,6 @@ hr.dark { background-color : #4c4c4c }
 .tabs.dark a { color : #ffbfbf ; border-bottom-color : #262626 }
 .tabs.dark a:hover { color : #ff8f8f ; border-bottom-color : #ff8f8f }
 .tabs.dark li.is-active a { color : #ff8f8f ; border-bottom-color : #c6c6c6 }
+
+.textarea.default { color : #393939 ; background-color : white ; border-color : #4c4c4c /* custom $dark */ }
+.textarea.dark { color : #c6c6c6 ; background-color : black ; border-color : #b3b3b3 /* custom $light */ }

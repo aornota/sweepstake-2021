@@ -9,6 +9,7 @@ open Aornota.UI.Theme.Common
 open Fable.Core.JsInterop
 module Rct = Fable.Helpers.React
 open Fable.Helpers.React.Props
+open Fable.Import.React
 
 open Fulma
 open Fulma.Components
@@ -23,13 +24,10 @@ type FieldData = {
     TooltipData : TooltipData option }
 
 type LinkType =
-    | SameWindow
-    | NewWindow
-    | DownloadFile of fileName : string
-
-type LinkData = {
-    LinkUrl : string
-    LinkType : LinkType }
+    | SameWindow of url : string
+    | NewWindow of url : string
+    | DownloadFile of url : string * fileName : string
+    | ClickableLink of onClick : (MouseEvent -> unit)
 
 let [<Literal>] private IS_LINK = "is-link"
 
@@ -129,12 +127,21 @@ let hr theme useAlternativeClass =
     let className = getClassName theme useAlternativeClass
     Rct.hr [ ClassName className ] 
 
-let link theme linkData children =
+let link theme linkType children =
     let (ThemeClass className) = theme.ThemeClass
     Rct.a [
         yield ClassName className :> IHTMLProp
-        yield Href linkData.LinkUrl :> IHTMLProp
-        match linkData.LinkType with | NewWindow -> yield Target "_blank" :> IHTMLProp | DownloadFile fileName -> yield Download fileName :> IHTMLProp | SameWindow -> ()
+        match linkType with
+        | NewWindow url ->
+            yield Href url :> IHTMLProp
+            yield Target "_blank" :> IHTMLProp
+        | SameWindow url ->
+            yield Href url :> IHTMLProp
+        | DownloadFile (url, fileName) ->
+            yield Href url :> IHTMLProp
+            yield Download fileName :> IHTMLProp
+        | ClickableLink onClick ->
+            yield OnClick onClick :> IHTMLProp
     ] children
 
 let media theme left content right =
@@ -281,21 +288,6 @@ let progress theme useAlternativeClass progressData =
         yield Progress.Max progressData.MaxValue
     ] []
 
-// TODO-NMB: "Genericize"?...
-let searchBox theme (searchId:Guid) searchText tooltip (onChange:string -> unit) onEnter =
-    let className = getClassName theme false
-    field theme { fieldDefault with TooltipData = Some tooltip } [
-        Control.div [ Control.HasIconLeft ] [
-            Input.text [
-                yield Input.CustomClass className
-                yield Input.Size IsSmall
-                yield Input.DefaultValue searchText
-                yield Input.Props [
-                    Key (searchId.ToString ())
-                    OnChange (fun ev -> !!ev.target?value |> onChange)
-                    onEnterPressed onEnter ] ]
-            icon { iconFindSmall with IconAlignment = Some LeftAligned } ] ]
-
 let span theme spanData children =
     let spanData = theme.TransformSpanData spanData
     let customClasses = [
@@ -355,3 +347,33 @@ let tag theme tagData children =
         yield! children
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
+// TODO-NMB: "Genericize"?...
+let textArea theme (id:Guid) text autoFocus (onChange:string -> unit) =
+    let className = getClassName theme false
+    Control.div [ Control.HasIconLeft ] [
+        yield Textarea.textarea [
+            yield Textarea.CustomClass className
+            yield Textarea.Size IsSmall
+            yield Textarea.DefaultValue text
+            yield Textarea.Props [
+                Key (id.ToString ())
+                AutoFocus autoFocus
+                OnChange (fun ev -> !!ev.target?value |> onChange) ] ] [] ]
+
+// TODO-NMB: "Genericize"?...
+let textBox theme (id:Guid) text iconData errorText autoFocus disabled (onChange:string -> unit) onEnter =
+    let className = getClassName theme false
+    Control.div [ Control.HasIconLeft ] [
+        yield Input.text [
+            match errorText with | Some _ -> yield Input.Color IsDanger | None -> ()
+            yield Input.CustomClass className
+            yield Input.Size IsSmall
+            yield Input.DefaultValue text
+            yield Input.Props [
+                Key (id.ToString ())
+                Disabled disabled
+                AutoFocus autoFocus
+                OnChange (fun ev -> !!ev.target?value |> onChange)
+                onEnterPressed onEnter ] ]
+        match iconData with | Some iconData -> yield icon { iconData with IconAlignment = Some LeftAligned } | None -> ()
+        match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
