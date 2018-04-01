@@ -50,7 +50,7 @@ let private renderNotConnected theme (ConnectionId connectionId, nicknameText, e
         | true -> Loading
         | false -> match validateNicknameText nicknameText with | Some _ -> NotEnabled None | None -> Clickable ((fun _ -> dispatch Connect), None)
     columnContent [
-        para theme paraCentredSmaller [ str "Please enter your nickname" ]
+        para theme paraCentredSmall [ str "Please enter your nickname" ]
         hr theme false
         field theme { fieldDefault with Grouped = Some Centred } [
             textBox theme connectionId nicknameText (Some iconUserSmall) errorText true connecting (NicknameTextChanged >> dispatch) (fun _ -> dispatch Connect)
@@ -89,13 +89,13 @@ let private renderConnected theme (connection : Connection, messageUis, MessageI
         ]              
     let sendMessageInteraction = match validateMessageText messageText with | Some _ -> NotEnabled None | None -> Clickable ((fun _ -> dispatch SendMessage), None)
     columnContent [
-        yield para theme paraCentredSmaller [ str "Messages" ]
+        yield para theme paraCentredSmall [ str "Messages" ]
         yield hr theme false
         yield field theme { fieldDefault with Grouped = Some FullWidth } [
             // TEMP-NMB: textArea...
-            textArea theme messageId messageText true (MessageTextChanged >> dispatch) ]
+            //textArea theme messageId messageText true (MessageTextChanged >> dispatch) ]
             // ...or textBox...
-            //textBox theme messageId messageText (Some iconFileSmall) None true false (MessageTextChanged >> dispatch) (fun _ -> dispatch SendMessage) ]
+            textBox theme messageId messageText (Some iconFileSmall) None true false (MessageTextChanged >> dispatch) (fun _ -> dispatch SendMessage) ]
             // ...NMB-TEMP
         yield field theme { fieldDefault with Grouped = Some RightAligned } [
             button theme { buttonSuccessSmall with Interaction = sendMessageInteraction } [ span theme spanDefault [ str "Send message" ] ] ]
