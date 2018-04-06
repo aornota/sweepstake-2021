@@ -5,8 +5,11 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../shared/literals.fs" />
     <Compile Include="../shared/shared.fs" />
-    <Compile Include="ws.fs" />
+    <Compile Include="json.fs" />
+    <Compile Include="agents/ws.fs" />
+    <Compile Include="ws-middleware.fs" />
     <Compile Include="server.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />

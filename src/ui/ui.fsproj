@@ -4,6 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../shared/literals.fs" />
     <Compile Include="../shared/shared.fs" />
     <Compile Include="../ui-render-bulma/render-common.fs" />
     <Compile Include="../ui-render-bulma/render-bulma.fs" />

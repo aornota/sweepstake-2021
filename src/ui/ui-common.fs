@@ -2,7 +2,7 @@ module Aornota.Sweepstake2018.UI.Common
 
 open System
 
-open Aornota.Sweepstake2018.Shared
+open Aornota.Sweepstake2018.Shared.TODO
 
 open Aornota.UI.Common.DebugMessages
 open Aornota.UI.Theme.Dark

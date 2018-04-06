@@ -2,7 +2,7 @@ module Aornota.Sweepstake2018.UI.Render
 
 open System
 
-open Aornota.Sweepstake2018.Shared
+open Aornota.Sweepstake2018.Shared.TODO
 open Aornota.Sweepstake2018.UI.Common
 
 open Aornota.UI.Common.DebugMessages
@@ -102,7 +102,7 @@ let private renderConnected theme (connection : Connection, messageUis, MessageI
         yield hr theme false
         yield! messageUis
             |> List.sortBy (fun messageUi -> messageUi.Timestamp)
-            |> List.rev
+            // TODO-NMB: More recent messages first?...|> List.rev
             |> List.map renderMessageUi
             |> List.collect id
     ]

@@ -2,7 +2,8 @@ module Aornota.Sweepstake2018.UI.State
 
 open System
 
-open Aornota.Sweepstake2018.Shared
+open Aornota.Sweepstake2018.Shared.Literals
+open Aornota.Sweepstake2018.Shared.TODO
 open Aornota.Sweepstake2018.UI.Common
 
 open Aornota.UI.Common.DebugMessages
@@ -48,17 +49,16 @@ let private initializeWsSub dispatch =
             | DisconnectWs connection -> ws.send (toJson (DisconnectWs connection))
             Cmd.none
     let onWsMessage (wsMessage:Brw.MessageEvent) : unit =
-        try
-            // Note: Expect wsMessage.data to be deserializable to ServerWs.
+        try // note: Expect wsMessage.data to be deserializable to ServerWs
             let serverWs = ofJson<ServerWs> <| unbox wsMessage.data
             match serverWs with
-            | ConnectResultWs result -> dispatch (ConnectResult result)
-            | UserConnectedOtherWs nickname -> dispatch (UserConnectedOther nickname)
-            | SendMessageResultWs result -> dispatch (SendMessageResult result)
-            | SendMessageOtherWs message -> dispatch (SendMessageOther message)
-            | DisconnectResultWs result -> dispatch (DisconnectResult result)
-            | UserDisconnectedOtherWs nickname -> dispatch (UserDisconnectedOther nickname)
             | OnReceiveErrorWs exn -> dispatch (OnServerReceiveWsError exn)
+            | ConnectResultWs result -> dispatch (ConnectResult result)
+            | SendMessageResultWs result -> dispatch (SendMessageResult result)
+            | DisconnectResultWs result -> dispatch (DisconnectResult result)
+            | UserConnectedOtherWs nickname -> dispatch (UserConnectedOther nickname)
+            | SendMessageOtherWs message -> dispatch (SendMessageOther message)
+            | UserDisconnectedOtherWs nickname -> dispatch (UserDisconnectedOther nickname)
         with exn -> dispatch (OnWsMessageError exn)
 #if DEBUG
     let wsUrl = sprintf "ws://localhost:%i" WS_PORT
@@ -66,7 +66,7 @@ let private initializeWsSub dispatch =
     // TODO-NMB: Confirm "production" wsUrl (e.g. Azure app service?)...
     let wsUrl = sprintf "wss://localhost:%i" WS_PORT
 #endif
-    let wsApiUrl = sprintf "%s%s" wsUrl WS_API
+    let wsApiUrl = sprintf "%s%s" wsUrl WS_API_PATH
     let ws = Brw.WebSocket.Create wsApiUrl
     ws.onopen <- (fun _ -> dispatch (OnWsOpen (sendUiWsCmd ws)))
     ws.onerror <- (fun _ -> dispatch (OnWsError wsApiUrl))

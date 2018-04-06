@@ -1,7 +1,7 @@
-﻿module Aornota.Sweepstake2018.Server.Server
+﻿module Aornota.Sweepstake2018.Server.Host
 
-open Aornota.Sweepstake2018.Server.Ws
-open Aornota.Sweepstake2018.Shared
+open Aornota.Sweepstake2018.Server.WsMiddleware
+open Aornota.Sweepstake2018.Shared.Literals
 
 open System
 open System.IO
