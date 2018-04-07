@@ -210,6 +210,7 @@ type ConnectionsAgent () =
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> signIn (connectionId, authenticatedUser.UserId, authenticatedUser.SessionId, authenticatedUser.UserName) else connections
                     let! connections = sendWs (AutoSignInResultWs result |> ServerAppWsApi) (OnlyConnectionId connectionId) connections
+                    // TODO-NMB: Only if was not already signed-in?...
                     let! connections =
                         if isOk then sendWs (OtherUserSignedIn authenticatedUser.UserName |> ServerAppWsApi) (AllAuthenticatedExceptUserId authenticatedUser.UserId) connections
                         else idAsync connections

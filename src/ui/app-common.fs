@@ -69,6 +69,7 @@ type UnauthenticatedState = {
     PasswordKey : Guid
     PasswordText : string
     PasswordErrorText : string option
+    FocusPassword : bool
     SignInStatus : Status option }
 
 type Page =

@@ -97,6 +97,7 @@ let private defaultUnauthenticatedStateOnly (userName:string option) state =
         PasswordKey = Guid.NewGuid ()
         PasswordText = String.Empty
         PasswordErrorText = None
+        FocusPassword = match userName with | Some _ -> true | None -> false
         SignInStatus = None }
     let cmd = match debugMessage with | Some debugMessage -> AddDebugMessageApp debugMessage |> Cmd.ofMsg | None -> Cmd.none
     unauthenticatedState, cmd

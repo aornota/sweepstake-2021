@@ -63,9 +63,9 @@ let private renderUnauthenticated theme (state:UnauthenticatedState) dispatch =
         hr theme false
         // TODO-NMB: Finesse layout / alignment - and add labels?...
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText true isSigningIn (UserNameTextChanged >> dispatch) ignore ]
+            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText (not state.FocusPassword) isSigningIn (UserNameTextChanged >> dispatch) ignore ]
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText false isSigningIn (PasswordTextChanged >> dispatch) onEnter ]
+            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText state.FocusPassword isSigningIn (PasswordTextChanged >> dispatch) onEnter ]
         field theme { fieldDefault with Grouped = Some Centred } [
             button theme { buttonSuccessSmall with Interaction = signInInteraction } [ span theme spanDefault [ str "Sign in" ] ] ] ]
 
