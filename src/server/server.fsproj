@@ -6,9 +6,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../shared/literals.fs" />
-    <Compile Include="../shared/shared.fs" />
+    <Compile Include="../shared/domain.fs" />
+    <Compile Include="../shared/ws-ui.fs" />
+    <Compile Include="../shared/ws-server.fs" />
     <Compile Include="json.fs" />
-    <Compile Include="agents/ws.fs" />
+    <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />
     <Compile Include="server.fs" />
   </ItemGroup>

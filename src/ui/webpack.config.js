@@ -54,7 +54,7 @@ module.exports = {
           loader: "fable-loader",
           options: {
             babel: babelOptions,
-            define: isProduction ? [] : ["DEBUG"]
+            define: isProduction ? [] : [ "DEBUG" ]
           }
         }
       },

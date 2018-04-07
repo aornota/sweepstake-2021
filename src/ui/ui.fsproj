@@ -5,7 +5,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../shared/literals.fs" />
-    <Compile Include="../shared/shared.fs" />
+    <Compile Include="../shared/domain.fs" />
+    <Compile Include="../shared/ws-ui.fs" />
+    <Compile Include="../shared/ws-server.fs" />
     <Compile Include="../ui-render-bulma/render-common.fs" />
     <Compile Include="../ui-render-bulma/render-bulma.fs" />
     <Compile Include="../ui-theme-bulma/theme-common.fs" />
@@ -14,10 +16,14 @@
     <Compile Include="../ui-theme-bulma/theme-render-bulma.fs" />
     <Compile Include="../ui-common/debug-messages.fs" />
     <Compile Include="../ui-common/local-storage.fs" />
-    <Compile Include="ui-common.fs" />
-    <Compile Include="ui-state.fs" />
-    <Compile Include="ui-render.fs" />
-    <Compile Include="ui-app.fs" />
+    <Compile Include="ui-shared.fs" />
+    <Compile Include="pages/chat/chat-common.fs" />
+    <Compile Include="pages/chat/chat-state.fs" />
+    <Compile Include="pages/chat/chat-render.fs" />
+    <Compile Include="app-common.fs" />
+    <Compile Include="app-state.fs" />
+    <Compile Include="app-render.fs" />
+    <Compile Include="app.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

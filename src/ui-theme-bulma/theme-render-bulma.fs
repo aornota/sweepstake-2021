@@ -348,20 +348,22 @@ let tag theme tagData children =
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
 // TODO-NMB: "Genericize"?...
-let textArea theme (id:Guid) text autoFocus (onChange:string -> unit) =
+let textArea theme (key:Guid) text errorText autoFocus (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Textarea.textarea [
+            match errorText with | Some _ -> yield Textarea.Color IsDanger | None -> ()
             yield Textarea.CustomClass className
             yield Textarea.Size IsSmall
             yield Textarea.DefaultValue text
             yield Textarea.Props [
-                Key (id.ToString ())
+                Key (key.ToString ())
                 AutoFocus autoFocus
-                OnChange (fun ev -> !!ev.target?value |> onChange) ] ] [] ]
+                OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
+        match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
 
 // TODO-NMB: "Genericize"?...
-let textBox theme (id:Guid) text iconData errorText autoFocus disabled (onChange:string -> unit) onEnter =
+let textBox theme (key:Guid) text iconData isPassword errorText autoFocus disabled (onChange:string -> unit) onEnter =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Input.text [
@@ -369,8 +371,9 @@ let textBox theme (id:Guid) text iconData errorText autoFocus disabled (onChange
             yield Input.CustomClass className
             yield Input.Size IsSmall
             yield Input.DefaultValue text
+            if isPassword then yield Input.Type Input.Password
             yield Input.Props [
-                Key (id.ToString ())
+                Key (key.ToString ())
                 Disabled disabled
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange)
