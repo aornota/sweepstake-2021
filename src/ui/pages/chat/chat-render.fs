@@ -26,7 +26,7 @@ let private renderChatMessageUi theme authenticatedUserName dispatch chatMessage
         | Some errorText ->
             yield! [
                 divVerticalSpace 10
-                para theme { paraDefaultSmallest with Weight = Bold ; ParaAlignment = Centred } [ str errorText ] ]
+                para theme { paraDefaultSmallest with Weight = Bold } [ str errorText ] ]
         | None -> () ]
     let notificationData, unconfirmed, errorText =
         match chatMessageUi.ChatMessageType with

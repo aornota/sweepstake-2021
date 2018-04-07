@@ -24,7 +24,7 @@ module Brw = Fable.Import.Browser
 let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preferences"
 
 #if DEBUG
-//let private random = Random ()
+let private random = Random ()
 #endif
 
 let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
@@ -32,7 +32,7 @@ let private setBodyClass useDefaultTheme = Browser.document.body.className <- ge
 let private readPreferencesCmd =
     let readPreferences () = async {
 #if DEBUG
-        //do! Async.Sleep (random.Next (100, 500))
+        do! Async.Sleep (random.Next (10, 50))
 #endif
         return Option.map ofJson<Preferences> (readJson APP_PREFERENCES_KEY) }
     Cmd.ofAsync readPreferences () (Ok >> ReadPreferencesResult >> ReadingPreferencesInput >> AppInput) (Error >> ReadPreferencesResult >> ReadingPreferencesInput >> AppInput)
@@ -48,7 +48,7 @@ let private initializeWsSub dispatch =
         try // note: Expect wsMessage.data to be deserializable to ServerWsApi
             let serverWsApi = ofJson<ServerWsApi> <| unbox wsMessage.data
 #if DEBUG
-            //if random.NextDouble () < 0.75 then failwith (sprintf "Fake error deserializing %A" serverWsApi)
+            if random.NextDouble () < 0.02 then failwith (sprintf "Fake error deserializing %A" serverWsApi)
 #endif
             HandleServerWsApi serverWsApi |> dispatch
         with exn -> OnUiWsError (DeserializeServerWsApiError exn.Message) |> dispatch
@@ -73,7 +73,7 @@ let private sendUiWsApiCmd (ws:Brw.WebSocket) (uiWsApi:UiWsApi) =
     else
         try
 #if DEBUG
-            //if random.NextDouble () < 0.75 then failwith "Fake sendUiWsApiCmd error"
+            if random.NextDouble () < 0.02 then failwith "Fake sendUiWsApiCmd error"
 #endif
             ws.send (toJson uiWsApi)
             Cmd.none
@@ -173,7 +173,7 @@ let transition input state =
     | HandleServerWsApi (ServerAppWsApi (ConnectedWs (otherConnections, signedIn))), Connecting jwt ->
         let toastCmd =
 #if DEBUG
-            infoToastCmd (sprintf "%i other connections | %i signed-in" otherConnections signedIn)
+            infoToastCmd (sprintf "%i other connection%s | %i signed-in" otherConnections (if otherConnections = 1 then String.Empty else "s") signedIn)
 #else
             Cmd.none
 #endif
