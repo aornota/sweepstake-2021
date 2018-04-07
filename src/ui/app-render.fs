@@ -18,6 +18,7 @@ let private renderHeader theme state dispatch =
         | ReadingPreferences -> [ para theme paraStatus [ str "Reading preferences... " ; icon iconSpinnerPulseSmall ] ]
         | Connecting _ -> [ para theme paraStatus [ str "Connecting... " ; icon iconSpinnerPulseSmall ] ]
         | ServiceUnavailable -> [ para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger ; Weight = Bold } [ str "Service unavailable" ] ]
+        | AutomaticallySigningIn _ -> [ para theme paraStatus [ str "Signing-in... " ; icon iconSpinnerPulseSmall ] ]
         | Unauthenticated unauthenticatedState ->
             match unauthenticatedState.SignInStatus with
             | Some Pending -> [ para theme paraStatus [ str "Signing-in... " ; icon iconSpinnerPulseSmall ] ]
@@ -27,7 +28,7 @@ let private renderHeader theme state dispatch =
             | Some Pending -> [ para theme paraStatus [ str "Signing-out... " ; icon iconSpinnerPulseSmall ] ]
             | Some (Failed _) | None ->
                 [
-                    para theme paraStatus [ str "Connected as " ; bold authenticatedState.AuthenticatedUser.UserName ]
+                    para theme paraStatus [ str "Signed-in as " ; bold authenticatedState.AuthenticatedUser.UserName ]
                     para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> dispatch (SignOut |> AuthenticatedInput |> AppInput))) [ str "Sign out" ] ]
                 ]
     let toggleThemeTooltipText = match state.UseDefaultTheme with | true -> "Switch to dark theme" | false -> "Switch to light theme"           
@@ -75,7 +76,7 @@ let private renderContent theme state dispatch =
     div divDefault [
         yield divVerticalSpace 20
         match state.AppState with
-        | ReadingPreferences | Connecting _ ->
+        | ReadingPreferences | Connecting _ | AutomaticallySigningIn _ ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
         | ServiceUnavailable ->
             yield columnContent [ para theme paraCentredSmall [ str "Service unavailable" ] ; hr theme false ; para theme paraCentredSmaller [ str "Please try again later" ] ]

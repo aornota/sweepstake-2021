@@ -32,6 +32,7 @@ let private renderChatMessageUi theme authenticatedUserName dispatch chatMessage
         match chatMessageUi.ChatMessageType with
         | Sent -> notificationLight, true, None
         | SendFailed errorText -> notificationDanger, false, Some errorText
+        // TODO-NMB: Would it be better to [add and] compare ChatMessage.UserId?...
         | Received when chatMessageUi.ChatMessage.UserName = authenticatedUserName -> notificationPrimary, false, None
         | Received -> notificationInfo, false, None
     let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText

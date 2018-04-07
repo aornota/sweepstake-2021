@@ -84,23 +84,27 @@ let private addDebugMessage message state = { state with DebugMessages = debugMe
 let private errorMessage message = sprintf "ERROR -> %s" message
 let private shouldNeverHappenMessage message = sprintf "SHOULD NEVER HAPPEN -> %s" message
 
-let private defaultUnauthenticatedState (jwt:Jwt option) state : State * Cmd<Input> =
+let private defaultUnauthenticatedStateOnly (userName:string option) state =
     let sendUiUnauthenticatedWsApi, debugMessage =
         match state.Ws with
         | Some ws -> UiUnauthenticatedWsApi >> sendUiWsApiCmd ws, None
-        | None -> (fun _ -> Cmd.none), Some (shouldNeverHappenMessage "defaultUnauthenticatedState called when state.Ws is None")
+        | None -> (fun _ -> Cmd.none), Some (shouldNeverHappenMessage "defaultUnauthenticatedStateOnly called when state.Ws is None")
     let unauthenticatedState = {
         SendUiUnauthenticatedWsApi = sendUiUnauthenticatedWsApi
         UserNameKey = Guid.NewGuid ()
-        UserNameText = match jwt with | Some (Jwt jwt) -> jwt.UserName | None -> String.Empty
+        UserNameText = match userName with | Some userName -> userName | None -> String.Empty
         UserNameErrorText = None
         PasswordKey = Guid.NewGuid ()
         PasswordText = String.Empty
         PasswordErrorText = None
         SignInStatus = None }
+    let cmd = match debugMessage with | Some debugMessage -> AddDebugMessageApp debugMessage |> Cmd.ofMsg | None -> Cmd.none
+    unauthenticatedState, cmd
+
+let private defaultUnauthenticatedState (userName:string option) state =
+    let unauthenticatedState, cmd = defaultUnauthenticatedStateOnly userName state
     let state = { state with AppState = Unauthenticated unauthenticatedState }
-    let state = match debugMessage with | Some debugMessage -> addDebugMessage debugMessage state | None -> state
-    state, Cmd.none
+    state, cmd
 
 let private defaultAuthenticatedState authenticatedUser state =
     let sendUiWsApi, debugMessage =
@@ -136,6 +140,8 @@ let transition input state =
         writePreferencesCmd (state.UseDefaultTheme, state.SessionId, jwt)
     let unchanged = state, Cmd.none
     match input, state.AppState with
+    | AddDebugMessageApp message, _ ->
+        addDebugMessage message state, Cmd.none
     | DismissDebugMessage debugId, _ -> // note: silently ignore unknown debugId
         { state with DebugMessages = state.DebugMessages |> removeDebugMessage debugId }, Cmd.none
     | ToggleTheme, _ ->
@@ -173,17 +179,24 @@ let transition input state =
     | HandleServerWsApi (ServerAppWsApi (ConnectedWs (otherConnections, signedIn))), Connecting jwt ->
         let toastCmd =
 #if DEBUG
-            infoToastCmd (sprintf "%i other connection%s | %i signed-in" otherConnections (if otherConnections = 1 then String.Empty else "s") signedIn)
+            let plural i = if i = 1 then String.Empty else "s"
+            infoToastCmd (sprintf "%i other web socket connection%s | %i user%s signed-in" otherConnections (plural otherConnections) signedIn (plural signedIn))
 #else
             Cmd.none
 #endif
-        // TODO-NMB: If jwt [from ReadPreferencesResult] is Some, auto-sign-in (rather than just auto-populating UserNameText)?...
-        let state, cmd = defaultUnauthenticatedState jwt state
+        let state, cmd =
+            match jwt with
+            | Some jwt ->
+                let unauthenticatedState, cmd = defaultUnauthenticatedStateOnly None state
+                let autoCmd = unauthenticatedState.SendUiUnauthenticatedWsApi (AutoSignInWs jwt)
+                { state with AppState = AutomaticallySigningIn jwt }, Cmd.batch [ cmd ; autoCmd ]
+            | None -> defaultUnauthenticatedState None state       
+        //let state, cmd = defaultUnauthenticatedState (match jwt with | Some (Jwt jwt) -> Some jwt.UserName | None -> None) state
         state, Cmd.batch [ cmd ; toastCmd ]
     | HandleServerWsApi serverWsApi, Connecting _ ->
         addDebugMessage (sprintf "Unexpected serverWsApi when Connecting -> %A" serverWsApi) state, Cmd.none
     | HandleServerWsApi (ServerAppWsApi (SignInResultWs (Ok authenticatedUser))), Unauthenticated _ ->
-        let toastCmd = successToastCmd (sprintf "You have signed in as %s" authenticatedUser.UserName)
+        let toastCmd = successToastCmd "You have signed in"
         let state, cmd = defaultAuthenticatedState authenticatedUser state
         state, Cmd.batch [ cmd ; toastCmd ; writePreferencesCmd state ]
     | HandleServerWsApi (ServerAppWsApi (SignInResultWs (Error errorText))), Unauthenticated unauthenticatedState ->
@@ -191,22 +204,33 @@ let transition input state =
         let unauthenticatedState = { unauthenticatedState with SignInStatus = Some (Failed errorText) }
         let state = addDebugMessage (errorMessage (sprintf "SignInResultWs -> %s" errorText)) state // TODO-NMB: Is this necessary, e.g. if errorText rendered elsewhere?...
         { state with AppState = Unauthenticated unauthenticatedState }, toastCmd
+    | HandleServerWsApi (ServerAppWsApi (AutoSignInResultWs (Ok authenticatedUser))), AutomaticallySigningIn (Jwt _jwt) ->
+        // TODO-NMB: Check authenticatedUser vs. _jwt?...
+        let toastCmd = successToastCmd "You have been automatically signed in"
+        let state, cmd = defaultAuthenticatedState authenticatedUser state
+        state, Cmd.batch [ cmd ; toastCmd ]
+    | HandleServerWsApi (ServerAppWsApi (AutoSignInResultWs (Error errorText))), AutomaticallySigningIn (Jwt jwt) ->
+        let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as %s" jwt.UserName)
+        let unauthenticatedState, cmd = defaultUnauthenticatedStateOnly (Some jwt.UserName) state
+        let unauthenticatedState = { unauthenticatedState with SignInStatus = Some (Failed errorText) }
+        let state = addDebugMessage (errorMessage (sprintf "AutoSignInResultWs -> %s" errorText)) state // TODO-NMB: Is this necessary, e.g. if errorText rendered elsewhere?...
+        { state with AppState = Unauthenticated unauthenticatedState }, Cmd.batch [ cmd ; toastCmd ]
     | HandleServerWsApi serverWsApi, Unauthenticated _ ->
         addDebugMessage (sprintf "Unexpected serverWsApi when Unauthenticated -> %A" serverWsApi) state, Cmd.none
-    | HandleServerWsApi (ServerAppWsApi (SignOutResultWs (Ok _sessionId))), Authenticated _authenticatedState ->
+    | HandleServerWsApi (ServerAppWsApi (SignOutResultWs (Ok _sessionId))), Authenticated authenticatedState ->
         // TODO-NMB: Check _sessionId vs. authenticatedState.AuthenticatedUser.SessionId?...
         let toastCmd = successToastCmd "You have signed out"
-        let state, cmd = defaultUnauthenticatedState None state
+        let state, cmd = defaultUnauthenticatedState (Some authenticatedState.AuthenticatedUser.UserName) state
         state, Cmd.batch [ cmd ; toastCmd ; writePreferencesCmd state ]
     | HandleServerWsApi (ServerAppWsApi (SignOutResultWs (Error errorText))), Authenticated authenticatedState ->
         let toastCmd = errorToastCmd "Unable to sign out"
         let authenticatedState = { authenticatedState with SignOutStatus = Some (Failed errorText) }
         let state = addDebugMessage (errorMessage (sprintf "SignOutResultWs -> %s" errorText)) state // TODO-NMB: Is this necessary, e.g. if errorText rendered elsewhere?...
         { state with AppState = Authenticated authenticatedState }, toastCmd
-    | HandleServerWsApi (ServerAppWsApi (AutoSignOutWs _sessionId)), Authenticated _authenticatedState ->
+    | HandleServerWsApi (ServerAppWsApi (AutoSignOutWs _sessionId)), Authenticated authenticatedState ->
         // TODO-NMB: Check _sessionId vs. authenticatedState.AuthenticatedUser.SessionId?...
         let toastCmd = warningToastCmd "You have been automatically signed out"
-        let state, cmd = defaultUnauthenticatedState None state
+        let state, cmd = defaultUnauthenticatedState (Some authenticatedState.AuthenticatedUser.UserName) state
         state, Cmd.batch [ cmd ; toastCmd ]
     | HandleServerWsApi (ServerAppWsApi (OtherUserSignedIn userName)), Authenticated _ ->
         let toastCmd = infoToastCmd (sprintf "%s has signed in" userName)
@@ -238,13 +262,15 @@ let transition input state =
         addDebugMessage (sprintf "Unexpected input when Connecting -> %A" input) state, Cmd.none
     | _, ServiceUnavailable ->
         addDebugMessage (sprintf "Unexpected input when ServiceUnavailable -> %A" input) state, Cmd.none
+    | _, AutomaticallySigningIn _ ->
+        addDebugMessage (sprintf "Unexpected input when AutomaticallySigningIn -> %A" input) state, Cmd.none
     | AppInput (UnauthenticatedInput (UserNameTextChanged userNameText)), Unauthenticated unauthenticatedState ->
         let unauthenticatedState = { unauthenticatedState with UserNameText = userNameText ; UserNameErrorText = validateUserNameText userNameText }
         { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
     | AppInput (UnauthenticatedInput (PasswordTextChanged passwordText)), Unauthenticated unauthenticatedState ->
         let unauthenticatedState = { unauthenticatedState with PasswordText = passwordText ; PasswordErrorText = validatePasswordText passwordText }
         { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
-    | AppInput (UnauthenticatedInput SignIn), Unauthenticated unauthenticatedState -> // note: assume no need to validate unauthenticatedState.UserNameText or unauthenticatedState.PasswordText
+    | AppInput (UnauthenticatedInput SignIn), Unauthenticated unauthenticatedState -> // note: assume no need to validate unauthenticatedState.UserNameText or unauthenticatedState.PasswordText (i.e. because App.Render.renderUnauthenticated will ensure that SendChatMessage can only be called when valid)
         let unauthenticatedState = { unauthenticatedState with SignInStatus = Some Pending }
         let cmd = unauthenticatedState.SendUiUnauthenticatedWsApi (SignInWs (state.SessionId, unauthenticatedState.UserNameText, unauthenticatedState.PasswordText))
         { state with AppState = Unauthenticated unauthenticatedState }, cmd

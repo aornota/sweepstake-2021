@@ -6,7 +6,7 @@ open Aornota.Sweepstake2018.Shared.Domain
 
 type UiUnauthenticatedWsApi =
     | SignInWs of sessionId : SessionId * userName : string * password : string
-    // TODO-NMB... | AutoSignInWs of jwt : Jwt
+    | AutoSignInWs of jwt : Jwt
 
 type UiAuthenticatedWsApi =
     | SignOutWs

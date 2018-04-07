@@ -48,6 +48,7 @@ type AppInput<'a> =
     | AuthenticatedInput of authenticatedInput : AuthenticatedInput
 
 type Input =
+    | AddDebugMessageApp of message : string
     | DismissDebugMessage of debugId : DebugId
     | ToggleTheme
     | ToggleNavbarBurger
@@ -84,6 +85,7 @@ type AppState =
     | ReadingPreferences
     | Connecting of jwt : Jwt option
     | ServiceUnavailable
+    | AutomaticallySigningIn of jwt : Jwt
     | Unauthenticated of unauthenticatedState : UnauthenticatedState
     | Authenticated of authenticatedState : AuthenticatedState
 
@@ -95,7 +97,7 @@ type State = {
     Ws : Brw.WebSocket option
     AppState : AppState }
 
-let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (pre-α)"
+let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (pre-α prototype)"
 
 let getTheme useDefaultTheme = if useDefaultTheme then themeDefault else themeDark
 

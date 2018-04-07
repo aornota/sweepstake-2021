@@ -8,7 +8,7 @@ open Elmish
 open Elmish.Toastr
 
 type SharedInput =
-    | AddDebugMessage of debugMessage : string
+    | AddDebugMessage of message : string
     | SendUnauthenticatedWsApi of uiUnauthenticatedWsApi : UiUnauthenticatedWsApi
     | SendAuthenticatedWsApi of authenticatedUser : AuthenticatedUser * uiAuthenticatedWsApi : UiAuthenticatedWsApi
     | ReceiveServerWsApi of serverWsApi : ServerWsApi
