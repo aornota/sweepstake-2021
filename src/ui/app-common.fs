@@ -102,8 +102,9 @@ let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (pre-α prototype)"
 let getTheme useDefaultTheme = if useDefaultTheme then themeDefault else themeDark
 
 let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
-// TEMP-NMB: Allow a blank password...
-//let validatePasswordText passwordText : string option = if String.IsNullOrWhiteSpace passwordText then None else None
-// ...or not...
-let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None
-// ...NMB-TEMP
+let validatePasswordText passwordText = 
+    // TEMP-NMB: Allow a blank password...
+    //if String.IsNullOrWhiteSpace passwordText then None else None
+    // ...or not...
+    if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None
+    // ...NMB-TEMP

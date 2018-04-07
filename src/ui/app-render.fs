@@ -50,7 +50,7 @@ let private renderHeader theme state dispatch =
                 navbarEnd [ navbarItem [ button theme toggleThemeButton [] ] ] ] ] ]
 
 let private renderUnauthenticated theme (state:UnauthenticatedState) dispatch =
-    let signingIn, signInInteraction, onEnter =
+    let isSigningIn, signInInteraction, onEnter =
         let signIn = (fun _ -> dispatch SignIn)
         match state.SignInStatus with
         | Some Pending -> true, Loading, ignore
@@ -63,9 +63,9 @@ let private renderUnauthenticated theme (state:UnauthenticatedState) dispatch =
         hr theme false
         // TODO-NMB: Finesse layout / alignment - and add labels?...
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText true signingIn (UserNameTextChanged >> dispatch) ignore ]
+            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText true isSigningIn (UserNameTextChanged >> dispatch) ignore ]
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText false signingIn (PasswordTextChanged >> dispatch) onEnter ]
+            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText false isSigningIn (PasswordTextChanged >> dispatch) onEnter ]
         field theme { fieldDefault with Grouped = Some Centred } [
             button theme { buttonSuccessSmall with Interaction = signInInteraction } [ span theme spanDefault [ str "Sign in" ] ] ] ]
 
@@ -82,10 +82,10 @@ let private renderContent theme state dispatch =
             yield renderUnauthenticated theme unauthenticatedState (UnauthenticatedInput >> AppInput >> dispatch)
         | Authenticated authenticatedState ->
             // TODO-NMB: Render something (analogous to renderDebugMessage?) if authenticatedState.SignOutStatus is Some (Failed _)?...
+            let isSigningOut = match authenticatedState.SignOutStatus with | Some Pending -> true | Some _ | None -> false
             match authenticatedState.Page with
             | ChatPage ->
-                // TODO-MMB: Pass something to Chat.Render.render if authenticatedState.SignOutStatus is Some Pending, i.e. so can disable interactivity?...
-                yield Chat.Render.render theme authenticatedState.ChatState (ChatInput >> AuthenticatedInput >> AppInput >> dispatch)
+                yield Chat.Render.render theme authenticatedState.ChatState isSigningOut (ChatInput >> AuthenticatedInput >> AppInput >> dispatch)
         yield divVerticalSpace 20 ]
 
 let private renderFooter theme =

@@ -348,7 +348,7 @@ let tag theme tagData children =
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
 // TODO-NMB: "Genericize"?...
-let textArea theme (key:Guid) text errorText autoFocus (onChange:string -> unit) =
+let textArea theme (key:Guid) text errorText autoFocus disabled (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Textarea.textarea [
@@ -358,6 +358,7 @@ let textArea theme (key:Guid) text errorText autoFocus (onChange:string -> unit)
             yield Textarea.DefaultValue text
             yield Textarea.Props [
                 Key (key.ToString ())
+                Disabled disabled
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
         match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
