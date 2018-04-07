@@ -50,25 +50,22 @@ let private renderHeader theme state dispatch =
                 navbarEnd [ navbarItem [ button theme toggleThemeButton [] ] ] ] ] ]
 
 let private renderUnauthenticated theme (state:UnauthenticatedState) dispatch =
-    let signingIn, signInInteraction =
+    let signingIn, signInInteraction, onEnter =
+        let signIn = (fun _ -> dispatch SignIn)
         match state.SignInStatus with
-        | Some Pending -> true, Loading
+        | Some Pending -> true, Loading, ignore
         | Some (Failed _) | None ->
             match validateUserNameText state.UserNameText, validatePasswordText state.PasswordText with
-            | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None
-            | None, None -> false, Clickable ((fun _ -> dispatch (SignIn |> UnauthenticatedInput |> AppInput)), None)
+            | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore
+            | None, None -> false, Clickable (signIn, None), signIn
     columnContent [
         para theme paraCentredSmall [ str "Sign in" ]
         hr theme false
-        // TODO-NMB: Finesse layout / alignment...
+        // TODO-NMB: Finesse layout / alignment - and add labels?...
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText true signingIn
-                (UserNameTextChanged >> UnauthenticatedInput >> AppInput >> dispatch) (fun _ -> dispatch (SignIn |> UnauthenticatedInput |> AppInput)) ]
-        (* TEMP-NMB: Password not yet being used...
+            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText true signingIn (UserNameTextChanged >> dispatch) ignore ]
         field theme { fieldDefault with Grouped = Some Centred } [
-            // TODO-NMB: Only disable if signingIn - and change onEnter for UserNameText[Box] to ignore...
-            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText false true
-                (PasswordTextChanged >> UnauthenticatedInput >> AppInput >> dispatch) (fun _ -> dispatch (SignIn |> UnauthenticatedInput |> AppInput)) ] *)
+            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText false signingIn (PasswordTextChanged >> dispatch) onEnter ]
         field theme { fieldDefault with Grouped = Some Centred } [
             button theme { buttonSuccessSmall with Interaction = signInInteraction } [ span theme spanDefault [ str "Sign in" ] ] ] ]
 
@@ -82,7 +79,7 @@ let private renderContent theme state dispatch =
             yield columnContent [ para theme paraCentredSmall [ str "Service unavailable" ] ; hr theme false ; para theme paraCentredSmaller [ str "Please try again later" ] ]
         | Unauthenticated unauthenticatedState ->
             // TODO-NMB: Render something (via renderUnauthenticated?) if unauthenticatedState.SignInStatus is Some (Failed _)?...
-            yield renderUnauthenticated theme unauthenticatedState dispatch
+            yield renderUnauthenticated theme unauthenticatedState (UnauthenticatedInput >> AppInput >> dispatch)
         | Authenticated authenticatedState ->
             // TODO-NMB: Render something (analogous to renderDebugMessage?) if authenticatedState.SignOutStatus is Some (Failed _)?...
             match authenticatedState.Page with

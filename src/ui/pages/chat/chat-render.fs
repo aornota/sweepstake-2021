@@ -54,7 +54,7 @@ let render theme state dispatch =
         yield field theme { fieldDefault with Grouped = Some FullWidth }
             [
                 // TEMP-NMB: textArea...
-                //textArea theme newChatMessageId state.NewChatMessageText state.NewChatMessageErrorText true (NewChatMessageTextChanged >> dispatch)
+                //textArea theme newChatMessageId state.NewChatMessage.MessageText state.NewChatMessage.ErrorText true (MessageTextChanged >> dispatch)
                 // ...or textBox...
                 textBox theme newChatMessageId state.NewChatMessage.MessageText (Some iconFileSmall) false state.NewChatMessage.ErrorText true false (MessageTextChanged >> dispatch) onEnter
                 // ...NMB-TEMP

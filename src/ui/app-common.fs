@@ -47,7 +47,7 @@ type AppInput<'a> =
     | UnauthenticatedInput of unauthenticatedInput : UnauthenticatedInput
     | AuthenticatedInput of authenticatedInput : AuthenticatedInput
 
-type Input =
+type UiInput =
     | AddDebugMessageApp of message : string
     | DismissDebugMessage of debugId : DebugId
     | ToggleTheme
@@ -55,14 +55,14 @@ type Input =
     | WritePreferencesResult of result : Result<unit, exn>
     | OnUiWsError of uiWsError : UiWsError
     | HandleServerWsApi of serverWsApi : ServerWsApi
-    | AppInput of appInput : AppInput<Input>
+    | AppInput of appInput : AppInput<UiInput>
 
 type Status =
     | Pending
     | Failed of errorText : string
 
 type UnauthenticatedState = {
-    SendUiUnauthenticatedWsApi : (UiUnauthenticatedWsApi -> Cmd<Input>)
+    SendUiUnauthenticatedWsApi : (UiUnauthenticatedWsApi -> Cmd<UiInput>)
     UserNameKey : Guid
     UserNameText : string
     UserNameErrorText : string option
@@ -75,7 +75,7 @@ type Page =
     | ChatPage
 
 type AuthenticatedState = {
-    SendUiWsApi : (UiWsApi -> Cmd<Input>)
+    SendUiWsApi : (UiWsApi -> Cmd<UiInput>)
     AuthenticatedUser : AuthenticatedUser
     Page : Page
     ChatState : ChatState // TODO-NMB: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
@@ -89,7 +89,7 @@ type AppState =
     | Unauthenticated of unauthenticatedState : UnauthenticatedState
     | Authenticated of authenticatedState : AuthenticatedState
 
-type State = {
+type UiState = {
     DebugMessages : DebugMessage list
     UseDefaultTheme : bool
     SessionId : SessionId
@@ -103,7 +103,7 @@ let getTheme useDefaultTheme = if useDefaultTheme then themeDefault else themeDa
 
 let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
 // TEMP-NMB: Allow a blank password...
-let validatePasswordText passwordText : string option = if String.IsNullOrWhiteSpace passwordText then None else None
+//let validatePasswordText passwordText : string option = if String.IsNullOrWhiteSpace passwordText then None else None
 // ...or not...
-//let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None
+let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None
 // ...NMB-TEMP

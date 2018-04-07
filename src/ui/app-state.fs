@@ -32,7 +32,7 @@ let private setBodyClass useDefaultTheme = Browser.document.body.className <- ge
 let private readPreferencesCmd =
     let readPreferences () = async {
 #if DEBUG
-        do! Async.Sleep (random.Next (10, 50))
+        do! Async.Sleep (random.Next (20, 100))
 #endif
         return Option.map ofJson<Preferences> (readJson APP_PREFERENCES_KEY) }
     Cmd.ofAsync readPreferences () (Ok >> ReadPreferencesResult >> ReadingPreferencesInput >> AppInput) (Error >> ReadPreferencesResult >> ReadingPreferencesInput >> AppInput)
@@ -191,7 +191,6 @@ let transition input state =
                 let autoCmd = unauthenticatedState.SendUiUnauthenticatedWsApi (AutoSignInWs jwt)
                 { state with AppState = AutomaticallySigningIn jwt }, Cmd.batch [ cmd ; autoCmd ]
             | None -> defaultUnauthenticatedState None state       
-        //let state, cmd = defaultUnauthenticatedState (match jwt with | Some (Jwt jwt) -> Some jwt.UserName | None -> None) state
         state, Cmd.batch [ cmd ; toastCmd ]
     | HandleServerWsApi serverWsApi, Connecting _ ->
         addDebugMessage (sprintf "Unexpected serverWsApi when Connecting -> %A" serverWsApi) state, Cmd.none
@@ -295,6 +294,6 @@ let transition input state =
         { state with AppState = Authenticated authenticatedState }, cmd
     | _, Authenticated _ ->
         addDebugMessage (sprintf "Unexpected input when Authenticated -> %A" input) state, Cmd.none
-    (* TEMP-NMB: Prevent warning for unmatched Input cases...
+    (* TEMP-NMB: Prevent warning for unmatched UiInput * AppState cases...
     | _ -> unchanged
     ...NMB-TEMP *)
