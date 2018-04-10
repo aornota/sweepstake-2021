@@ -3,7 +3,7 @@
 open System
 
 open Fake
-// TODO-NMB?... open Fake.Azure.Kudu
+// TODO-NMB-MEDIUM?... open Fake.Azure.Kudu
 
 let serverDir = "./src/server" |> FullName
 let uiDir = "./src/ui" |> FullName
@@ -51,8 +51,9 @@ Target "clean" (fun _ ->
     DeleteFiles !! @".\src\server\obj\*.nuspec"
     CleanDir (uiDir </> "bin")
     DeleteFiles !! @".\src\ui\obj\*.nuspec"
-    CleanDir (uiDir </> "public")
-    CleanDir publishDir)
+    CleanDir (uiDir </> "public"))
+
+Target "clean-publish" (fun _ -> CleanDir publishDir)
 
 Target "copy-resources" (fun _ ->
     let publicResourcesDir = uiDir </> @"public\resources"
@@ -72,7 +73,7 @@ Target "install-ui" (fun _ ->
 Target "install" DoNothing
 
 Target "build" (fun _ ->
-    runDotnet serverDir "build"
+    runDotnet serverDir "build --configuration Release"
     runDotnet uiDir "fable webpack -- -p")
 
 Target "run" (fun _ ->
@@ -87,7 +88,7 @@ Target "publish" (fun _ ->
     CreateDir publishDir
     let serverDir = publishDir </> "server"
     CreateDir serverDir
-    CopyFiles serverDir !! @".\src\server\bin\Debug\netcoreapp2.0\*.*"
+    CopyFiles serverDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
     let uiDir = publishDir </> "ui"
     CreateDir uiDir
     CopyFile uiDir @".\src\ui\index.html"
@@ -113,7 +114,7 @@ Target "help" (fun _ ->
 "install-dot-net-core" ==> "install-ui" ==> "install"
 "clean" ==> "install-server"
 "clean" ==> "copy-resources" ==> "install-ui"
-"install" ==> "build" ==> "publish"
+"install" ==> "build" ==> "clean-publish" ==> "publish"
 "install" ==> "run"
 
 RunTargetOrDefault "build"

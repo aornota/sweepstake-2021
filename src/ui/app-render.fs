@@ -11,10 +11,10 @@ open Aornota.UI.Theme.Render.Bulma
 
 module Rct = Fable.Helpers.React
 
-let private renderHeader theme state dispatch =
+let private renderHeader theme uiState uiDispatch =
     let statusInfo =
         let paraStatus = { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker }
-        match state.AppState with
+        match uiState.AppState with
         | ReadingPreferences -> [ para theme paraStatus [ str "Reading preferences... " ; icon iconSpinnerPulseSmall ] ]
         | Connecting _ -> [ para theme paraStatus [ str "Connecting... " ; icon iconSpinnerPulseSmall ] ]
         | ServiceUnavailable -> [ para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger ; Weight = Bold } [ str "Service unavailable" ] ]
@@ -29,63 +29,65 @@ let private renderHeader theme state dispatch =
             | Some (Failed _) | None ->
                 [
                     para theme paraStatus [ str "Signed-in as " ; bold authenticatedState.AuthenticatedUser.UserName ]
-                    para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> dispatch (SignOut |> AuthenticatedInput |> AppInput))) [ str "Sign out" ] ]
+                    para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> uiDispatch (SignOut |> AuthenticatedInput |> AppInput))) [ str "Sign out" ] ]
                 ]
-    let toggleThemeTooltipText = match state.UseDefaultTheme with | true -> "Switch to dark theme" | false -> "Switch to light theme"           
-    let toggleThemeTooltipData = if state.NavbarBurgerIsActive then tooltipDefaultRight else tooltipDefaultLeft    
-    let toggleThemeInteraction = Clickable ((fun _ -> dispatch ToggleTheme), Some { toggleThemeTooltipData with TooltipText = toggleThemeTooltipText })
+    let toggleThemeTooltipText = match uiState.UseDefaultTheme with | true -> "Switch to dark theme" | false -> "Switch to light theme"           
+    let toggleThemeTooltipData = if uiState.NavbarBurgerIsActive then tooltipDefaultRight else tooltipDefaultLeft    
+    let toggleThemeInteraction = Clickable ((fun _ -> uiDispatch ToggleTheme), Some { toggleThemeTooltipData with TooltipText = toggleThemeTooltipText })
     let toggleThemeButton = { buttonDarkSmall with IsOutlined = true ; Interaction = toggleThemeInteraction ; IconLeft = Some iconTheme }
     let navbarData = { navbarDefault with NavbarSemantic = Some Light }
     navbar theme navbarData [
         container (Some Fluid) [
             navbarBrand [
-                // TODO-NMB: Use different image?...
+                // TODO-NMB-MEDIUM: Use different image?...
                 yield navbarItem [ image "public/resources/djnarration-24x24.png" (Some (FixedSize Square24)) ]
                 yield navbarItem [ para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = Bold } [ str SWEEPSTAKE_2018 ] ]
                 yield navbarItem [ para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = SemiBold } [ str "|" ] ]
                 yield! statusInfo |> List.map (fun element -> navbarItem [ element ])
-                yield navbarBurger (fun _ -> dispatch ToggleNavbarBurger) state.NavbarBurgerIsActive ]
-            navbarMenu theme navbarData state.NavbarBurgerIsActive [ 
+                yield navbarBurger (fun _ -> uiDispatch ToggleNavbarBurger) uiState.NavbarBurgerIsActive ]
+            navbarMenu theme navbarData uiState.NavbarBurgerIsActive [ 
                 navbarStart []
                 navbarEnd [ navbarItem [ button theme toggleThemeButton [] ] ] ] ] ]
 
-let private renderUnauthenticated theme (state:UnauthenticatedState) dispatch =
+let private renderUnauthenticated theme (unauthenticatedState:UnauthenticatedState) unauthenticatedDispatch =
     let isSigningIn, signInInteraction, onEnter =
-        let signIn = (fun _ -> dispatch SignIn)
-        match state.SignInStatus with
+        let signIn = (fun _ -> unauthenticatedDispatch SignIn)
+        match unauthenticatedState.SignInStatus with
         | Some Pending -> true, Loading, ignore
         | Some (Failed _) | None ->
-            match validateUserNameText state.UserNameText, validatePasswordText state.PasswordText with
+            match validateUserNameText unauthenticatedState.UserNameText, validatePasswordText unauthenticatedState.PasswordText with
             | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore
             | None, None -> false, Clickable (signIn, None), signIn
     columnContent [
         para theme paraCentredSmall [ str "Sign in" ]
         hr theme false
-        // TODO-NMB: Finesse layout / alignment - and add labels?...
+        // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.UserNameKey state.UserNameText (Some iconUserSmall) false state.UserNameErrorText (not state.FocusPassword) isSigningIn (UserNameTextChanged >> dispatch) ignore ]
+            textBox theme unauthenticatedState.UserNameKey unauthenticatedState.UserNameText (Some iconUserSmall) false unauthenticatedState.UserNameErrorText
+                (not unauthenticatedState.FocusPassword) isSigningIn (UserNameTextChanged >> unauthenticatedDispatch) ignore ]
         field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme state.PasswordKey state.PasswordText (Some iconPasswordSmall) true state.PasswordErrorText state.FocusPassword isSigningIn (PasswordTextChanged >> dispatch) onEnter ]
+            textBox theme unauthenticatedState.PasswordKey unauthenticatedState.PasswordText (Some iconPasswordSmall) true unauthenticatedState.PasswordErrorText
+                unauthenticatedState.FocusPassword isSigningIn (PasswordTextChanged >> unauthenticatedDispatch) onEnter ]
         field theme { fieldDefault with Grouped = Some Centred } [
             button theme { buttonSuccessSmall with Interaction = signInInteraction } [ span theme spanDefault [ str "Sign in" ] ] ] ]
 
-let private renderContent theme state dispatch =
+let private renderContent theme uiState uiDispatch =
     div divDefault [
         yield divVerticalSpace 20
-        match state.AppState with
+        match uiState.AppState with
         | ReadingPreferences | Connecting _ | AutomaticallySigningIn _ ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
         | ServiceUnavailable ->
             yield columnContent [ para theme paraCentredSmall [ str "Service unavailable" ] ; hr theme false ; para theme paraCentredSmaller [ str "Please try again later" ] ]
         | Unauthenticated unauthenticatedState ->
-            // TODO-NMB: Render something (via renderUnauthenticated?) if unauthenticatedState.SignInStatus is Some (Failed _)?...
-            yield renderUnauthenticated theme unauthenticatedState (UnauthenticatedInput >> AppInput >> dispatch)
+            // TODO-NMB-HIGH: Render something (via renderUnauthenticated?) if unauthenticatedState.SignInStatus is Some (Failed _)?...
+            yield renderUnauthenticated theme unauthenticatedState (UnauthenticatedInput >> AppInput >> uiDispatch)
         | Authenticated authenticatedState ->
-            // TODO-NMB: Render something (analogous to renderDebugMessage?) if authenticatedState.SignOutStatus is Some (Failed _)?...
+            // TODO-NMB-HIGH: Render something (analogous to renderDebugMessage?) if authenticatedState.SignOutStatus is Some (Failed _)?...
             let isSigningOut = match authenticatedState.SignOutStatus with | Some Pending -> true | Some _ | None -> false
             match authenticatedState.Page with
             | ChatPage ->
-                yield Chat.Render.render theme authenticatedState.ChatState isSigningOut (ChatInput >> AuthenticatedInput >> AppInput >> dispatch)
+                yield Chat.Render.render theme authenticatedState.ChatState isSigningOut (ChatInput >> AuthenticatedInput >> AppInput >> uiDispatch)
         yield divVerticalSpace 20 ]
 
 let private renderFooter theme =
@@ -102,10 +104,10 @@ let private renderFooter theme =
                 link theme (NewWindow "https://code.visualstudio.com/") [ str "Visual Studio Code" ] ; str ". Best viewed with "
                 link theme (NewWindow "https://www.google.com/chrome/index.html") [ str "Chrome" ] ; str ". Vaguely mobile-friendly." ] ] ]
 
-let render state dispatch =
-    let theme = getTheme state.UseDefaultTheme
+let render uiState uiDispatch =
+    let theme = getTheme uiState.UseDefaultTheme
     div divDefault [
-        yield renderHeader theme state dispatch
-        yield Rct.ofOption (renderDebugMessages theme SWEEPSTAKE_2018 state.DebugMessages (DismissDebugMessage >> dispatch))
-        yield renderContent theme state dispatch
+        yield renderHeader theme uiState uiDispatch
+        yield Rct.ofOption (renderDebugMessages theme SWEEPSTAKE_2018 uiState.DebugMessages (DismissDebugMessage >> uiDispatch))
+        yield renderContent theme uiState uiDispatch
         yield renderFooter theme ]

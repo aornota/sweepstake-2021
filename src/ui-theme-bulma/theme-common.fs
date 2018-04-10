@@ -93,7 +93,7 @@ type TabData = {
 type TabsData = {
     IsBoxed : bool
     IsToggle : bool
-    // TODO-NMB?... IsToggleRounded : bool
+    // TODO-NMB-LOW?... IsToggleRounded : bool
     TabsAlignment : Alignment
     TabsSize : Size
     Tabs : TabData list }    

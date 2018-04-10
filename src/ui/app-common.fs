@@ -26,12 +26,6 @@ type UiWsError =
     | SendWsOtherError of uiWsApi : UiWsApi * errorText : string
     | DeserializeServerWsApiError of errorText : string
 
-type ReadingPreferencesInput =
-    | ReadPreferencesResult of result : Result<Preferences option, exn>
-
-type ConnectingInput<'a> =
-    | WsOnOpen of ws : Brw.WebSocket
-
 type UnauthenticatedInput =
     | UserNameTextChanged of userNameText : string
     | PasswordTextChanged of passwordText : string
@@ -41,21 +35,21 @@ type AuthenticatedInput =
     | ChatInput of chatInput : ChatInput
     | SignOut
 
-type AppInput<'a> =
-    | ReadingPreferencesInput of readingPreferencesInput : ReadingPreferencesInput
-    | ConnectingInput of connectingInput : ConnectingInput<'a>
+type AppInput =
+    | ReadingPreferencesInput of result : Result<Preferences option, exn>
+    | ConnectingInput of ws : Brw.WebSocket
     | UnauthenticatedInput of unauthenticatedInput : UnauthenticatedInput
     | AuthenticatedInput of authenticatedInput : AuthenticatedInput
 
 type UiInput =
-    | AddDebugMessageApp of message : string
+    | AddDebugMessageUi of message : string
     | DismissDebugMessage of debugId : DebugId
     | ToggleTheme
     | ToggleNavbarBurger
     | WritePreferencesResult of result : Result<unit, exn>
     | OnUiWsError of uiWsError : UiWsError
     | HandleServerWsApi of serverWsApi : ServerWsApi
-    | AppInput of appInput : AppInput<UiInput>
+    | AppInput of appInput : AppInput
 
 type Status =
     | Pending
@@ -79,7 +73,7 @@ type AuthenticatedState = {
     SendUiWsApi : (UiWsApi -> Cmd<UiInput>)
     AuthenticatedUser : AuthenticatedUser
     Page : Page
-    ChatState : ChatState // TODO-NMB: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
+    ChatState : ChatState // TODO-NMB-MEDIUM: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
     SignOutStatus : Status option }
 
 type AppState =

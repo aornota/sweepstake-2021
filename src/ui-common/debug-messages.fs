@@ -11,24 +11,24 @@ type DebugId = | DebugId of guid : Guid with static member Create () = Guid.NewG
 
 type DebugMessage = {
     DebugId : DebugId
-    DebugMessage : string }
+    DebugText : string }
 
 let [<Literal>] private DEBUG = "Debug"
 
-let private renderChildren theme colour source message = [
+let private renderChildren theme colour source text = [
     level true [
         levelLeft [
             levelItem [ para theme { paraDefaultSmallest with ParaColour = colour ; Weight = SemiBold } [ str (sprintf "%s | %s" source DEBUG) ] ]
             levelItem [ span theme spanDefault [] ] ] ]
-    para theme { paraDefaultSmallest with Weight = SemiBold } [ str message ] ]
+    para theme { paraDefaultSmallest with Weight = SemiBold } [ str text ] ]
 
-let debugMessage message = { DebugId = DebugId.Create () ; DebugMessage = message }
+let debugMessage debugText = { DebugId = DebugId.Create () ; DebugText = debugText }
 
 let removeDebugMessage debugId debugMessages = debugMessages |> List.filter (fun debugMessage -> debugMessage.DebugId <> debugId)
 
-let renderDebugMessage theme source message =
+let renderDebugMessage theme source debugText =
 #if DEBUG
-    let children = renderChildren theme (GreyscalePara GreyDarker) source message
+    let children = renderChildren theme (GreyscalePara GreyDarker) source debugText
     Some (columnContent
         [
             divVerticalSpace 10
@@ -46,7 +46,7 @@ let renderDebugMessages theme source (debugMessages:DebugMessage list) dispatch 
             [
                 yield! debugMessages
                     |> List.map (fun debugMessage ->
-                        let children = renderChildren theme (GreyscalePara GreyLighter) source debugMessage.DebugMessage
+                        let children = renderChildren theme (GreyscalePara GreyLighter) source debugMessage.DebugText
                         [
                             divVerticalSpace 10
                             notification theme { notificationDark with OnDismissNotification = Some (fun _ -> dispatch debugMessage.DebugId) } children

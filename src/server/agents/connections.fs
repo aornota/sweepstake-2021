@@ -178,16 +178,16 @@ type ConnectionsAgent () =
                 match uiWsApi with
                 | UiUnauthenticatedWsApi (SignInWs (sessionId, userName, _password)) ->
                     // SNH-NMB: What if connectionId not in connections? What if already have AuthenticatedUserSession for sessionId? (&c.)...
-                    // TODO-NMB: Handle properly, e.g. by checking userName and _password against real data...
+                    // TODO-NMB-MEDIUM: Handle properly, e.g. by checking userName and _password against real data...
                     let userId, alreadySignedIn = match connections |> userIdForUserName userName with | Some userId -> userId, true | None -> UserId.Create (), false
                     let authenticatedUser = { UserId = userId ; SessionId = sessionId ; UserName = userName }
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then (Error (sprintf "Fake SignInWs error -> %A" authenticatedUser))
-                        else if userName = "ann ewity" then (Error ("Username is reserved"))
-                        else (Ok authenticatedUser)
+                        if random.NextDouble () < 0.02 then Error (sprintf "Fake SignInWs error -> %A" authenticatedUser)
+                        else if userName = "ann ewity" then Error ("Username is reserved")
+                        else Ok authenticatedUser
 #else
-                        (Ok authenticatedUser)
+                        Ok authenticatedUser
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> signIn (connectionId, authenticatedUser.UserId, authenticatedUser.SessionId, authenticatedUser.UserName) else connections
@@ -199,15 +199,14 @@ type ConnectionsAgent () =
                     return! managing connections
                 | UiUnauthenticatedWsApi (AutoSignInWs (Jwt jwt)) ->
                     // SNH-NMB: What if connectionId not in connections? (&c.)...
-                    // TODO-NMB: Handle properly, e.g. by verifying jwt (i.e. can decrypt | details match [inc. permissions] | &c.)...
+                    // TODO-NMB-MEDIUM: Handle properly, e.g. by verifying jwt (i.e. can decrypt | details match [inc. permissions] | &c.)...
                     let authenticatedUser = jwt
                     let alreadySignedIn = connections |> countForUserId jwt.UserId > 0
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then (Error (sprintf "Fake AutoSignInWs error -> %A" authenticatedUser))
-                        else (Ok authenticatedUser)
+                        if random.NextDouble () < 0.02 then Error (sprintf "Fake AutoSignInWs error -> %A" authenticatedUser) else Ok authenticatedUser
 #else
-                        (Ok authenticatedUser)
+                        Ok authenticatedUser
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> signIn (connectionId, authenticatedUser.UserId, authenticatedUser.SessionId, authenticatedUser.UserName) else connections
@@ -221,9 +220,9 @@ type ConnectionsAgent () =
                     // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthenticatedUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then (Error (sprintf "Fake SignOutWs error -> %A" jwt)) else (Ok jwt.SessionId)
+                        if random.NextDouble () < 0.02 then Error (sprintf "Fake SignOutWs error -> %A" jwt) else Ok jwt.SessionId
 #else
-                        (Ok authenticatedUser)
+                        Ok jwt.SessionId
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     // Note: Okay to sign-out connection-for-connectionId before sending SignOutResultWs (since will always match OnlyConnectedId, even if signed-out).
@@ -243,9 +242,9 @@ type ConnectionsAgent () =
                     // SNH-NMB: What if connectionId not in connections? What if no AuthenticatedUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then (Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageWs error -> %A -> %A" jwt chatMessage))) else (Ok chatMessage)
+                        if random.NextDouble () < 0.02 then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageWs error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
 #else
-                        (Ok authenticatedUser)
+                        Ok chatMessage
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> updateLastApi (connectionId, jwt.UserId, jwt.SessionId) else connections

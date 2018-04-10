@@ -64,7 +64,7 @@ let button theme buttonData children =
     let buttonData = theme.TransformButtonData buttonData
     let tooltipData = match buttonData.Interaction with | Clickable (_, Some tooltipData) -> Some tooltipData | NotEnabled (Some tooltipData) -> Some tooltipData | _ -> None
     let tooltipData = match tooltipData with | Some tooltipData -> Some (theme.TransformTooltipData tooltipData) | None -> None
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match buttonData.ButtonSemantic with
         | Some Primary -> Some (Button.Color IsPrimary) | Some Info -> Some (Button.Color IsInfo) | Some Link -> None (* Some (Button.Color IsLink) *)
@@ -154,7 +154,7 @@ let media theme left content right =
 
 let message theme messageData headerChildren bodyChildren =
     let messageData = theme.TransformMessageData messageData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match messageData.MessageSemantic with
         | Some Primary -> Some (Message.Color IsPrimary) | Some Info -> Some (Message.Color IsInfo) | Some Link -> None (* Some (Message.Color IsLink) *)
@@ -174,7 +174,7 @@ let message theme messageData headerChildren bodyChildren =
 
 let navbar theme navbarData children =
     let navbarData = theme.TransformNavbarData navbarData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match navbarData.NavbarSemantic with
         | Some Primary -> Some (Navbar.Color IsPrimary) | Some Info -> Some (Navbar.Color IsInfo) | Some Link -> None (* Some (Navbar.Color IsLink) *)
@@ -211,7 +211,7 @@ let navbarMenu theme navbarData isActive children =
 
 let notification theme notificationData children =
     let notificationData = theme.TransformNotificationData notificationData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match notificationData.NotificationSemantic with
         | Some Primary -> Some (Notification.Color IsPrimary) | Some Info -> Some (Notification.Color IsInfo) | Some Link -> None (* Some (Notification.Color IsLink) *)
@@ -228,7 +228,7 @@ let notification theme notificationData children =
 
 let pageLoader theme pageLoaderData =
     let pageLoaderData = theme.TransformPageLoaderData pageLoaderData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match pageLoaderData.PageLoaderSemantic with
         | Primary -> Some (PageLoader.Color IsPrimary) | Info -> Some (PageLoader.Color IsInfo) | Link -> None (* Some (PageLoader.Color IsLink) *)
@@ -268,7 +268,7 @@ let para theme paraData children =
 let progress theme useAlternativeClass progressData =
     let className = getClassName theme useAlternativeClass
     let progressData = theme.TransformProgressData progressData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match progressData.ProgressSemantic with
         | Some Primary -> Some (Progress.Color IsPrimary) | Some Info -> Some (Progress.Color IsInfo) | Some Link -> None (* Some (Progress.Color IsLink) *)
@@ -327,7 +327,7 @@ let table theme useAlternativeClass tableData children =
 
 let tag theme tagData children =
     let tagData = theme.TransformTagData tagData
-    // TODO-NMB: Rework Link hack once supported by Fulma...
+    // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
         match tagData.TagSemantic with
         | Some Primary -> Some (Tag.Color IsPrimary) | Some Info -> Some (Tag.Color IsInfo) | Some Link -> None (* Some (Tag.Color IsLink) *)
@@ -347,7 +347,7 @@ let tag theme tagData children =
         yield! children
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
-// TODO-NMB: "Genericize"?...
+// TODO-NMB-MEDIUM: "Genericize"?...
 let textArea theme (key:Guid) text errorText autoFocus disabled (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
@@ -363,7 +363,7 @@ let textArea theme (key:Guid) text errorText autoFocus disabled (onChange:string
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
         match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
 
-// TODO-NMB: "Genericize"?...
+// TODO-NMB-MEDIUM: "Genericize"?...
 let textBox theme (key:Guid) text iconData isPassword errorText autoFocus disabled (onChange:string -> unit) onEnter =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [

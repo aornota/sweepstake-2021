@@ -36,7 +36,7 @@ let private columns isMobile children = Columns.columns [ if isMobile then yield
 
 let private columnEmpty = Column.column [] []
 
-// TODO-NMB: Make this configurable (i.e. rather than hard-coding responsive sizes)?...
+// TODO-NMB-LOW: Make this configurable (i.e. rather than hard-coding responsive sizes)?...
 let columnContent children =
     columns true [
         columnEmpty

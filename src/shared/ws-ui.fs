@@ -2,7 +2,7 @@ module Aornota.Sweepstake2018.Shared.Ws.Ui
 
 open Aornota.Sweepstake2018.Shared.Domain
 
-// TODO-NMB: Distinguish between "commands" and "queries"?...
+// TODO-NMB-MEDIUM: Distinguish between "commands" and "queries"?...
 
 type UiUnauthenticatedWsApi =
     | SignInWs of sessionId : SessionId * userName : string * password : string

@@ -10,7 +10,7 @@ open Aornota.UI.Theme.Render.Bulma
 
 open System
 
-let private renderChatMessageUi theme authenticatedUserName isSigningOut dispatch chatMessageUi =
+let private renderChatMessageUi theme authenticatedUserName isSigningOut chatDispatch chatMessageUi =
     let renderChildren userName (messageText:string) (timestamp:DateTime) unconfirmed errorText = [  
         let message =
             messageText.Split ([| "\n" |], StringSplitOptions.RemoveEmptyEntries)
@@ -32,7 +32,7 @@ let private renderChatMessageUi theme authenticatedUserName isSigningOut dispatc
         match chatMessageUi.ChatMessageType with
         | Sent -> notificationLight, true, None
         | SendFailed errorText -> notificationDanger, false, Some errorText
-        // TODO-NMB: Would it be better to [add and] compare ChatMessage.UserId?...
+        // TODO-NMB-LOW: Would it be better to [add and] compare ChatMessage.UserId?...
         | Received when chatMessageUi.ChatMessage.UserName = authenticatedUserName -> notificationPrimary, false, None
         | Received -> notificationInfo, false, None
     let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
@@ -42,18 +42,18 @@ let private renderChatMessageUi theme authenticatedUserName isSigningOut dispatc
         // ...or not...
         //not unconfirmed
         // ...NMB-TEMP
-    let onDismissNotification = if dismissable then Some (fun _ -> dispatch (DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId)) else None
+    let onDismissNotification = if dismissable then Some (fun _ -> chatDispatch (DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId)) else None
     [
         divVerticalSpace 10
         notification theme { notificationData with OnDismissNotification = onDismissNotification } children
     ]
 
-let render theme state isSigningOut dispatch =
-    let (ChatMessageId newChatMessageId) = state.NewChatMessage.NewChatMessageId
+let render theme chatState isSigningOut chatDispatch =
+    let (ChatMessageId newChatMessageId) = chatState.NewChatMessage.NewChatMessageId
     let sendButtonInteraction, onEnter =
-        match validateChatMessageText state.NewChatMessage.MessageText with
+        match validateChatMessageText chatState.NewChatMessage.MessageText with
         | Some _ -> NotEnabled None, ignore
-        | None -> Clickable ((fun _ -> dispatch SendChatMessage), None), (fun _ -> dispatch SendChatMessage)
+        | None -> Clickable ((fun _ -> chatDispatch SendChatMessage), None), (fun _ -> chatDispatch SendChatMessage)
     columnContent [
         yield para theme paraCentredSmall [ str "Chat" ]
         yield hr theme false
@@ -62,17 +62,17 @@ let render theme state isSigningOut dispatch =
                 // TEMP-NMB: textArea...
                 //textArea theme newChatMessageId state.NewChatMessage.MessageText state.NewChatMessage.ErrorText true isSigningOut (MessageTextChanged >> dispatch)
                 // ...or textBox...
-                textBox theme newChatMessageId state.NewChatMessage.MessageText (Some iconFileSmall) false state.NewChatMessage.ErrorText true isSigningOut (MessageTextChanged >> dispatch) onEnter
+                textBox theme newChatMessageId chatState.NewChatMessage.MessageText (Some iconFileSmall) false chatState.NewChatMessage.ErrorText true isSigningOut (MessageTextChanged >> chatDispatch) onEnter
                 // ...NMB-TEMP
             ]
         yield field theme { fieldDefault with Grouped = Some RightAligned } [
             button theme { buttonSuccessSmall with Interaction = sendButtonInteraction } [ str "Send chat message" ] ]
         yield hr theme false
-        yield! state.ChatMessageUis
+        yield! chatState.ChatMessageUis
             |> List.sortBy (fun chatMessageUi -> chatMessageUi.Timestamp)
             // TEMP-NMB: Show more recent messages at the top...
             |> List.rev
             // ...NMB-TEMP
-            |> List.map (renderChatMessageUi theme state.AuthenticatedUser.UserName isSigningOut dispatch)
+            |> List.map (renderChatMessageUi theme chatState.AuthenticatedUser.UserName isSigningOut chatDispatch)
             |> List.collect id
     ]
