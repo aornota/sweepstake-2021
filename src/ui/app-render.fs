@@ -39,8 +39,7 @@ let private renderHeader theme uiState uiDispatch =
     navbar theme navbarData [
         container (Some Fluid) [
             navbarBrand [
-                // TODO-NMB-MEDIUM: Use different image?...
-                yield navbarItem [ image "public/resources/djnarration-24x24.png" (Some (FixedSize Square24)) ]
+                yield navbarItem [ image "public/resources/sweepstake-2018-24x24.png" (Some (FixedSize Square24)) ]
                 yield navbarItem [ para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = Bold } [ str SWEEPSTAKE_2018 ] ]
                 yield navbarItem [ para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = SemiBold } [ str "|" ] ]
                 yield! statusInfo |> List.map (fun element -> navbarItem [ element ])
