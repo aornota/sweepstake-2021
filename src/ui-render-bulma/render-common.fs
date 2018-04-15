@@ -48,6 +48,8 @@ let divCentred = { divDefault with IsCentred = true }
 
 let divVerticalSpace height = div { divDefault with PadV = Some (height / 2) } [ str SPACE ]
 
+let divEmpty = div divDefault []
+
 let onEnterPressed onEnter =
     OnKeyDown (fun (ev:KeyboardEvent) ->
         match ev with

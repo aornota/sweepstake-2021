@@ -15,6 +15,7 @@ open Microsoft.AspNetCore.Http
     
 #if DEBUG
 let private random = Random ()
+let private fakeErrorFrequency = 0.02
 #endif
 
 type WsMiddleware (next:RequestDelegate) =
@@ -23,14 +24,14 @@ type WsMiddleware (next:RequestDelegate) =
         try // note: buffer size should be adequate (as serialized UiWsApi data should be relatively small)
             let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
 #if DEBUG
-            if random.NextDouble () < 0.02 then failwith (sprintf "Fake error receiving message for %A" connectionId)
+            if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error receiving message for %A" connectionId)
 #endif
             if receiveResult.CloseStatus.HasValue then return receiveResult
             else
                 try // note: expect buffer to be deserializable to UiWsApi               
                     let uiWs = ofJson<UiWsApi> (Encoding.UTF8.GetString buffer)
 #if DEBUG
-                    if random.NextDouble () < 0.02 then failwith (sprintf "Fake error deserializing %A for %A" uiWs connectionId)
+                    if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error deserializing %A for %A" uiWs connectionId)
 #endif
                     connectionsAgent.HandleUiWsApi (connectionId, uiWs)
                     return! receiving (connectionId, ws)

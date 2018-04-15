@@ -32,51 +32,51 @@ let private initialChatMessageUis : ChatMessageUi list =
 
 let private defaultNewChatMessage () = { NewChatMessageId = ChatMessageId.Create () ; MessageText = String.Empty ; ErrorText = None }
 
-let initialize authenticatedUser : ChatState * Cmd<ChatInput> =
+let initialize authenticatedUser : State * Cmd<Input> =
     let state = {
         AuthenticatedUser = authenticatedUser
         ChatMessageUis = initialChatMessageUis
         NewChatMessage = defaultNewChatMessage () }
     state, Cmd.none
 
-let private handleServerChatWsApi serverChatWsApi chatState : ChatState * Cmd<ChatInput> =
+let private handleServerChatWsApi serverChatWsApi state : State * Cmd<Input> =
     match serverChatWsApi with
     | SendChatMessageResultWs (Ok chatMessage) -> // TODO-NMB-LOW: AddDebugMessage if no corresponding Sent message?...
         let chatMessageUis =
-            chatState.ChatMessageUis
+            state.ChatMessageUis
             |> List.map (fun chatMessageUi ->
                 match chatMessageUi.ChatMessageType with
                 | Sent when chatMessageUi.ChatMessage.ChatMessageId = chatMessage.ChatMessageId -> { chatMessageUi with ChatMessageType = Received }
                 | _ -> chatMessageUi)
-        { chatState with ChatMessageUis = chatMessageUis }, Cmd.none
+        { state with ChatMessageUis = chatMessageUis }, Cmd.none
     | SendChatMessageResultWs (Error (chatMessageId, errorText)) -> // TODO-NMB-LOW: AddDebugMessage if no corresponding Sent message?...
         let chatMessageUis =
-            chatState.ChatMessageUis
+            state.ChatMessageUis
             |> List.map (fun chatMessageUi ->
                 match chatMessageUi.ChatMessageType with
                 | Sent when chatMessageUi.ChatMessage.ChatMessageId = chatMessageId -> { chatMessageUi with ChatMessageType = SendFailed errorText }
                 | _ -> chatMessageUi)
-        { chatState with ChatMessageUis = chatMessageUis }, errorToastCmd "Unable to send chat message"
+        { state with ChatMessageUis = chatMessageUis }, errorToastCmd "Unable to send chat message"
     | OtherUserChatMessageWs chatMessage ->
-        let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Received ; Timestamp = DateTime.Now } :: chatState.ChatMessageUis
-        { chatState with ChatMessageUis = chatMessageUis }, Cmd.none
+        let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Received ; Timestamp = DateTime.Now } :: state.ChatMessageUis
+        { state with ChatMessageUis = chatMessageUis }, Cmd.none
 
-let private handleSharedInput sharedInput chatState =
+let private handleSharedInput sharedInput state =
     match sharedInput with
-    | ReceiveServerWsApi (ServerChatWsApi serverChatWsApi) -> handleServerChatWsApi serverChatWsApi chatState
-    | _ -> chatState, Cmd.none // note: all other SharedInput expected to be handled by App.State.transition
+    | ReceiveServerWsApi (ServerChatWsApi serverChatWsApi) -> handleServerChatWsApi serverChatWsApi state
+    | _ -> state, Cmd.none // note: all other SharedInput expected to be handled by App.State.transition
 
-let transition chatInput chatState =
-    match chatInput with
-    | SharedInput sharedInput -> handleSharedInput sharedInput chatState
+let transition input state =
+    match input with
+    | SharedInput sharedInput -> handleSharedInput sharedInput state
     | DismissChatMessage chatMessageId -> // note: silently ignore unknown chatMessageId
-        let chatMessageUis = chatState.ChatMessageUis |> List.filter (fun chatMessageUi -> chatMessageUi.ChatMessage.ChatMessageId <> chatMessageId)
-        { chatState with ChatMessageUis = chatMessageUis }, Cmd.none
+        let chatMessageUis = state.ChatMessageUis |> List.filter (fun chatMessageUi -> chatMessageUi.ChatMessage.ChatMessageId <> chatMessageId)
+        { state with ChatMessageUis = chatMessageUis }, Cmd.none
     | MessageTextChanged messageText ->
-        let newChatMessage = { chatState.NewChatMessage with MessageText = messageText ; ErrorText = validateChatMessageText messageText }
-        { chatState with NewChatMessage = newChatMessage }, Cmd.none
+        let newChatMessage = { state.NewChatMessage with MessageText = messageText ; ErrorText = validateChatMessageText messageText }
+        { state with NewChatMessage = newChatMessage }, Cmd.none
     | SendChatMessage -> // note: assume no need to validate state.NewChatMessage.MessageText (i.e. because Chat.Render.render will ensure that SendChatMessage can only be dispatched when valid)
-        let chatMessage = { ChatMessageId = chatState.NewChatMessage.NewChatMessageId ; UserName = chatState.AuthenticatedUser.UserName ; MessageText = chatState.NewChatMessage.MessageText }
-        let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Sent ; Timestamp = DateTime.Now } :: chatState.ChatMessageUis
-        let cmd = SendAuthenticatedWsApi (chatState.AuthenticatedUser, SendChatMessageWs chatMessage) |> SharedInput |> Cmd.ofMsg
-        { chatState with ChatMessageUis = chatMessageUis ; NewChatMessage = defaultNewChatMessage () }, cmd
+        let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = state.AuthenticatedUser.UserName ; MessageText = state.NewChatMessage.MessageText }
+        let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Sent ; Timestamp = DateTime.Now } :: state.ChatMessageUis
+        let cmd = SendAuthenticatedWsApi (state.AuthenticatedUser, SendChatMessageWs chatMessage) |> SharedInput |> Cmd.ofMsg
+        { state with ChatMessageUis = chatMessageUis ; NewChatMessage = defaultNewChatMessage () }, cmd

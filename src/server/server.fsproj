@@ -5,6 +5,7 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../common/units-of-measure.fs" />
     <Compile Include="../shared/literals.fs" />
     <Compile Include="../shared/domain.fs" />
     <Compile Include="../shared/ws-ui.fs" />

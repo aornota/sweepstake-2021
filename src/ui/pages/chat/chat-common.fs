@@ -5,7 +5,7 @@ open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
-type ChatInput =
+type Input =
     | SharedInput of sharedInput : SharedInput
     | DismissChatMessage of chatMessageId : ChatMessageId
     | MessageTextChanged of messageText : string
@@ -26,7 +26,7 @@ type NewChatMessage = {
     MessageText : string
     ErrorText : string option }
 
-type ChatState = {
+type State = {
     AuthenticatedUser : AuthenticatedUser
     ChatMessageUis : ChatMessageUi list
     NewChatMessage : NewChatMessage }

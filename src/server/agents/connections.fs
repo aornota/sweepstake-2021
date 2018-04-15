@@ -40,6 +40,7 @@ type private SendFilter =
 
 #if DEBUG
 let private random = Random ()
+let private fakeErrorFrequency = 0.02
 #endif
 
 type ConnectionsAgent () =
@@ -183,7 +184,7 @@ type ConnectionsAgent () =
                     let authenticatedUser = { UserId = userId ; SessionId = sessionId ; UserName = userName }
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then Error (sprintf "Fake SignInWs error -> %A" authenticatedUser)
+                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignInWs error -> %A" authenticatedUser)
                         else if userName = "ann ewity" then Error ("Username is reserved")
                         else Ok authenticatedUser
 #else
@@ -204,7 +205,7 @@ type ConnectionsAgent () =
                     let alreadySignedIn = connections |> countForUserId jwt.UserId > 0
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then Error (sprintf "Fake AutoSignInWs error -> %A" authenticatedUser) else Ok authenticatedUser
+                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake AutoSignInWs error -> %A" authenticatedUser) else Ok authenticatedUser
 #else
                         Ok authenticatedUser
 #endif
@@ -220,7 +221,7 @@ type ConnectionsAgent () =
                     // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthenticatedUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then Error (sprintf "Fake SignOutWs error -> %A" jwt) else Ok jwt.SessionId
+                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignOutWs error -> %A" jwt) else Ok jwt.SessionId
 #else
                         Ok jwt.SessionId
 #endif
@@ -242,7 +243,7 @@ type ConnectionsAgent () =
                     // SNH-NMB: What if connectionId not in connections? What if no AuthenticatedUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
-                        if random.NextDouble () < 0.02 then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageWs error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
+                        if random.NextDouble () < fakeErrorFrequency then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageWs error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
 #else
                         Ok chatMessage
 #endif

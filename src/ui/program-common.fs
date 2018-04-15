@@ -1,13 +1,13 @@
-module Aornota.Sweepstake2018.UI.App.Common
+module Aornota.Sweepstake2018.UI.Program.Common
+
+open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Sweepstake2018.Shared.Domain
 open Aornota.Sweepstake2018.Shared.Ws.Server
 open Aornota.Sweepstake2018.Shared.Ws.Ui
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
-open Aornota.UI.Common.DebugMessages
-open Aornota.UI.Theme.Dark
-open Aornota.UI.Theme.Default
+open Aornota.UI.Common.Notifications
 
 open System
 
@@ -32,7 +32,7 @@ type UnauthenticatedInput =
     | SignIn
 
 type AuthenticatedInput =
-    | ChatInput of chatInput : ChatInput
+    | ChatInput of chatInput : Input
     | SignOut
 
 type AppInput =
@@ -41,9 +41,12 @@ type AppInput =
     | UnauthenticatedInput of unauthenticatedInput : UnauthenticatedInput
     | AuthenticatedInput of authenticatedInput : AuthenticatedInput
 
-type UiInput =
-    | AddDebugMessageUi of message : string
-    | DismissDebugMessage of debugId : DebugId
+type Input =
+#if TICK
+    | Tick
+#endif
+    | AddNotificationMessage of notificationMessage : NotificationMessage
+    | DismissNotificationMessage of notificationId : NotificationId
     | ToggleTheme
     | ToggleNavbarBurger
     | WritePreferencesResult of result : Result<unit, exn>
@@ -56,7 +59,7 @@ type Status =
     | Failed of errorText : string
 
 type UnauthenticatedState = {
-    SendUiUnauthenticatedWsApi : (UiUnauthenticatedWsApi -> Cmd<UiInput>)
+    SendUiUnauthenticatedWsApi : (UiUnauthenticatedWsApi -> Cmd<Input>) // TODO-NMB-HIGH: Rethink this, e.g. since functions do not play well with lazyView?...
     UserNameKey : Guid
     UserNameText : string
     UserNameErrorText : string option
@@ -70,10 +73,10 @@ type Page =
     | ChatPage
 
 type AuthenticatedState = {
-    SendUiWsApi : (UiWsApi -> Cmd<UiInput>)
+    SendUiWsApi : (UiWsApi -> Cmd<Input>) // TODO-NMB-HIGH: Rethink this, e.g. since functions do not play well with lazyView?...
     AuthenticatedUser : AuthenticatedUser
     Page : Page
-    ChatState : ChatState // TODO-NMB-MEDIUM: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
+    ChatState : State // TODO-NMB-MEDIUM: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
     SignOutStatus : Status option }
 
 type AppState =
@@ -84,17 +87,16 @@ type AppState =
     | Unauthenticated of unauthenticatedState : UnauthenticatedState
     | Authenticated of authenticatedState : AuthenticatedState
 
-type UiState = {
-    DebugMessages : DebugMessage list
+type State = {
+    Ticks : int<tick> // note: will only be updated when TICK defined
+    NotificationMessages : NotificationMessage list
     UseDefaultTheme : bool
     SessionId : SessionId
     NavbarBurgerIsActive : bool
     Ws : Brw.WebSocket option
     AppState : AppState }
 
-let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (pre-α prototype)"
-
-let getTheme useDefaultTheme = if useDefaultTheme then themeDefault else themeDark
+let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
 
 let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
 let validatePasswordText passwordText = 

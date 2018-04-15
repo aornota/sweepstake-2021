@@ -4,6 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../common/units-of-measure.fs" />
     <Compile Include="../shared/literals.fs" />
     <Compile Include="../shared/domain.fs" />
     <Compile Include="../shared/ws-ui.fs" />
@@ -13,17 +14,19 @@
     <Compile Include="../ui-theme-bulma/theme-common.fs" />
     <Compile Include="../ui-theme-bulma/theme-default.fs" />
     <Compile Include="../ui-theme-bulma/theme-dark.fs" />
+    <Compile Include="../ui-theme-bulma/theme-shared.fs" />
     <Compile Include="../ui-theme-bulma/theme-render-bulma.fs" />
-    <Compile Include="../ui-common/debug-messages.fs" />
     <Compile Include="../ui-common/local-storage.fs" />
+    <Compile Include="../ui-common/timestamp-helper.fs" />
+    <Compile Include="../ui-common/notifications.fs" />
     <Compile Include="ui-shared.fs" />
     <Compile Include="pages/chat/chat-common.fs" />
     <Compile Include="pages/chat/chat-state.fs" />
     <Compile Include="pages/chat/chat-render.fs" />
-    <Compile Include="app-common.fs" />
-    <Compile Include="app-state.fs" />
-    <Compile Include="app-render.fs" />
-    <Compile Include="app.fs" />
+    <Compile Include="program-common.fs" />
+    <Compile Include="program-state.fs" />
+    <Compile Include="program-render.fs" />
+    <Compile Include="program-run.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

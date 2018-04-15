@@ -189,11 +189,11 @@ let navbar theme navbarData children =
         match customClass with | Some customClass -> yield customClass | None -> ()
     ] children
 
-let navbarDropDown theme text children =
+let navbarDropDown theme element children =
     let className = getClassName theme false
     Navbar.Item.div [ Navbar.Item.HasDropdown ; Navbar.Item.IsHoverable ] [
         // Note: Navbar.Link.CustomClass | Navbar.Dropdown.CustomClass do not work, so handle manually.
-        Rct.div [ ClassName (sprintf "navbar-link %s" className) ] [ text ]
+        Rct.div [ ClassName (sprintf "navbar-link %s" className) ] [ element ]
         Rct.div [ ClassName (sprintf "navbar-dropdown %s" className) ] children ]
 
 let navbarDropDownItem theme isActive children =
