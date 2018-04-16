@@ -37,6 +37,12 @@ type ButtonData = {
     IconLeft : IconData option
     IconRight : IconData option }
 
+type LinkType =
+    | SameWindow of url : string
+    | NewWindow of url : string
+    | DownloadFile of url : string * fileName : string
+    | ClickableLink of onClick : (MouseEvent -> unit)
+
 type MessageData = {
     MessageSemantic : Semantic option
     MessageSize : Size
@@ -88,7 +94,7 @@ type TableData = {
 type TabData = {
     IsActive : bool
     TabText : string
-    TabLink : string }
+    TabLinkType : LinkType }
 
 type TabsData = {
     IsBoxed : bool

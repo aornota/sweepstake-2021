@@ -23,12 +23,6 @@ type FieldData = {
     Grouped : Alignment option
     TooltipData : TooltipData option }
 
-type LinkType =
-    | SameWindow of url : string
-    | NewWindow of url : string
-    | DownloadFile of url : string * fileName : string
-    | ClickableLink of onClick : (MouseEvent -> unit)
-
 let [<Literal>] private IS_LINK = "is-link"
 
 let private delete onClick = Delete.delete [ Delete.OnClick onClick ] []
@@ -311,8 +305,7 @@ let tabs theme tabsData =
     Rct.div [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ]
         [ Rct.ul [] [
             for tab in tabsData.Tabs do
-                yield Tabs.tab [ Tabs.Tab.IsActive tab.IsActive ] [ Rct.a [ Href tab.TabLink ] [ str tab.TabText ] ]
-        ] ]
+                yield Tabs.tab [ Tabs.Tab.IsActive tab.IsActive ] [ link theme tab.TabLinkType [ str tab.TabText ] ] ] ]
 
 let table theme useAlternativeClass tableData children =
     let className = getClassName theme useAlternativeClass
@@ -348,11 +341,11 @@ let tag theme tagData children =
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
-let textArea theme (key:Guid) text errorText autoFocus disabled (onChange:string -> unit) =
+let textArea theme (key:Guid) text helpErrorText autoFocus disabled (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Textarea.textarea [
-            match errorText with | Some _ -> yield Textarea.Color IsDanger | None -> ()
+            match helpErrorText with | Some _ -> yield Textarea.Color IsDanger | None -> ()
             yield Textarea.CustomClass className
             yield Textarea.Size IsSmall
             yield Textarea.DefaultValue text
@@ -361,14 +354,14 @@ let textArea theme (key:Guid) text errorText autoFocus disabled (onChange:string
                 Disabled disabled
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
-        match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
+        match helpErrorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
-let textBox theme (key:Guid) text iconData isPassword errorText autoFocus disabled (onChange:string -> unit) onEnter =
+let textBox theme (key:Guid) text iconData isPassword helpErrorText autoFocus disabled (onChange:string -> unit) onEnter =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Input.text [
-            match errorText with | Some _ -> yield Input.Color IsDanger | None -> ()
+            match helpErrorText with | Some _ -> yield Input.Color IsDanger | None -> ()
             yield Input.CustomClass className
             yield Input.Size IsSmall
             yield Input.DefaultValue text
@@ -380,4 +373,4 @@ let textBox theme (key:Guid) text iconData isPassword errorText autoFocus disabl
                 OnChange (fun ev -> !!ev.target?value |> onChange)
                 onEnterPressed onEnter ] ]
         match iconData with | Some iconData -> yield icon { iconData with IconAlignment = Some LeftAligned } | None -> ()
-        match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
+        match helpErrorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]

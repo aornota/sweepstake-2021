@@ -21,15 +21,35 @@ open Elmish.React.Common
 
 module Rct = Fable.Helpers.React
 
-type HeaderStatus = | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn | SignedIn of authenticatedUser : AuthenticatedUser
+type private HeaderStatus = | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn | SignedIn of authenticatedUser : AuthenticatedUser
 
-let headerStatus (appState:AppState) =
+let private headerStatus (appState:AppState) =
     match appState with
     | ReadingPreferences -> ReadingPreferencesHS | Connecting _ -> ConnectingHS | ServiceUnavailable -> ServiceUnavailableHS | AutomaticallySigningIn _ -> SigningIn
-    | Unauthenticated unauthenticatedState -> match unauthenticatedState.SignInStatus with | Some Pending -> SigningIn | Some (Failed _) | None -> NotSignedIn
-    | Authenticated authenticatedState -> match authenticatedState.SignOutStatus with | Some Pending -> SigningOut | Some (Failed _) | None -> SignedIn authenticatedState.AuthenticatedUser
+    | Unauthenticated unauthenticatedState ->
+        match unauthenticatedState.SignInState with
+        | Some signInState -> match signInState.SignInStatus with | Some Pending -> SigningIn | Some (Failed _) | None -> NotSignedIn
+        | None -> NotSignedIn
+    | Authenticated authenticatedState -> match authenticatedState.SignOutStatus with | Some _ -> SigningOut | None -> SignedIn authenticatedState.AuthenticatedUser
 
-let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, _:int<tick>) dispatch =
+let headerPages (appState:AppState) =
+    match appState with
+    | Unauthenticated unauthenticatedState ->
+        [
+            "ToDoUP", unauthenticatedState.CurrentPage = ToDoUP, ShowUnauthenticatedPage ToDoUP |> UnauthenticatedInput
+        ]
+    | Authenticated authenticatedState ->
+        // TODO-NMB-LOW: Finesse handling of "unseen counts" (i.e. something better than count-in-parentheses)...
+        let unseenChatCount = match authenticatedState.ChatState with | Some chatState -> Some chatState.UnseenCount | None -> None
+        let chatText = match unseenChatCount with | Some unseenCount when unseenCount > 0 -> sprintf "Chat (%i)" unseenCount | _ -> "Chat"
+        [
+            "ToDoUP", authenticatedState.CurrentPage = UnauthenticatedPage ToDoUP, ShowPage (UnauthenticatedPage ToDoUP) |> AuthenticatedInput
+            "ToDoAP", authenticatedState.CurrentPage = AuthenticatedPage ToDoAP, ShowPage (AuthenticatedPage ToDoAP) |> AuthenticatedInput
+            chatText, authenticatedState.CurrentPage = AuthenticatedPage ChatPage, ShowPage (AuthenticatedPage ChatPage) |> AuthenticatedInput
+        ]
+    | _ -> []
+
+let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, headerPages, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     let statusInfo =
         let paraStatus = { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker }
@@ -40,17 +60,23 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, _
         | ServiceUnavailableHS -> [ para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger ; Weight = Bold } [ str "Service unavailable" ] ]
         | SigningIn -> [ para theme paraStatus [ str "Signing-in... " ; spinner ] ]
         | SigningOut -> [ para theme paraStatus [ str "Signing-out... " ; spinner ] ]
-        | NotSignedIn -> [ para theme paraStatus [ str "Not signed-in" ] ]
+        | NotSignedIn ->
+            [
+                para theme paraStatus [ str "Not signed-in" ]
+                para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> ShowSignIn |> UnauthenticatedInput |> AppInput |> dispatch)) [ str "Sign-in" ] ]
+            ]
         | SignedIn authenticatedUser -> [ para theme paraStatus [ str "Signed-in as " ; bold authenticatedUser.UserName ] ]
     let authenticatedUserDropDown =
         match headerStatus with
         | SignedIn _ -> 
-            // TODO-NMB-MEDIUM... let changePassword = link theme (ClickableLink (fun _ -> uiDispatch (ChangePassword |> AuthenticatedInput |> AppInput))) [ str "Change password" ]
-            let signOut = link theme (ClickableLink (fun _ -> dispatch (SignOut |> AuthenticatedInput |> AppInput))) [ str "Sign out" ]
+            let changePassword = str "Change password" // TODO-NMB-MEDIUM... link theme (ClickableLink (fun _ -> ChangePassword |> AuthenticatedInput |> AppInput |> dispatch)) [ str "Change password" ]
+            let signOut = link theme (ClickableLink (fun _ -> SignOut |> AuthenticatedInput |> AppInput |> dispatch)) [ str "Sign out" ]
             Some (navbarDropDown theme (icon iconUserSmall) [
-                    navbarDropDownItem theme false [ para theme paraDefaultSmallest [ str "TODO:Change password" ] ]
+                    navbarDropDownItem theme false [ para theme paraDefaultSmallest [ changePassword ] ]
                     navbarDropDownItem theme false [ para theme paraDefaultSmallest [ signOut ] ] ])
         | _ -> None
+    let pageTabs =
+        headerPages |> List.map (fun (text, isActive, appInput) -> { IsActive = isActive ; TabText = text ; TabLinkType = ClickableLink (fun _ -> appInput |> AppInput |> dispatch) })
     let toggleThemeTooltipText = match useDefaultTheme with | true -> "Switch to dark theme" | false -> "Switch to light theme"           
     let toggleThemeTooltipData = if navbarBurgerIsActive then tooltipDefaultRight else tooltipDefaultLeft    
     let toggleThemeInteraction = Clickable ((fun _ -> dispatch ToggleTheme), Some { toggleThemeTooltipData with TooltipText = toggleThemeTooltipText })
@@ -65,45 +91,105 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, _
                 yield! statusInfo |> List.map (fun element -> navbarItem [ element ])
                 yield navbarBurger (fun _ -> dispatch ToggleNavbarBurger) navbarBurgerIsActive ]
             navbarMenu theme navbarData navbarBurgerIsActive [ 
-                navbarStart [ Rct.ofOption authenticatedUserDropDown ]
+                navbarStart [
+                    Rct.ofOption authenticatedUserDropDown
+                    navbarItem [ tabs theme { tabsDefault with Tabs = pageTabs } ] ]
                 navbarEnd [
 #if TICK
                     navbarItem [ para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker } [ str (DateTime.Now.ToString ("HH:mm:ss")) ] ]
 #endif
                     navbarItem [ button theme toggleThemeButton [] ] ] ] ] ]
 
-let private renderUnauthenticated (useDefaultTheme, unauthenticatedState:UnauthenticatedState) dispatch =
+let private renderSignInModal (useDefaultTheme, signInState) dispatch =
     let theme = getTheme useDefaultTheme
     let isSigningIn, signInInteraction, onEnter =
         let signIn = (fun _ -> dispatch SignIn)
-        match unauthenticatedState.SignInStatus with
+        match signInState.SignInStatus with
         | Some Pending -> true, Loading, ignore
         | Some (Failed _) | None ->
-            match validateUserNameText unauthenticatedState.UserNameText, validatePasswordText unauthenticatedState.PasswordText with
+            match validateUserNameText signInState.UserNameText, validatePasswordText signInState.PasswordText with
             | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore
             | None, None -> false, Clickable (signIn, None), signIn
-    columnContent [
-        para theme paraCentredSmall [ str "Sign in" ]
-        hr theme false
-        // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
-        field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme unauthenticatedState.UserNameKey unauthenticatedState.UserNameText (Some iconUserSmall) false unauthenticatedState.UserNameErrorText
-                (not unauthenticatedState.FocusPassword) isSigningIn (UserNameTextChanged >> dispatch) ignore ]
-        field theme { fieldDefault with Grouped = Some Centred } [
-            textBox theme unauthenticatedState.PasswordKey unauthenticatedState.PasswordText (Some iconPasswordSmall) true unauthenticatedState.PasswordErrorText
-                unauthenticatedState.FocusPassword isSigningIn (PasswordTextChanged >> dispatch) onEnter ]
-        field theme { fieldDefault with Grouped = Some Centred } [ button theme { buttonSuccessSmall with Interaction = signInInteraction } [ str "Sign in" ] ] ]
+    // TODO-NMB-HIGH: Display errorText somehow... let errorText = match signInState.SignInStatus with | Some (Failed errorText) -> Some errorText | Some Pending | None -> None
+    // TODO-NMB-HIGH: Theme-ing, i.e. useDefaultTheme and sweepstake-2018.css (&c.)...
+    Fulma.Components.Modal.modal [ Fulma.Components.Modal.IsActive true ] [
+        Fulma.Components.Modal.background [] []
+        Fulma.Components.Modal.Card.card [] [
+            Fulma.Components.Modal.Card.head [] [
+                Fulma.Components.Modal.Card.title [] [ para theme paraCentredSmall [ str "Sign in" ] ]
+                Fulma.Elements.Delete.delete [ Fulma.Elements.Delete.OnClick (fun _ -> CancelSignIn |> dispatch) ] [] ]
+            Fulma.Components.Modal.Card.body [] [
+                // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
+                field theme { fieldDefault with Grouped = Some Centred } [
+                    textBox theme signInState.UserNameKey signInState.UserNameText (Some iconUserSmall) false signInState.UserNameErrorText (not signInState.FocusPassword) isSigningIn
+                        (UserNameTextChanged >> dispatch) ignore ]
+                field theme { fieldDefault with Grouped = Some Centred } [
+                    textBox theme signInState.PasswordKey signInState.PasswordText (Some iconPasswordSmall) true signInState.PasswordErrorText signInState.FocusPassword isSigningIn
+                        (PasswordTextChanged >> dispatch) onEnter ]
+                field theme { fieldDefault with Grouped = Some Centred } [ button theme { buttonSuccessSmall with Interaction = signInInteraction } [ str "Sign in" ] ] ] ] ]
+
+// TEMP-NMB...
+let private renderToDoUP useDefaultTheme =
+        let theme = getTheme useDefaultTheme
+        columnContent [ para theme paraCentredSmall [ str "TODO-NMB-MEDIUM... UnauthorizedPage" ] ; hr theme false ; para theme paraCentredSmaller [ str "Not yet implemented" ] ]
+// ...NMB-TEMP
+
+let private renderUnauthenticated (useDefaultTheme, unauthenticatedState, _ticks) (dispatch:UnauthenticatedInput -> unit) =
+    div divDefault [
+        match unauthenticatedState.SignInState with
+        | Some signInState ->
+            yield lazyView2 renderSignInModal (useDefaultTheme, signInState) (SignInInput >> dispatch)
+        | None -> ()
+        match unauthenticatedState.CurrentPage with
+        | ToDoUP ->
+            yield lazyView renderToDoUP useDefaultTheme ]
+
+let private renderSignOutModal (useDefaultTheme, signOutStatus:Status) dispatch =
+    let theme = getTheme useDefaultTheme
+    // TODO-NMB-HIGH: Display errorText somehow (e.g. in place of iconSpinnerPulseLarge)...
+    let errorText = match signOutStatus with | Failed errorText -> Some errorText | Pending -> None
+    // TODO-NMB-HIGH: Theme-ing, i.e. useDefaultTheme and sweepstake-2018.css (&c.)...
+    Fulma.Components.Modal.modal [ Fulma.Components.Modal.IsActive true ] [
+        Fulma.Components.Modal.background [] []
+        Fulma.Components.Modal.Card.card [] [
+            Fulma.Components.Modal.Card.head [] [
+                yield Fulma.Components.Modal.Card.title [] [ para theme paraCentredSmall [ str "Signing-out..." ] ]
+                match errorText with
+                | Some _ ->
+                    yield Fulma.Elements.Delete.delete [ Fulma.Elements.Delete.OnClick (fun _ -> CancelSignOut |> dispatch) ] []
+                | None -> () ]
+            Fulma.Components.Modal.Card.body [] [ div divCentred [ icon iconSpinnerPulseLarge ] ] ] ]
+
+// TEMP-NMB...
+let private renderToDoAP useDefaultTheme =
+    let theme = getTheme useDefaultTheme
+    columnContent [ para theme paraCentredSmall [ str "TODO-NMB-MEDIUM... AuthorizedPage" ] ; hr theme false ; para theme paraCentredSmaller [ str "Not yet implemented" ] ]
+// ...NMB-TEMP
+
+let private renderAuthenticated (useDefaultTheme, authenticatedState, ticks) dispatch =
+    div divDefault [
+        match authenticatedState.SignOutStatus with
+        | Some signOutStatus ->
+            yield lazyView2 renderSignOutModal (useDefaultTheme, signOutStatus) dispatch
+        | None -> ()
+        match authenticatedState.CurrentPage with
+        | UnauthenticatedPage ToDoUP ->
+            yield renderToDoUP useDefaultTheme // TEMP-NMB: No lazyView since renderToDoUP and renderToDoAP will return the same until implemented properly...
+        | AuthenticatedPage ToDoAP ->
+            yield renderToDoAP useDefaultTheme // TEMP-NMB: No lazyView since renderToDoUP and renderToDoAP will return the same until implemented properly...
+        | AuthenticatedPage ChatPage ->
+            match authenticatedState.ChatState with
+            | Some chatState ->
+                yield lazyView2 Chat.Render.render (useDefaultTheme, chatState, ticks) (ChatInput >> dispatch)
+            | None ->
+                let message = debugMessage "CurrentPage is AuthenticatedPage ChatPage when ChatState is None" false
+                yield lazyView renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks) ]
 
 let private renderContent state dispatch =
     let renderSpinner () = div divCentred [ icon iconSpinnerPulseLarge ]
     let renderServiceUnavailable useDefaultTheme =
         let theme = getTheme useDefaultTheme
         columnContent [ para theme paraCentredSmall [ str "Service unavailable" ] ; hr theme false ; para theme paraCentredSmaller [ str "Please try again later" ] ]
-    // TODO-NMB-HIGH: Rework UnauthenticatedState to avoid needing custom equal function?...
-    let usEqual (useDefaultTheme1:bool, us1:UnauthenticatedState) (useDefaultTheme2:bool, us2:UnauthenticatedState) =
-        useDefaultTheme1 = useDefaultTheme2 && us1.UserNameKey = us2.UserNameKey && us1.UserNameText = us2.UserNameText && us1.UserNameErrorText = us2.UserNameErrorText
-        && us1.PasswordKey = us2.PasswordKey && us1.PasswordText = us2.PasswordText && us1.PasswordErrorText = us2.PasswordErrorText && us1.FocusPassword = us2.FocusPassword
-        && us1.SignInStatus = us2.SignInStatus
     div divDefault [
         yield lazyView divVerticalSpace 20
         match state.AppState with
@@ -112,14 +198,9 @@ let private renderContent state dispatch =
         | ServiceUnavailable ->
             yield lazyView renderServiceUnavailable state.UseDefaultTheme
         | Unauthenticated unauthenticatedState ->
-            // TODO-NMB-HIGH: Render something (via renderUnauthenticated?) if unauthenticatedState.SignInStatus is Some (Failed _)?...
-            yield lazyView2With usEqual renderUnauthenticated (state.UseDefaultTheme, unauthenticatedState) (UnauthenticatedInput >> AppInput >> dispatch)
+            yield renderUnauthenticated (state.UseDefaultTheme, unauthenticatedState, state.Ticks) (UnauthenticatedInput >> AppInput >> dispatch) // note: renderUnauthenticated has its own lazyView handling
         | Authenticated authenticatedState ->
-            // TODO-NMB-HIGH: Render something (analogous to renderDebugMessage?) if authenticatedState.SignOutStatus is Some (Failed _)?...
-            let isSigningOut = match authenticatedState.SignOutStatus with | Some Pending -> true | Some (Failed _) | None -> false
-            match authenticatedState.Page with
-            | ChatPage ->
-                yield lazyView2 Chat.Render.render (state.UseDefaultTheme, authenticatedState.ChatState, isSigningOut, state.Ticks) (ChatInput >> AuthenticatedInput >> AppInput >> dispatch)
+            yield renderAuthenticated (state.UseDefaultTheme, authenticatedState, state.Ticks) (AuthenticatedInput >> AppInput >> dispatch) // note: renderAuthenticated has its own lazyView handling
         yield lazyView divVerticalSpace 20 ]
 
 let private renderFooter useDefaultTheme =
@@ -139,10 +220,7 @@ let private renderFooter useDefaultTheme =
 
 let render state dispatch =
     div divDefault [
-        lazyView2 renderHeader (state.UseDefaultTheme, state.NavbarBurgerIsActive, headerStatus state.AppState, state.Ticks) dispatch
-        // TEMP-NMB: To test rendering "special" [i.e. not from state] NotificationMessage...
-        //lazyView renderSpecialNotificationMessage (state.UseDefaultTheme, SWEEPSTAKE_2018, (infoMessage "Test non-dismissable render message" false), state.Ticks)
-        // ...NMB-TEMP
+        lazyView2 renderHeader (state.UseDefaultTheme, state.NavbarBurgerIsActive, headerStatus state.AppState, headerPages state.AppState, state.Ticks) dispatch
         lazyView2 renderNotificationMessages (state.UseDefaultTheme, SWEEPSTAKE_2018, state.NotificationMessages, state.Ticks) (DismissNotificationMessage >> dispatch)
         renderContent state dispatch // note: renderContent has its own lazyView handling
         lazyView renderFooter state.UseDefaultTheme ]

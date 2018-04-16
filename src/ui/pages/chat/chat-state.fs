@@ -32,9 +32,11 @@ let private initialChatMessageUis : ChatMessageUi list =
 
 let private defaultNewChatMessage () = { NewChatMessageId = ChatMessageId.Create () ; MessageText = String.Empty ; ErrorText = None }
 
-let initialize authenticatedUser : State * Cmd<Input> =
+let initialize authenticatedUser isCurrentPage : State * Cmd<Input> =
     let state = {
         AuthenticatedUser = authenticatedUser
+        IsCurrentPage = isCurrentPage
+        UnseenCount = 0
         ChatMessageUis = initialChatMessageUis
         NewChatMessage = defaultNewChatMessage () }
     state, Cmd.none
@@ -59,7 +61,7 @@ let private handleServerChatWsApi serverChatWsApi state : State * Cmd<Input> =
         { state with ChatMessageUis = chatMessageUis }, errorToastCmd "Unable to send chat message"
     | OtherUserChatMessageWs chatMessage ->
         let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Received ; Timestamp = DateTime.Now } :: state.ChatMessageUis
-        { state with ChatMessageUis = chatMessageUis }, Cmd.none
+        { state with ChatMessageUis = chatMessageUis ; UnseenCount = state.UnseenCount + match state.IsCurrentPage with | true -> 0 | false -> 1 }, Cmd.none
 
 let private handleSharedInput sharedInput state =
     match sharedInput with
@@ -69,6 +71,7 @@ let private handleSharedInput sharedInput state =
 let transition input state =
     match input with
     | SharedInput sharedInput -> handleSharedInput sharedInput state
+    | ToggleChatIsCurrentPage isCurrentPage -> { state with IsCurrentPage = isCurrentPage ; UnseenCount = if isCurrentPage then 0 else state.UnseenCount }, Cmd.none
     | DismissChatMessage chatMessageId -> // note: silently ignore unknown chatMessageId
         let chatMessageUis = state.ChatMessageUis |> List.filter (fun chatMessageUi -> chatMessageUi.ChatMessage.ChatMessageId <> chatMessageId)
         { state with ChatMessageUis = chatMessageUis }, Cmd.none

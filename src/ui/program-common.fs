@@ -5,19 +5,29 @@ open Aornota.Common.UnitsOfMeasure
 open Aornota.Sweepstake2018.Shared.Domain
 open Aornota.Sweepstake2018.Shared.Ws.Server
 open Aornota.Sweepstake2018.Shared.Ws.Ui
-open Aornota.Sweepstake2018.UI.Pages.Chat.Common
+open Aornota.Sweepstake2018.UI.Pages
 
 open Aornota.UI.Common.Notifications
 
 open System
 
-open Elmish
-
 module Brw = Fable.Import.Browser
 
-type Preferences = { 
+type UnauthenticatedPage =
+    | ToDoUP
+
+type AuthenticatedPage =
+    | ToDoAP
+    | ChatPage
+
+type Page =
+    | UnauthenticatedPage of unauthenticatedPage : UnauthenticatedPage
+    | AuthenticatedPage of authenticatedPage : AuthenticatedPage
+
+type Preferences = {
     UseDefaultTheme : bool
     SessionId : SessionId
+    LastPage : Page option
     Jwt : Jwt option }
 
 type UiWsError =
@@ -26,14 +36,25 @@ type UiWsError =
     | SendWsOtherError of uiWsApi : UiWsApi * errorText : string
     | DeserializeServerWsApiError of errorText : string
 
-type UnauthenticatedInput =
+type SignInInput =
     | UserNameTextChanged of userNameText : string
     | PasswordTextChanged of passwordText : string
     | SignIn
+    | CancelSignIn
+
+type UnauthenticatedInput =
+    | ShowSignIn
+    | ShowUnauthenticatedPage of unauthenticatedPage : UnauthenticatedPage
+    | ToDoUPInputUI
+    | SignInInput of signInInput : SignInInput
 
 type AuthenticatedInput =
-    | ChatInput of chatInput : Input
+    | ShowPage of page : Page
+    | ToDoUPInputAI
+    | ToDoAPInputAI
+    | ChatInput of chatInput : Chat.Common.Input
     | SignOut
+    | CancelSignOut
 
 type AppInput =
     | ReadingPreferencesInput of result : Result<Preferences option, exn>
@@ -54,12 +75,13 @@ type Input =
     | HandleServerWsApi of serverWsApi : ServerWsApi
     | AppInput of appInput : AppInput
 
+type ToDo = unit
+
 type Status =
     | Pending
     | Failed of errorText : string
 
-type UnauthenticatedState = {
-    SendUiUnauthenticatedWsApi : (UiUnauthenticatedWsApi -> Cmd<Input>) // TODO-NMB-HIGH: Rethink this, e.g. since functions do not play well with lazyView?...
+type SignInState = {
     UserNameKey : Guid
     UserNameText : string
     UserNameErrorText : string option
@@ -69,26 +91,29 @@ type UnauthenticatedState = {
     FocusPassword : bool
     SignInStatus : Status option }
 
-type Page =
-    | ChatPage
+type UnauthenticatedState = {
+    CurrentPage : UnauthenticatedPage
+    ToDoUPState : ToDo
+    SignInState : SignInState option }
 
 type AuthenticatedState = {
-    SendUiWsApi : (UiWsApi -> Cmd<Input>) // TODO-NMB-HIGH: Rethink this, e.g. since functions do not play well with lazyView?...
     AuthenticatedUser : AuthenticatedUser
-    Page : Page
-    ChatState : State // TODO-NMB-MEDIUM: Should this be ChatState option, i.e. only initialize "on demand" (rather than automatically "on connection")?...
+    CurrentPage : Page
+    ToDoUPState : ToDo
+    ToDoAPState : ToDo
+    ChatState : Chat.Common.State option
     SignOutStatus : Status option }
 
 type AppState =
     | ReadingPreferences
-    | Connecting of jwt : Jwt option
+    | Connecting of jwt : Jwt option * lastPage : Page option
     | ServiceUnavailable
-    | AutomaticallySigningIn of jwt : Jwt
+    | AutomaticallySigningIn of jwt : Jwt * lastPage : Page option
     | Unauthenticated of unauthenticatedState : UnauthenticatedState
     | Authenticated of authenticatedState : AuthenticatedState
 
 type State = {
-    Ticks : int<tick> // note: will only be updated when TICK defined
+    Ticks : int<tick> // note: will only be updated when TICK defined (see webpack.config.js)
     NotificationMessages : NotificationMessage list
     UseDefaultTheme : bool
     SessionId : SessionId

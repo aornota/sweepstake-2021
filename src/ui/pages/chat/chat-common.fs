@@ -7,6 +7,7 @@ open System
 
 type Input =
     | SharedInput of sharedInput : SharedInput
+    | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
     | MessageTextChanged of messageText : string
     | SendChatMessage
@@ -28,7 +29,9 @@ type NewChatMessage = {
 
 type State = {
     AuthenticatedUser : AuthenticatedUser
+    IsCurrentPage : bool
     ChatMessageUis : ChatMessageUi list
+    UnseenCount : int
     NewChatMessage : NewChatMessage }
 
 let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 100

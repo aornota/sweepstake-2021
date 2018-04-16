@@ -16,7 +16,7 @@ open Aornota.UI.Theme.Shared
 
 open System
 
-let private renderChatMessageUi theme authenticatedUserName isSigningOut dispatch chatMessageUi =
+let private renderChatMessageUi theme authenticatedUserName dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
     let renderChildren userName (messageText:string) (timestamp:DateTime) unconfirmed errorText = [  
         let message =
@@ -52,19 +52,13 @@ let private renderChatMessageUi theme authenticatedUserName isSigningOut dispatc
         | Received when chatMessageUi.ChatMessage.UserName = authenticatedUserName -> notificationPrimary, false, None
         | Received -> notificationInfo, false, None
     let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
-    let dismissable =
-        // TEMP-NMB: Prevent DismissChatMessage if signing out [or if unconfirmed]...
-        not (unconfirmed || isSigningOut)
-        // ...or not...
-        //not unconfirmed
-        // ...NMB-TEMP
-    let onDismissNotification = if dismissable then Some (fun _ -> dispatch (DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId)) else None
+    let onDismissNotification = if not unconfirmed then Some (fun _ -> DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId |> dispatch) else None
     [
         divVerticalSpace 10
         notification theme { notificationData with OnDismissNotification = onDismissNotification } children
     ]
 
-let render (useDefaultTheme, state, isSigningOut, _:int<tick>) dispatch =
+let render (useDefaultTheme, state, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     let (ChatMessageId newChatMessageId) = state.NewChatMessage.NewChatMessageId
     let sendButtonInteraction, onEnter =
@@ -78,9 +72,9 @@ let render (useDefaultTheme, state, isSigningOut, _:int<tick>) dispatch =
         yield field theme { fieldDefault with Grouped = Some FullWidth }
             [
                 // TEMP-NMB: textArea...
-                //textArea theme newChatMessageId state.NewChatMessage.MessageText state.NewChatMessage.ErrorText true isSigningOut (MessageTextChanged >> dispatch)
+                //textArea theme newChatMessageId state.NewChatMessage.MessageText state.NewChatMessage.ErrorText true false (MessageTextChanged >> dispatch)
                 // ...or textBox...
-                textBox theme newChatMessageId state.NewChatMessage.MessageText (Some iconFileSmall) false state.NewChatMessage.ErrorText true isSigningOut (MessageTextChanged >> dispatch) onEnter
+                textBox theme newChatMessageId state.NewChatMessage.MessageText (Some iconFileSmall) false state.NewChatMessage.ErrorText true false (MessageTextChanged >> dispatch) onEnter
                 // ...NMB-TEMP
             ]
         yield field theme { fieldDefault with Grouped = Some RightAligned } [ button theme { buttonSuccessSmall with Interaction = sendButtonInteraction } [ str "Send chat message" ] ]
@@ -90,5 +84,5 @@ let render (useDefaultTheme, state, isSigningOut, _:int<tick>) dispatch =
             // TEMP-NMB: Show more recent messages at the top...
             |> List.rev
             // ...NMB-TEMP
-            |> List.map (renderChatMessageUi theme state.AuthenticatedUser.UserName isSigningOut dispatch)
+            |> List.map (renderChatMessageUi theme state.AuthenticatedUser.UserName dispatch)
             |> List.collect id ]
