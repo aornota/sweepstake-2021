@@ -355,7 +355,7 @@ let textArea theme (key:Guid) text errorText helpInfo autoFocus disabled (onChan
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
         match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> ()
-        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsInfo ] helpInfo | [] -> () ]
+        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsDark ] helpInfo | [] -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
 let textBox theme (key:Guid) text iconData isPassword helpErrorText helpInfo autoFocus disabled (onChange:string -> unit) onEnter =

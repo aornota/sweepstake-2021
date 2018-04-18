@@ -58,7 +58,8 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     let (ChatMessageId newChatMessageId, Markdown messageText) = state.NewChatMessage.NewChatMessageId, state.NewChatMessage.MessageText
     let helpInfo = [
-        str "You can use " ; link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch)) [ str "Markdown syntax" ]
+        str "Chat messages are not persisted and will only be received by signed-in users. You can use "
+        link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch)) [ str "Markdown syntax" ]
         str " to format your message. A preview of your message will appear below." ; br; br ]
     let sendButtonInteraction =
         match validateChatMessageText state.NewChatMessage.MessageText with

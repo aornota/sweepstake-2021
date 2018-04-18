@@ -58,6 +58,7 @@ Target "clean-publish" (fun _ -> CleanDir publishDir)
 Target "copy-resources" (fun _ ->
     let publicResourcesDir = uiDir </> @"public\resources"
     CreateDir publicResourcesDir
+    // TODO-NMB-LOW: Get "favicon" working in Edge (cf. .\src\ui\index.html)?... CopyFiles publicResourcesDir !! @".\src\resources\ico\*.*"
     CopyFiles publicResourcesDir !! @".\src\resources\images\*.*")
 
 Target "install-server" (fun _ -> runDotnet serverDir "restore")
