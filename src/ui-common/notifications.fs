@@ -33,7 +33,7 @@ let private render theme source dispatch notificationMessage =
         | Danger -> notificationDanger, SemanticPara Semantic.Warning
     let paraHeader = { paraDefaultSmallest with ParaColour = headerColour }
     let notificationData =
-        if notificationMessage.Dismissable then { notificationData with OnDismissNotification = Some (fun _ -> dispatch notificationMessage.NotificationId) }
+        if notificationMessage.Dismissable then { notificationData with OnDismissNotification = Some (fun _ -> notificationMessage.NotificationId |> dispatch) }
         else notificationData
     let sourceAndTypeText = sprintf "%s | %s" source (match notificationMessage.Type with | Debug -> "DEBUG" | Info -> "INFORMATION" | Warning -> "WARNING" | Danger -> "ERROR")
     let timestampText =

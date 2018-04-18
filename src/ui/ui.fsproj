@@ -18,6 +18,8 @@
     <Compile Include="../ui-theme-bulma/theme-render-bulma.fs" />
     <Compile Include="../ui-common/local-storage.fs" />
     <Compile Include="../ui-common/timestamp-helper.fs" />
+    <Compile Include="../ui-common/marked.fs" />
+    <Compile Include="../ui-common/render-markdown.fs" />
     <Compile Include="../ui-common/notifications.fs" />
     <Compile Include="ui-shared.fs" />
     <Compile Include="pages/chat/chat-common.fs" />

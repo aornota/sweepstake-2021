@@ -2,6 +2,8 @@ module Aornota.Sweepstake2018.Shared.Domain
 
 open System
 
+type Markdown = | Markdown of markdown : string
+
 type UserId = | UserId of guid : Guid with static member Create () = Guid.NewGuid () |> UserId
 type SessionId = | SessionId of guid : Guid with static member Create () = Guid.NewGuid () |> SessionId
 
@@ -19,4 +21,4 @@ type ChatMessageId = | ChatMessageId of guid : Guid with static member Create ()
 type ChatMessage = {
     ChatMessageId : ChatMessageId
     UserName : string
-    MessageText : string }
+    MessageText : Markdown }

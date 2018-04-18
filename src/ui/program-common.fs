@@ -13,11 +13,12 @@ open System
 
 module Brw = Fable.Import.Browser
 
-type UnauthenticatedPage =
-    | ToDoUP
+type UnauthenticatedPage = // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
+    | News
+    | Squads
 
-type AuthenticatedPage =
-    | ToDoAP
+type AuthenticatedPage = // TODO-NMB-MEDIUM: More...
+    | Drafts
     | ChatPage
 
 type Page =
@@ -29,6 +30,11 @@ type Preferences = {
     SessionId : SessionId
     LastPage : Page option
     Jwt : Jwt option }
+
+type StaticModal =
+    | ScoringSystem
+    | Payouts
+    | MarkdownSyntax
 
 type UiWsError =
     | WsOnError of wsApiUrl : string
@@ -42,19 +48,22 @@ type SignInInput =
     | SignIn
     | CancelSignIn
 
-type UnauthenticatedInput =
+type UnauthenticatedInput = // TODO-NMB-MEDIUM: More (e.g. Standings[U] | Fixtures[U] | Results[U] | ...)...
     | ShowSignIn
     | ShowUnauthenticatedPage of unauthenticatedPage : UnauthenticatedPage
-    | ToDoUPInputUI
+    | NewsInputU
+    | SquadsInputU
     | SignInInput of signInInput : SignInInput
 
-type AuthenticatedInput =
+type AuthenticatedInput = // TODO-NMB-MEDIUM: More (e.g. Standings[A] | Fixtures[A] | Results[A] | ...)...
     | ShowPage of page : Page
-    | ToDoUPInputAI
-    | ToDoAPInputAI
+    | NewsInputA
+    | SquadsInputA
+    | DraftsInput
     | ChatInput of chatInput : Chat.Common.Input
     | SignOut
     | CancelSignOut
+    | ChangePassword
 
 type AppInput =
     | ReadingPreferencesInput of result : Result<Preferences option, exn>
@@ -70,6 +79,8 @@ type Input =
     | DismissNotificationMessage of notificationId : NotificationId
     | ToggleTheme
     | ToggleNavbarBurger
+    | ShowStaticModal of staticModal : StaticModal
+    | HideStaticModal
     | WritePreferencesResult of result : Result<unit, exn>
     | OnUiWsError of uiWsError : UiWsError
     | HandleServerWsApi of serverWsApi : ServerWsApi
@@ -91,16 +102,18 @@ type SignInState = {
     FocusPassword : bool
     SignInStatus : Status option }
 
-type UnauthenticatedState = {
+type UnauthenticatedState = { // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
     CurrentPage : UnauthenticatedPage
-    ToDoUPState : ToDo
+    NewsState : ToDo
+    SquadsState : ToDo
     SignInState : SignInState option }
 
-type AuthenticatedState = {
+type AuthenticatedState = { // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
     AuthenticatedUser : AuthenticatedUser
     CurrentPage : Page
-    ToDoUPState : ToDo
-    ToDoAPState : ToDo
+    NewsState : ToDo
+    SquadsState : ToDo
+    DraftsState : ToDo
     ChatState : Chat.Common.State option
     SignOutStatus : Status option }
 
@@ -113,20 +126,16 @@ type AppState =
     | Authenticated of authenticatedState : AuthenticatedState
 
 type State = {
-    Ticks : int<tick> // note: will only be updated when TICK defined (see webpack.config.js)
+    Ticks : int<tick> // note: will only be updated when TICK (see webpack.config.js) is defined
     NotificationMessages : NotificationMessage list
     UseDefaultTheme : bool
     SessionId : SessionId
     NavbarBurgerIsActive : bool
+    StaticModal : StaticModal option
     Ws : Brw.WebSocket option
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
 
 let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
-let validatePasswordText passwordText = 
-    // TEMP-NMB: Allow a blank password...
-    //if String.IsNullOrWhiteSpace passwordText then None else None
-    // ...or not...
-    if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None
-    // ...NMB-TEMP
+let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None

@@ -341,11 +341,11 @@ let tag theme tagData children =
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
-let textArea theme (key:Guid) text helpErrorText autoFocus disabled (onChange:string -> unit) =
+let textArea theme (key:Guid) text errorText helpInfo autoFocus disabled (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Textarea.textarea [
-            match helpErrorText with | Some _ -> yield Textarea.Color IsDanger | None -> ()
+            match errorText with | Some _ -> yield Textarea.Color IsDanger | None -> ()
             yield Textarea.CustomClass className
             yield Textarea.Size IsSmall
             yield Textarea.DefaultValue text
@@ -354,10 +354,11 @@ let textArea theme (key:Guid) text helpErrorText autoFocus disabled (onChange:st
                 Disabled disabled
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
-        match helpErrorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
+        match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> ()
+        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsInfo ] helpInfo | [] -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
-let textBox theme (key:Guid) text iconData isPassword helpErrorText autoFocus disabled (onChange:string -> unit) onEnter =
+let textBox theme (key:Guid) text iconData isPassword helpErrorText helpInfo autoFocus disabled (onChange:string -> unit) onEnter =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
         yield Input.text [
@@ -373,4 +374,5 @@ let textBox theme (key:Guid) text iconData isPassword helpErrorText autoFocus di
                 OnChange (fun ev -> !!ev.target?value |> onChange)
                 onEnterPressed onEnter ] ]
         match iconData with | Some iconData -> yield icon { iconData with IconAlignment = Some LeftAligned } | None -> ()
-        match helpErrorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> () ]
+        match helpErrorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> ()
+        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsInfo ] helpInfo | [] -> () ]

@@ -48,6 +48,8 @@ let container width children =
         match width with | Some Fluid -> Some Container.IsFluid | Some Widescreen -> Some Container.IsWideScreen | Some FullHD -> Some Container.IsFullHD | None -> None
     Container.container [ match width with | Some width -> yield width | None -> () ] children
 
+let content children = Content.content [] children
+
 let control children = Control.div [] children
 
 let icon iconData =

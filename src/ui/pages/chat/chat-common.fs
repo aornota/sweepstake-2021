@@ -1,15 +1,18 @@
 module Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2018.Shared.Ws.Server
+open Aornota.Sweepstake2018.Shared.Ws.Ui
 
 open System
 
 type Input =
-    | SharedInput of sharedInput : SharedInput
+    | ShowMarkdownSyntaxModal
+    | SendAuthenticatedWsApi of authenticatedUser : AuthenticatedUser * uiAuthenticatedWsApi : UiAuthenticatedWsApi
+    | ReceiveServerChatWsApi of serverWsApi : ServerChatWsApi
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
-    | MessageTextChanged of messageText : string
+    | MessageTextChanged of messageText : Markdown
     | SendChatMessage
 
 type ChatMessageType =
@@ -24,7 +27,7 @@ type ChatMessageUi = {
 
 type NewChatMessage = {
     NewChatMessageId : ChatMessageId
-    MessageText : string
+    MessageText : Markdown
     ErrorText : string option }
 
 type State = {
@@ -34,9 +37,9 @@ type State = {
     UnseenCount : int
     NewChatMessage : NewChatMessage }
 
-let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 100
+let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 1000
 
-let validateChatMessageText (messageText:string) =
+let validateChatMessageText (Markdown messageText) =
     if String.IsNullOrWhiteSpace messageText then Some "Chat message must not be blank"
     else if messageText.Length > MAX_CHAT_MESSAGE_LENGTH then Some "Chat message is too long"
     else None

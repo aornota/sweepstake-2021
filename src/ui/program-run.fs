@@ -10,6 +10,8 @@ open Aornota.Sweepstake2018.UI.Program.Common
 open Aornota.Sweepstake2018.UI.Program.Render
 open Aornota.Sweepstake2018.UI.Program.State
 
+open Aornota.UI.Common.Marked
+
 open Elmish
 #if DEBUG
 open Elmish.Debug
@@ -19,6 +21,7 @@ open Elmish.HMR
 #endif
 open Elmish.React
 
+open Fable.Core.JsInterop
 #if TICK
 open Fable.Import
 #endif
@@ -35,6 +38,8 @@ let private ticker dispatch =
 
 let private tickSubscription (_:State) = Cmd.ofSub ticker
 #endif
+
+Marked.Globals.marked.setOptions (unbox (createObj [ "sanitize" ==> true ])) |> ignore // note: "sanitize" ensures Html rendered as text
 
 Program.mkProgram initialize transition render
 #if TICK

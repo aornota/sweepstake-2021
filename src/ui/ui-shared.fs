@@ -1,19 +1,7 @@
 module Aornota.Sweepstake2018.UI.Shared
 
-open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.Shared.Ws.Server
-open Aornota.Sweepstake2018.Shared.Ws.Ui
-
-open Aornota.UI.Common.Notifications
-
 open Elmish
 open Elmish.Toastr
-
-type SharedInput =
-    | SendNotificationMessage of notificatioMessage : NotificationMessage
-    | SendUnauthenticatedWsApi of uiUnauthenticatedWsApi : UiUnauthenticatedWsApi
-    | SendAuthenticatedWsApi of authenticatedUser : AuthenticatedUser * uiAuthenticatedWsApi : UiAuthenticatedWsApi
-    | ReceiveServerWsApi of serverWsApi : ServerWsApi
 
 let [<Literal>] private DEFAULT_TOAST_TIMEOUT = 3000
 

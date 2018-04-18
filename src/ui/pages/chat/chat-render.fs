@@ -5,6 +5,7 @@ open Aornota.Common.UnitsOfMeasure
 open Aornota.Sweepstake2018.Shared.Domain
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
+open Aornota.UI.Common.Render.Markdown
 #if TICK
 open Aornota.UI.Common.TimestampHelper
 #endif
@@ -18,12 +19,7 @@ open System
 
 let private renderChatMessageUi theme authenticatedUserName dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
-    let renderChildren userName (messageText:string) (timestamp:DateTime) unconfirmed errorText = [  
-        let message =
-            messageText.Split ([| "\n" |], StringSplitOptions.RemoveEmptyEntries)
-            |> List.ofArray
-            |> List.fold (fun acc item -> match acc with | _ :: _ -> str item :: br :: acc | [] -> str item :: acc) []
-            |> List.rev
+    let renderChildren userName messageText (timestamp:DateTime) unconfirmed errorText = [  
         let rightItem =
             if unconfirmed then icon iconSpinnerPulse
             else
@@ -37,7 +33,7 @@ let private renderChatMessageUi theme authenticatedUserName dispatch chatMessage
         yield level true [
             levelLeft [ levelItem [ para theme paraDefaultSmallest [ bold userName ; str " says" ] ] ]
             levelRight [ levelItem [ rightItem ] ] ]
-        yield para theme { paraDefaultSmallest with Weight = SemiBold } message
+        yield content [ htmlFromMarkdown messageText ]
         match errorText with
         | Some errorText ->
             yield! [
@@ -60,23 +56,20 @@ let private renderChatMessageUi theme authenticatedUserName dispatch chatMessage
 
 let render (useDefaultTheme, state, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
-    let (ChatMessageId newChatMessageId) = state.NewChatMessage.NewChatMessageId
-    let sendButtonInteraction, onEnter =
-        let sendChatMessage = (fun _ -> dispatch SendChatMessage)
+    let (ChatMessageId newChatMessageId, Markdown messageText) = state.NewChatMessage.NewChatMessageId, state.NewChatMessage.MessageText
+    let helpInfo = [
+        str "You can use " ; link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch)) [ str "Markdown syntax" ]
+        str " to format your message. A preview of your message will appear below." ; br; br ]
+    let sendButtonInteraction =
         match validateChatMessageText state.NewChatMessage.MessageText with
-        | Some _ -> NotEnabled None, ignore
-        | None -> Clickable (sendChatMessage, None), sendChatMessage
+        | Some _ -> NotEnabled None
+        | None -> Clickable ((fun _ -> SendChatMessage |> dispatch), None)
     columnContent [
         yield para theme paraCentredSmall [ str "Chat" ]
         yield hr theme false
-        yield field theme { fieldDefault with Grouped = Some FullWidth }
-            [
-                // TEMP-NMB: textArea...
-                //textArea theme newChatMessageId state.NewChatMessage.MessageText state.NewChatMessage.ErrorText true false (MessageTextChanged >> dispatch)
-                // ...or textBox...
-                textBox theme newChatMessageId state.NewChatMessage.MessageText (Some iconFileSmall) false state.NewChatMessage.ErrorText true false (MessageTextChanged >> dispatch) onEnter
-                // ...NMB-TEMP
-            ]
+        yield field theme { fieldDefault with Grouped = Some FullWidth } [
+            yield textArea theme newChatMessageId messageText state.NewChatMessage.ErrorText helpInfo true false (Markdown >> MessageTextChanged >> dispatch)
+            if not (String.IsNullOrWhiteSpace messageText) then yield notification theme notificationLight [ content [ htmlFromMarkdown state.NewChatMessage.MessageText ] ] ]
         yield field theme { fieldDefault with Grouped = Some RightAligned } [ button theme { buttonSuccessSmall with Interaction = sendButtonInteraction } [ str "Send chat message" ] ]
         yield hr theme false
         yield! state.ChatMessageUis

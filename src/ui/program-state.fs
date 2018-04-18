@@ -54,7 +54,7 @@ let private writePreferencesCmd state =
 
 let private initializeWsSub dispatch =
     let receiveServerWsApi (wsMessage:Brw.MessageEvent) : unit =
-        try // note: Expect wsMessage.data to be deserializable to ServerWsApi
+        try // note: expect wsMessage.data to be deserializable to ServerWsApi
             let serverWsApi = ofJson<ServerWsApi> <| unbox wsMessage.data
 #if DEBUG
             if random.NextDouble () < 0.02 then failwith (sprintf "Fake error deserializing %A" serverWsApi)
@@ -128,8 +128,9 @@ let defaultSignInState userName signInStatus = {
 
 let private defaultUnauthenticatedState currentPage signInState state =
     let unauthenticatedState = {
-        CurrentPage = match currentPage with | Some currentPage -> currentPage | None -> ToDoUP
-        ToDoUPState = ()
+        CurrentPage = match currentPage with | Some currentPage -> currentPage | None -> News
+        NewsState = ()
+        SquadsState = ()
         SignInState = signInState }
     { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
 
@@ -140,8 +141,9 @@ let private defaultAuthenticatedState authenticatedUser currentPage (unauthentic
     let authenticatedState = {
         AuthenticatedUser = authenticatedUser
         CurrentPage = currentPage
-        ToDoUPState = match unauthenticatedState with | Some unauthenticatedState -> unauthenticatedState.ToDoUPState | None -> ()
-        ToDoAPState = ()
+        NewsState = match unauthenticatedState with | Some unauthenticatedState -> unauthenticatedState.NewsState | None -> ()
+        SquadsState = match unauthenticatedState with | Some unauthenticatedState -> unauthenticatedState.SquadsState | None -> ()
+        DraftsState = ()
         ChatState = Some chatState
         SignOutStatus = None }
     { state with AppState = Authenticated authenticatedState }, chatCmd |> Cmd.map (ChatInput >> AuthenticatedInput >> AppInput)
@@ -153,6 +155,7 @@ let initialize () =
         UseDefaultTheme = true
         SessionId = SessionId.Create ()
         NavbarBurgerIsActive = false
+        StaticModal = None
         Ws = None
         AppState = ReadingPreferences }
     setBodyClass state.UseDefaultTheme
@@ -187,13 +190,15 @@ let private handleConnected (otherConnections, signedIn) jwt lastPage state =
         | None ->
             let lastPage = match lastPage with | Some (UnauthenticatedPage unauthenticatedPage) -> Some unauthenticatedPage | Some (AuthenticatedPage _) | None -> None
             let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthenticatedPage lastPage |> UnauthenticatedInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
-            let state, cmd =
-            // TEMP-NMB: Initialize SignInState (i.e. such that Modal is displayed)...
-                defaultUnauthenticatedState None (Some (defaultSignInState None None)) state
+            // TEMP-NMB: Force sign-in Modal to be displayed...
+            let showSignInCmd =
+                ShowSignIn |> UnauthenticatedInput |> AppInput |> Cmd.ofMsg
             // ...or not...
-                //defaultUnauthenticatedState None None state
+                //Cmd.none
             // ...NMB-TEMP
-            state, Cmd.batch [ showPageCmd ; cmd ]
+            let state, cmd = defaultUnauthenticatedState None None state
+            // ...NMB-TEMP
+            state, Cmd.batch [ cmd ; showPageCmd ; showSignInCmd ]
     state, Cmd.batch [ cmd ; toastCmd ]
 
 let private handleSignInResult result unauthenticatedState state =
@@ -253,8 +258,7 @@ let private handleServerAppWsApi serverAppWsApi state =
 let private handleServerWsApi serverWsApi state =
     match serverWsApi, state.AppState with
     | ServerAppWsApi serverAppWsApi, _ -> handleServerAppWsApi serverAppWsApi state
-    | ServerChatWsApi serverChatWsApi, Authenticated _ ->
-        state, ReceiveServerWsApi (ServerChatWsApi serverChatWsApi) |> SharedInput |> ChatInput |> AuthenticatedInput |> AppInput |> Cmd.ofMsg
+    | ServerChatWsApi serverChatWsApi, Authenticated _ -> state, ReceiveServerChatWsApi serverChatWsApi |> ChatInput |> AuthenticatedInput |> AppInput |> Cmd.ofMsg
     | _, appState -> shouldNeverHappen (sprintf "Unexpected ServerWsApi when %s -> %A" (appStateText appState) serverWsApi) state
 
 let private handleReadingPreferencesInput (result:Result<Preferences option, exn>) (state:State) =
@@ -282,7 +286,8 @@ let private handleUnauthenticatedInput unauthenticatedInput unauthenticatedState
             let state = { state with AppState = Unauthenticated unauthenticatedState }
             state, writePreferencesCmd state
         else state, Cmd.none
-    | ToDoUPInputUI, None -> shouldNeverHappen "Unexpected ToDoUPInputUI -> NYI" state
+    | NewsInputU, None -> shouldNeverHappen "Unexpected NewsInputU -> NYI" state
+    | SquadsInputU, None -> shouldNeverHappen "Unexpected SquadsInputU -> NYI" state
     | SignInInput (UserNameTextChanged userNameText), Some signInState ->
         let signInState = { signInState with UserNameText = userNameText ; UserNameErrorText = validateUserNameText userNameText }
         let unauthenticatedState = { unauthenticatedState with SignInState = Some signInState }
@@ -318,11 +323,11 @@ let private handleAuthenticatedInput authenticatedInput authenticatedState state
             let state = { state with AppState = Authenticated authenticatedState }
             state, Cmd.batch [ chatCmd ; writePreferencesCmd state ]
         else state, Cmd.none
-    | ToDoUPInputAI, None -> shouldNeverHappen "Unexpected ToDoUPInputAI -> NYI" state
-    | ToDoAPInputAI, None -> shouldNeverHappen "Unexpected ToDoAPInputAI -> NYI" state
-    | ChatInput (SharedInput (SendNotificationMessage notificationMessage)), None -> addNotificationMessage notificationMessage state, Cmd.none
-    | ChatInput (SharedInput (SendUnauthenticatedWsApi uiUnauthenticatedWsApi)), None -> state, UiUnauthenticatedWsApi uiUnauthenticatedWsApi |> sendUiWsApiCmd state.Ws
-    | ChatInput (SharedInput (SendAuthenticatedWsApi (_authenticatedUser, uiAuthenticatedWsApi))), None -> // TODO-NMB-LOW: Check _authenticatedUser vs. authenticatedState.AuthenticatedUser?...
+    | NewsInputA, None -> shouldNeverHappen "Unexpected NewsInputA -> NYI" state
+    | SquadsInputA, None -> shouldNeverHappen "Unexpected SquadsInputA -> NYI" state
+    | DraftsInput, None -> shouldNeverHappen "Unexpected DraftsInput -> NYI" state
+    | ChatInput ShowMarkdownSyntaxModal, None -> { state with StaticModal = Some MarkdownSyntax }, Cmd.none
+    | ChatInput (SendAuthenticatedWsApi (_authenticatedUser, uiAuthenticatedWsApi)), None -> // TODO-NMB-LOW: Check _authenticatedUser vs. authenticatedState.AuthenticatedUser?...
         state, UiAuthenticatedWsApi (Jwt authenticatedState.AuthenticatedUser, uiAuthenticatedWsApi) |> sendUiWsApiCmd state.Ws
     | ChatInput chatInput, None ->
         match authenticatedState.ChatState with
@@ -337,6 +342,7 @@ let private handleAuthenticatedInput authenticatedInput authenticatedState state
         let currentPage = match authenticatedState.CurrentPage with | UnauthenticatedPage unauthenticatedPage -> Some unauthenticatedPage | _ -> None
         let state, cmd = defaultUnauthenticatedState currentPage None state
         state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd "You have signed out" ]
+    | ChangePassword, None -> state, warningToastCmd "Change password functionality is coming soon"
     | _, _ -> shouldNeverHappen (sprintf "Unexpected AuthenticatedInput when SignOutStatus is %A -> %A" authenticatedState.SignOutStatus authenticatedInput) state
 
 let private handleAppInput appInput state =
@@ -359,6 +365,8 @@ let transition input state =
         setBodyClass state.UseDefaultTheme
         state, writePreferencesCmd state
     | ToggleNavbarBurger -> { state with NavbarBurgerIsActive = not state.NavbarBurgerIsActive }, Cmd.none
+    | ShowStaticModal staticModal -> { state with StaticModal = Some staticModal }, Cmd.none
+    | HideStaticModal -> { state with StaticModal = None }, Cmd.none
     | WritePreferencesResult (Ok _) -> state, Cmd.none
     | WritePreferencesResult (Error exn) -> error (sprintf "WritePreferencesResult -> %s" exn.Message) None state // note: no need for toast
     | OnUiWsError uiWsError -> handleUiWsError uiWsError state
