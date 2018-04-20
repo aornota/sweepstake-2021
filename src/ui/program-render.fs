@@ -165,6 +165,14 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
         | _ -> None
     let pageTabs =
         headerPages |> List.map (fun (text, isActive, appInput) -> { IsActive = isActive ; TabText = text ; TabLinkType = ClickableLink (fun _ -> appInput |> AppInput |> dispatch) })
+    // TEMP-NMB...
+    let adminUserDropDown =
+        match headerStatus with
+        | SignedIn authUser when authUser.UserName = "neph" ->
+            let userAdministration = link theme (ClickableLink (fun _ -> UserAdministration |> AuthInput |> AppInput |> dispatch)) [ str "User administration" ]
+            Some (navbarDropDown theme (icon iconAdminSmall) [ navbarDropDownItem theme false [ para theme paraDefaultSmallest [ userAdministration ] ] ])
+        | _ -> None
+    // ...NMB-TEMP
     let otherLinks =
         match headerStatus with
         | NotSignedIn | SignedIn _ ->
@@ -190,6 +198,9 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
                 navbarStart [
                     yield Rct.ofOption authUserDropDown
                     yield navbarItem [ tabs theme { tabsDefault with Tabs = pageTabs } ]
+                    // TEMP-NMB...
+                    yield Rct.ofOption adminUserDropDown
+                    // ...NMB-TEMP
                     yield! otherLinks ]
                 navbarEnd [
 #if TICK

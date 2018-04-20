@@ -19,7 +19,8 @@ open System
 
 let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
-    let renderChildren userName messageText (timestamp:DateTime) unconfirmed errorText = [  
+    let renderChildren headerColour userName messageText (timestamp:DateTime) unconfirmed errorText = [
+        let paraHeader = { paraDefaultSmallest with ParaColour = headerColour }
         let rightItem =
             if unconfirmed then icon iconSpinnerPulse
             else
@@ -29,9 +30,9 @@ let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
 #else
                     timestamp.ToString ("HH:mm:ss")
 #endif
-                para theme paraDefaultSmallest [ str timestampText ]
+                para theme paraHeader [ str timestampText ]
         yield level true [
-            levelLeft [ levelItem [ para theme paraDefaultSmallest [ bold userName ; str " says" ] ] ]
+            levelLeft [ levelItem [ para theme paraHeader [ bold userName ; str " says" ] ] ]
             levelRight [ levelItem [ rightItem ] ] ]
         yield content [ htmlFromMarkdown messageText ]
         match errorText with
@@ -40,14 +41,14 @@ let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
                 divVerticalSpace 10
                 para theme { paraDefaultSmallest with Weight = Bold } [ str errorText ] ]
         | None -> () ]
-    let notificationData, unconfirmed, errorText =
+    let notificationData, headerColour, unconfirmed, errorText =
         match chatMessageUi.ChatMessageType with
-        | Sent -> notificationLight, true, None
-        | SendFailed errorText -> notificationDanger, false, Some errorText
+        | Sent -> notificationLight, GreyscalePara GreyDarker, true, None
+        | SendFailed errorText -> notificationDanger, SemanticPara Semantic.Warning, false, Some errorText
         // TODO-NMB-LOW: Would it be better to [add and] compare ChatMessage.UserId?...
-        | Received when chatMessageUi.ChatMessage.UserName = authUserName -> notificationInfo, false, None
-        | Received -> notificationPrimary, false, None
-    let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
+        | Received when chatMessageUi.ChatMessage.UserName = authUserName -> notificationInfo, SemanticPara Semantic.Warning, false, None
+        | Received -> notificationPrimary, SemanticPara Semantic.Warning, false, None
+    let children = renderChildren headerColour chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
     let onDismissNotification = if not unconfirmed then Some (fun _ -> DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId |> dispatch) else None
     [
         divVerticalSpace 10

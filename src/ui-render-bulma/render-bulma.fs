@@ -15,7 +15,7 @@ type ContainerWidth = | Fluid | Widescreen | FullHD
 
 type Size = | Large | Medium | Normal | Small
 
-type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Branch | Database | Notes | File | Find | User | Password
+type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Notes | File | Find | User | Password | Admin
 
 type IconData = {
     IconSize : Size
@@ -65,13 +65,12 @@ let icon iconData =
         | ExpandDown -> "fa-caret-down" | CollapseUp -> "fa-caret-up"
         | Forward -> "fa-chevron-right" | Back -> "fa-chevron-left"
         | Ascending -> "fa-angle-up" (* or "fa-long-arrow-up"? *) | Descending -> "fa-angle-down" (* or "fa-long-arrow-down"? *)
-        | Branch -> "fa-code-fork"
-        | Database -> "fa-database"
         | Notes -> "fa-pencil"
         | File -> "fa-file-o"
         | Find -> "fa-search"
         | User -> "fa-user"
         | Password -> "fa-key"
+        | Admin -> "fa-cog"
     Icon.icon [
         match size with Some size -> yield size | None -> ()
         match alignment with Some alignment -> yield alignment | None -> ()
@@ -140,10 +139,6 @@ let iconAscending = { iconDefault with Icon = Ascending }
 let iconAscendingSmall = { iconAscending with IconSize = Small }
 let iconDescending = { iconDefault with Icon = Descending }
 let iconDescendingSmall = { iconDescending with IconSize = Small }
-let iconBranch = { iconDefault with Icon = Branch }
-let iconBranchSmall = { iconBranch with IconSize = Small }
-let iconDatabase = { iconDefault with Icon = Database }
-let iconDatabaseSmall = { iconDatabase with IconSize = Small }
 let iconNotes = { iconDefault with Icon = Notes }
 let iconNotesSmall = { iconNotes with IconSize = Small }
 let iconFile = { iconDefault with Icon = File }
@@ -154,3 +149,5 @@ let iconUser = { iconDefault with Icon = User }
 let iconUserSmall = { iconUser with IconSize = Small }
 let iconPassword = { iconDefault with Icon = Password }
 let iconPasswordSmall = { iconPassword with IconSize = Small }
+let iconAdmin = { iconDefault with Icon = Admin }
+let iconAdminSmall = { iconAdmin with IconSize = Small }

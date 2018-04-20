@@ -69,8 +69,9 @@ type PageInput =
 type AuthInput =
     | ShowPage of page : Page
     | PageInput of pageInput : PageInput
-    | SignOut
     | ChangePassword
+    | SignOut
+    | UserAdministration
 
 type AppInput =
     | ReadingPreferencesInput of result : Result<Preferences option, exn>

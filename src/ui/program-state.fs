@@ -209,8 +209,7 @@ let private handleSignInResult result unauthState state =
         let toastCmd = errorToastCmd (sprintf "Unable to sign in as %s" signInState.UserNameText)
         let errorText =
 #if DEBUG
-            //sprintf "SignInResultWs error -> %s" errorText
-            "An unexpected error occurred when signing in"
+            sprintf "SignInResultWs error -> %s" errorText
 #else
             "An unexpected error occurred when signing in"
 #endif        
@@ -228,8 +227,7 @@ let private handleAutoSignInResult result (jwt:AuthUser) lastPage state =
         let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as %s" jwt.UserName)
         let errorText =
 #if DEBUG
-            //sprintf "AutoSignInResultWs error -> %s" errorText
-            "An unexpected error occurred when automatically signing in"
+            sprintf "AutoSignInResultWs error -> %s" errorText
 #else
             "An unexpected error occurred when automatically signing in"
 #endif        
@@ -357,10 +355,12 @@ let private handleAuthInput authInput authState state =
             let authPageStates = { authState.AuthPageStates with ChatState = Some chatState }
             { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
         | None -> shouldNeverHappen "Unexpected ChatInput when ChatState is None" state
+    | ChangePassword, false -> state, warningToastCmd "Change password functionality is coming soon"
     | SignOut, false ->
         let cmd = UiAuthWsApi (Jwt authState.AuthUser, SignOutWs) |> sendUiWsApiCmd state.Ws
         { state with AppState = Auth { authState with SigningOut = true } }, cmd
-    | ChangePassword, false -> state, warningToastCmd "Change password functionality is coming soon"
+    | UserAdministration, false -> // TODO-NMB-LOW: Check that authState.AuthUser has appropriate permissions?...
+        state, warningToastCmd "User administration functionality is coming soon"
     | _, true -> shouldNeverHappen (sprintf "Unexpected AuthInput when SigningOut -> %A" authInput) state
 
 let private handleAppInput appInput state =

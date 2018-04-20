@@ -16,7 +16,7 @@ open Elmish
 #if DEBUG
 open Elmish.Debug
 #endif
-#if !TICK
+#if HMR
 open Elmish.HMR
 #endif
 open Elmish.React
@@ -48,8 +48,8 @@ Program.mkProgram initialize transition render
 #if DEBUG
 |> Program.withConsoleTrace
 #endif
-#if !TICK
-|> Program.withHMR // note: HMR can cause weird behaviour when TICK is defined
+#if HMR
+|> Program.withHMR // note: HMR can cause weird behaviour if TICK is also defined
 #endif
 |> Program.withReact "elmish-app" // note: needs to match id of div in index.html
 #if DEBUG
