@@ -32,9 +32,9 @@ let private initialChatMessageUis : ChatMessageUi list =
 
 let private defaultNewChatMessage () = { NewChatMessageId = ChatMessageId.Create () ; MessageText = Markdown String.Empty ; ErrorText = None }
 
-let initialize authenticatedUser isCurrentPage : State * Cmd<Input> =
+let initialize authUser isCurrentPage : State * Cmd<Input> =
     let state = {
-        AuthenticatedUser = authenticatedUser
+        AuthUser = authUser
         IsCurrentPage = isCurrentPage
         UnseenCount = 0
         ChatMessageUis = initialChatMessageUis
@@ -66,7 +66,7 @@ let private handleServerChatWsApi serverChatWsApi state : State * Cmd<Input> =
 let transition input state =
     match input with
     | ShowMarkdownSyntaxModal -> state, Cmd.none // note: expected to be handled by Program.State.transition
-    | SendAuthenticatedWsApi _ -> state, Cmd.none // note: expected to be handled by Program.State.transition
+    | SendAuthWsApi _ -> state, Cmd.none // note: expected to be handled by Program.State.transition
     | ReceiveServerChatWsApi serverChatWsApi -> handleServerChatWsApi serverChatWsApi state
     | ToggleChatIsCurrentPage isCurrentPage -> { state with IsCurrentPage = isCurrentPage ; UnseenCount = if isCurrentPage then 0 else state.UnseenCount }, Cmd.none
     | DismissChatMessage chatMessageId -> // note: silently ignore unknown chatMessageId
@@ -76,7 +76,7 @@ let transition input state =
         let newChatMessage = { state.NewChatMessage with MessageText = messageText ; ErrorText = validateChatMessageText messageText }
         { state with NewChatMessage = newChatMessage }, Cmd.none
     | SendChatMessage -> // note: assume no need to validate state.NewChatMessage.MessageText (i.e. because Chat.Render.render will ensure that SendChatMessage can only be dispatched when valid)
-        let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = state.AuthenticatedUser.UserName ; MessageText = state.NewChatMessage.MessageText }
+        let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = state.AuthUser.UserName ; MessageText = state.NewChatMessage.MessageText }
         let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Sent ; Timestamp = DateTime.Now } :: state.ChatMessageUis
-        let cmd = SendAuthenticatedWsApi (state.AuthenticatedUser, SendChatMessageWs chatMessage) |> Cmd.ofMsg
+        let cmd = SendAuthWsApi (state.AuthUser, SendChatMessageWs chatMessage) |> Cmd.ofMsg
         { state with ChatMessageUis = chatMessageUis ; NewChatMessage = defaultNewChatMessage () }, cmd

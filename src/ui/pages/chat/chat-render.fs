@@ -17,7 +17,7 @@ open Aornota.UI.Theme.Shared
 
 open System
 
-let private renderChatMessageUi theme authenticatedUserName dispatch chatMessageUi =
+let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
     let renderChildren userName messageText (timestamp:DateTime) unconfirmed errorText = [  
         let rightItem =
@@ -45,8 +45,8 @@ let private renderChatMessageUi theme authenticatedUserName dispatch chatMessage
         | Sent -> notificationLight, true, None
         | SendFailed errorText -> notificationDanger, false, Some errorText
         // TODO-NMB-LOW: Would it be better to [add and] compare ChatMessage.UserId?...
-        | Received when chatMessageUi.ChatMessage.UserName = authenticatedUserName -> notificationPrimary, false, None
-        | Received -> notificationInfo, false, None
+        | Received when chatMessageUi.ChatMessage.UserName = authUserName -> notificationInfo, false, None
+        | Received -> notificationPrimary, false, None
     let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
     let onDismissNotification = if not unconfirmed then Some (fun _ -> DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId |> dispatch) else None
     [
@@ -78,5 +78,5 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
             // TEMP-NMB: Show more recent messages at the top...
             |> List.rev
             // ...NMB-TEMP
-            |> List.map (renderChatMessageUi theme state.AuthenticatedUser.UserName dispatch)
+            |> List.map (renderChatMessageUi theme state.AuthUser.UserName dispatch)
             |> List.collect id ]

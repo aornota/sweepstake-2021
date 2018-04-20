@@ -13,17 +13,17 @@ open System
 
 module Brw = Fable.Import.Browser
 
-type UnauthenticatedPage = // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
+type UnauthPage =
     | News
     | Squads
 
-type AuthenticatedPage = // TODO-NMB-MEDIUM: More...
+type AuthPage =
     | Drafts
     | ChatPage
 
 type Page =
-    | UnauthenticatedPage of unauthenticatedPage : UnauthenticatedPage
-    | AuthenticatedPage of authenticatedPage : AuthenticatedPage
+    | UnauthPage of unauthPage : UnauthPage
+    | AuthPage of authPage: AuthPage
 
 type Preferences = {
     UseDefaultTheme : bool
@@ -42,34 +42,41 @@ type UiWsError =
     | SendWsOtherError of uiWsApi : UiWsApi * errorText : string
     | DeserializeServerWsApiError of errorText : string
 
+type UnauthPageInput =
+    | NewsInput
+    | SquadsInput
+
 type SignInInput =
     | UserNameTextChanged of userNameText : string
     | PasswordTextChanged of passwordText : string
     | SignIn
     | CancelSignIn
 
-type UnauthenticatedInput = // TODO-NMB-MEDIUM: More (e.g. Standings[U] | Fixtures[U] | Results[U] | ...)...
-    | ShowSignIn
-    | ShowUnauthenticatedPage of unauthenticatedPage : UnauthenticatedPage
-    | NewsInputU
-    | SquadsInputU
+type UnauthInput =
+    | ShowUnauthPage of unauthPage : UnauthPage
+    | UnauthPageInput of unauthPageInput : UnauthPageInput
+    | ShowSignInModal
     | SignInInput of signInInput : SignInInput
 
-type AuthenticatedInput = // TODO-NMB-MEDIUM: More (e.g. Standings[A] | Fixtures[A] | Results[A] | ...)...
-    | ShowPage of page : Page
-    | NewsInputA
-    | SquadsInputA
+type AuthPageInput =
     | DraftsInput
     | ChatInput of chatInput : Chat.Common.Input
+
+type PageInput =
+    | UPageInput of unauthPageInput : UnauthPageInput
+    | APageInput of authPageInput : AuthPageInput
+
+type AuthInput =
+    | ShowPage of page : Page
+    | PageInput of pageInput : PageInput
     | SignOut
-    | CancelSignOut
     | ChangePassword
 
 type AppInput =
     | ReadingPreferencesInput of result : Result<Preferences option, exn>
     | ConnectingInput of ws : Brw.WebSocket
-    | UnauthenticatedInput of unauthenticatedInput : UnauthenticatedInput
-    | AuthenticatedInput of authenticatedInput : AuthenticatedInput
+    | UnauthInput of unauthInput : UnauthInput
+    | AuthInput of authInput : AuthInput
 
 type Input =
 #if TICK
@@ -88,7 +95,7 @@ type Input =
 
 type ToDo = unit
 
-type Status =
+type SignInStatus =
     | Pending
     | Failed of errorText : string
 
@@ -100,30 +107,35 @@ type SignInState = {
     PasswordText : string
     PasswordErrorText : string option
     FocusPassword : bool
-    SignInStatus : Status option }
+    SignInStatus : SignInStatus option }
 
-type UnauthenticatedState = { // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
-    CurrentPage : UnauthenticatedPage
+type UnauthPageStates = {
     NewsState : ToDo
-    SquadsState : ToDo
+    SquadsState : ToDo }
+
+type UnauthState = {
+    CurrentUnauthPage : UnauthPage
+    UnauthPageStates : UnauthPageStates
     SignInState : SignInState option }
 
-type AuthenticatedState = { // TODO-NMB-MEDIUM: More (e.g. Standings | Fixtures | Results | ...)...
-    AuthenticatedUser : AuthenticatedUser
-    CurrentPage : Page
-    NewsState : ToDo
-    SquadsState : ToDo
+type AuthPageStates = {
     DraftsState : ToDo
-    ChatState : Chat.Common.State option
-    SignOutStatus : Status option }
+    ChatState : Chat.Common.State option }
+
+type AuthState = {
+    AuthUser : AuthUser
+    CurrentPage : Page
+    UnauthPageStates : UnauthPageStates
+    AuthPageStates : AuthPageStates
+    SigningOut : bool }
 
 type AppState =
     | ReadingPreferences
     | Connecting of jwt : Jwt option * lastPage : Page option
     | ServiceUnavailable
     | AutomaticallySigningIn of jwt : Jwt * lastPage : Page option
-    | Unauthenticated of unauthenticatedState : UnauthenticatedState
-    | Authenticated of authenticatedState : AuthenticatedState
+    | Unauth of unauthState : UnauthState
+    | Auth of authState : AuthState
 
 type State = {
     Ticks : int<tick> // note: will only be updated when TICK (see webpack.config.js) is defined

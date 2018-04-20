@@ -341,6 +341,7 @@ let tag theme tagData children =
         match tagData.OnDismiss with | Some onDismiss -> yield delete onDismiss | None -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
+// TODO-NMB_LOW: If make helpInfo colour configurable, will need to transform via theme (e.g. IsDark -> IsLight &c.)...
 let textArea theme (key:Guid) text errorText helpInfo autoFocus disabled (onChange:string -> unit) =
     let className = getClassName theme false
     Control.div [ Control.HasIconLeft ] [
@@ -355,7 +356,7 @@ let textArea theme (key:Guid) text errorText helpInfo autoFocus disabled (onChan
                 AutoFocus autoFocus
                 OnChange (fun ev -> !!ev.target?value |> onChange) ] ] []
         match errorText with | Some errorText -> yield Help.help [ Help.Color IsDanger ] [ str errorText ] | None -> ()
-        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsDark ] helpInfo | [] -> () ]
+        match helpInfo with | _ :: _ -> yield Help.help [ Help.Color IsInfo ] helpInfo | [] -> () ]
 
 // TODO-NMB-MEDIUM: "Genericize"?...
 let textBox theme (key:Guid) text iconData isPassword helpErrorText helpInfo autoFocus disabled (onChange:string -> unit) onEnter =

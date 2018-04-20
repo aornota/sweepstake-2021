@@ -8,13 +8,13 @@ type UserId = | UserId of guid : Guid with static member Create () = Guid.NewGui
 type SessionId = | SessionId of guid : Guid with static member Create () = Guid.NewGuid () |> SessionId
 
 // TODO-NMB-MEDIUM: Permissions?...
-type AuthenticatedUser = {
+type AuthUser = {
     UserId : UserId
     SessionId : SessionId
     UserName : string }
 
-// TODO-NMB-MEDIUM: Change to string (rather than AuthenticatedUser) - once Jwt functionality implemented...
-type Jwt = | Jwt of jwt : AuthenticatedUser
+// TODO-NMB-MEDIUM: Change to string (rather than AuthdUser) - once Jwt functionality implemented...
+type Jwt = | Jwt of jwt : AuthUser
 
 type ChatMessageId = | ChatMessageId of guid : Guid with static member Create () = Guid.NewGuid () |> ChatMessageId
 

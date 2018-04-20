@@ -11,8 +11,8 @@ type ServerWsError =
 type ServerAppWsApi =
     | ServerWsErrorWs of serverWsError : ServerWsError
     | ConnectedWs of otherConnections : int * signedIn : int
-    | SignInResultWs of result : Result<AuthenticatedUser, string>
-    | AutoSignInResultWs of result : Result<AuthenticatedUser, string>
+    | SignInResultWs of result : Result<AuthUser, string>
+    | AutoSignInResultWs of result : Result<AuthUser, string>
     | SignOutResultWs of result : Result<SessionId, string> // TODO-NMB-HIGH: If no need for SessionId, use unit?...
     | AutoSignOutWs of sessionId : SessionId // TODO-NMB-HIGH: If no need for SessionId, use unit - or, e.g., AutoSignOutReason?...
     | OtherUserSignedIn of userName : string // TODO-NMB-MEDIUM: Should this be a ServerChatWs case, e.g. as a ChatUsers "projection"?...

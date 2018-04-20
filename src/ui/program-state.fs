@@ -44,10 +44,10 @@ let private writePreferencesCmd state =
     let writePreferences uiState = async {
         let lastPage =
             match uiState.AppState with
-            | Unauthenticated unauthenticatedState -> Some (UnauthenticatedPage unauthenticatedState.CurrentPage)
-            | Authenticated authenticatedState -> Some authenticatedState.CurrentPage
+            | Unauth unauthState -> Some (UnauthPage unauthState.CurrentUnauthPage)
+            | Auth authState -> Some authState.CurrentPage
             | _ -> None
-        let jwt = match uiState.AppState with | Authenticated authenticatedState -> Some (Jwt (authenticatedState.AuthenticatedUser)) | _ -> None
+        let jwt = match uiState.AppState with | Auth authState -> Some (Jwt (authState.AuthUser)) | _ -> None
         let preferences = { UseDefaultTheme = uiState.UseDefaultTheme ; SessionId = uiState.SessionId ; LastPage = lastPage ; Jwt = jwt }
         do writeJson APP_PREFERENCES_KEY (toJson preferences) }
     Cmd.ofAsync writePreferences state (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
@@ -89,10 +89,10 @@ let private sendUiWsApi (ws:Brw.WebSocket) (uiWsApi:UiWsApi) =
 
 let private shouldNeverHappenText text = sprintf "SHOULD NEVER HAPPEN -> %s" text
 
-let private sendUiUnauthenticatedWsApiCmd (ws:Brw.WebSocket option) uiUnauthenticatedWsApi =
+let private sendUiUnauthWsApiCmd (ws:Brw.WebSocket option) uiUnauthWsApi =
     match ws with
-    | Some ws -> sendUiWsApi ws (UiUnauthenticatedWsApi uiUnauthenticatedWsApi)
-    | None -> AddNotificationMessage (debugDismissableMessage (shouldNeverHappenText "sendUiUnauthenticatedWsApiCmd called when WebSocket is None")) |> Cmd.ofMsg
+    | Some ws -> sendUiWsApi ws (UiUnauthWsApi uiUnauthWsApi)
+    | None -> AddNotificationMessage (debugDismissableMessage (shouldNeverHappenText "sendUiUnauthWsApiCmd called when WebSocket is None")) |> Cmd.ofMsg
 
 let private sendUiWsApiCmd (ws:Brw.WebSocket option) uiWsApi =
     match ws with
@@ -108,13 +108,15 @@ let private addDangerMessage dangerText state = addNotificationMessage (dangerDi
 
 let private shouldNeverHappen debugText state : State * Cmd<Input> = addDebugMessage (shouldNeverHappenText debugText) state, Cmd.none
 
-let private error debugText toastText state : State * Cmd<Input> =
+let private addDebugError debugText toastText state : State * Cmd<Input> =
     addDebugMessage (sprintf "ERROR -> %s" debugText) state, match toastText with | Some toastText -> errorToastCmd toastText | None -> Cmd.none
+
+let private addError errorText state = addDangerMessage errorText state
 
 let private appStateText appState =
     match appState with
     | ReadingPreferences -> "ReadingPreferences" | Connecting _ -> "Connecting" | ServiceUnavailable -> "ServiceUnavailable" | AutomaticallySigningIn _ -> "AutomaticallySigningIn"
-    | Authenticated _ -> "Authenticated" | Unauthenticated _ -> "Unauthenticated"
+    | Unauth _ -> "Unauth" | Auth _ -> "Auth"
 
 let defaultSignInState userName signInStatus = {
     UserNameKey = Guid.NewGuid ()
@@ -126,27 +128,24 @@ let defaultSignInState userName signInStatus = {
     FocusPassword = match userName with | Some _ -> true | None -> false
     SignInStatus = signInStatus }
 
-let private defaultUnauthenticatedState currentPage signInState state =
-    let unauthenticatedState = {
-        CurrentPage = match currentPage with | Some currentPage -> currentPage | None -> News
-        NewsState = ()
-        SquadsState = ()
+let private defaultUnauthState currentPage signInState state =
+    let unauthState = {
+        CurrentUnauthPage = match currentPage with | Some currentPage -> currentPage | None -> News
+        UnauthPageStates = { NewsState = () ; SquadsState = () }
         SignInState = signInState }
-    { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
+    { state with AppState = Unauth unauthState }, Cmd.none
 
-let private defaultAuthenticatedState authenticatedUser currentPage (unauthenticatedState:UnauthenticatedState option) state =
-    let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthenticatedPage ChatPage
-    // Note: No actual need to call Chat.State.initialize here as will be initialized on demand - i.e. by ShowPage (AuthenticatedPage ChatPage) - but no harm in being pre-emptive.
-    let chatState, chatCmd = Chat.State.initialize authenticatedUser (currentPage = AuthenticatedPage ChatPage)
-    let authenticatedState = {
-        AuthenticatedUser = authenticatedUser
+let private defaultAuthState authUser currentPage (unauthState:UnauthState option) state =
+    let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
+    // Note: No actual need to call Chat.State.initialize here as will be initialized on demand - i.e. by ShowPage (AuthPage ChatPage) - but no harm in being pre-emptive.
+    let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
+    let authState = {
+        AuthUser = authUser
         CurrentPage = currentPage
-        NewsState = match unauthenticatedState with | Some unauthenticatedState -> unauthenticatedState.NewsState | None -> ()
-        SquadsState = match unauthenticatedState with | Some unauthenticatedState -> unauthenticatedState.SquadsState | None -> ()
-        DraftsState = ()
-        ChatState = Some chatState
-        SignOutStatus = None }
-    { state with AppState = Authenticated authenticatedState }, chatCmd |> Cmd.map (ChatInput >> AuthenticatedInput >> AppInput)
+        UnauthPageStates = match unauthState with | Some unauthState -> unauthState.UnauthPageStates | None -> { NewsState = () ; SquadsState = () }
+        AuthPageStates = { DraftsState = () ; ChatState = Some chatState }
+        SigningOut = false }
+    { state with AppState = Auth authState }, chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
 
 let initialize () =
     let state = {
@@ -165,100 +164,121 @@ let private handleUiWsError uiWsError state : State * Cmd<Input> =
     match uiWsError, state.AppState with
     | WsOnError wsApiUrl, Connecting _ ->
         let uiState = { state with AppState = ServiceUnavailable }
-        error (sprintf "WsOnError when Connecting -> %s" wsApiUrl) (Some "Unable to create a web socket connection to the web server") uiState
-    | WsOnError wsApiUrl, _ -> error (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some "An unexpected web socket error has occurred") state
-    | SendWsNotOpenError uiWsApi, _ -> error (sprintf "SendWsNotOpenError -> %A" uiWsApi) (Some "The web socket connection to the web server has been closed") state
-    | SendWsOtherError (uiWsApi, errorText), _ -> error (sprintf "SendWsOtherError -> %s -> %A" errorText uiWsApi) (Some "Unable to send a web socket message") state
-    | DeserializeServerWsApiError errorText, _ -> error (sprintf "DeserializeServerWsApiError -> %s" errorText) (Some "Unable to process a received web socket message") state
+        addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) (Some "Unable to create a web socket connection to the web server") uiState
+    | WsOnError wsApiUrl, _ -> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some "An unexpected web socket error has occurred") state
+    | SendWsNotOpenError uiWsApi, _ -> addDebugError (sprintf "SendWsNotOpenError -> %A" uiWsApi) (Some "The web socket connection to the web server has been closed") state
+    | SendWsOtherError (uiWsApi, errorText), _ -> addDebugError (sprintf "SendWsOtherError -> %s -> %A" errorText uiWsApi) (Some "Unable to send a web socket message") state
+    | DeserializeServerWsApiError errorText, _ -> addDebugError (sprintf "DeserializeServerWsApiError -> %s" errorText) (Some "Unable to process a received web socket message") state
 
 let private handleServerWsError serverWsError state =
     match serverWsError with
-    | ReceiveError errorText -> error (sprintf "Server ReceiveError -> %s" errorText) (Some "The web server was unable to receive a web socket message") state
-    | DeserializeUiWsApiError errorText -> error (sprintf "Server DeserializeUiWsApiError -> %s" errorText) (Some"The web server was unable to process a web socket message") state
+    | ReceiveError errorText -> addDebugError (sprintf "Server ReceiveError -> %s" errorText) (Some "The web server was unable to receive a web socket message") state
+    | DeserializeUiWsApiError errorText -> addDebugError (sprintf "Server DeserializeUiWsApiError -> %s" errorText) (Some"The web server was unable to process a web socket message") state
 
 let private handleConnected (otherConnections, signedIn) jwt lastPage state =
     let toastCmd =
 #if DEBUG
         let plural i = if i = 1 then String.Empty else "s"
-        infoToastCmd (sprintf "%i other web socket connection%s | %i user%s signed-in" otherConnections (plural otherConnections) signedIn (plural signedIn))
+        infoToastCmd (sprintf "%i other web socket connection%s | %i signed-in user%s" otherConnections (plural otherConnections) signedIn (plural signedIn))
 #else
         Cmd.none
 #endif
     let state, cmd =
         match jwt with
-        | Some jwt -> { state with AppState = AutomaticallySigningIn (jwt, lastPage) }, AutoSignInWs jwt |> sendUiUnauthenticatedWsApiCmd state.Ws
+        | Some jwt -> { state with AppState = AutomaticallySigningIn (jwt, lastPage) }, AutoSignInWs jwt |> sendUiUnauthWsApiCmd state.Ws
         | None ->
-            let lastPage = match lastPage with | Some (UnauthenticatedPage unauthenticatedPage) -> Some unauthenticatedPage | Some (AuthenticatedPage _) | None -> None
-            let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthenticatedPage lastPage |> UnauthenticatedInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
-            // TEMP-NMB: Force sign-in Modal to be displayed...
+            let lastPage = match lastPage with | Some (UnauthPage unauthPage) -> Some unauthPage | Some (AuthPage _) | None -> None
+            let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthPage lastPage |> UnauthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
+            // TEMP-NMB: ShowSignInModal once connected...
             let showSignInCmd =
-                ShowSignIn |> UnauthenticatedInput |> AppInput |> Cmd.ofMsg
+                ShowSignInModal |> UnauthInput |> AppInput |> Cmd.ofMsg
             // ...or not...
                 //Cmd.none
             // ...NMB-TEMP
-            let state, cmd = defaultUnauthenticatedState None None state
-            // ...NMB-TEMP
+            let state, cmd = defaultUnauthState None None state
             state, Cmd.batch [ cmd ; showPageCmd ; showSignInCmd ]
     state, Cmd.batch [ cmd ; toastCmd ]
 
-let private handleSignInResult result unauthenticatedState state =
-    match unauthenticatedState.SignInState, result with
-    | Some _, Ok authenticatedUser ->
-        let currentPage = Some (UnauthenticatedPage unauthenticatedState.CurrentPage)
-        let state, cmd = defaultAuthenticatedState authenticatedUser currentPage (Some unauthenticatedState) state
+let private handleSignInResult result unauthState state =
+    match unauthState.SignInState, result with
+    | Some _, Ok authUser ->
+        let currentPage = Some (UnauthPage unauthState.CurrentUnauthPage)
+        let state, cmd = defaultAuthState authUser currentPage (Some unauthState) state
         state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd "You have signed in" ]
     | Some signInState, Error errorText ->
-        let state, toastCmd = error (sprintf "SignInResultWs -> %s" errorText) (Some (sprintf "Unable to sign in as %s" signInState.UserNameText)) state // TODO-NMB-MEDIUM: Is this [error] necessary, e.g. if errorText rendered elsewhere?...
+        let toastCmd = errorToastCmd (sprintf "Unable to sign in as %s" signInState.UserNameText)
+        let errorText =
+#if DEBUG
+            //sprintf "SignInResultWs error -> %s" errorText
+            "An unexpected error occurred when signing in"
+#else
+            "An unexpected error occurred when signing in"
+#endif        
         let signInState = { signInState with SignInStatus = Some (Failed errorText) }
-        { state with AppState = Unauthenticated { unauthenticatedState with SignInState = Some signInState } }, toastCmd
-    | None, _ -> shouldNeverHappen (sprintf "Unexpected 'SignInResult' when SignInState is None -> %A" result) state
+        { state with AppState = Unauth { unauthState with SignInState = Some signInState } }, toastCmd
+    | None, _ -> shouldNeverHappen (sprintf "Unexpected SignInResultWs when SignInState is None -> %A" result) state
 
-let private handleAutoSignInResult result (jwt:AuthenticatedUser) lastPage state =
+let private handleAutoSignInResult result (jwt:AuthUser) lastPage state =
     match result with
-    | Ok authenticatedUser -> // TODO-NMB-LOW: Check authenticatedUser vs. _jwt?...
-        let showPageCmd = match lastPage with | Some lastPage -> ShowPage lastPage |> AuthenticatedInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
-        let state, cmd = defaultAuthenticatedState authenticatedUser None None state
+    | Ok authUser -> // TODO-NMB-LOW: Check authUser vs. _jwt?...
+        let showPageCmd = match lastPage with | Some lastPage -> ShowPage lastPage |> AuthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
+        let state, cmd = defaultAuthState authUser None None state
         state, Cmd.batch [ showPageCmd ; cmd ; successToastCmd "You have been automatically signed in" ]
     | Error errorText ->
-        let state, toastCmd = error (sprintf "AutoSignInResultWs -> %s" errorText) (Some (sprintf "Unable to automatically sign in as %s" jwt.UserName)) state // TODO-NMB-MEDIUM: Is this [error] necessary, e.g. if errorText rendered elsewhere?...
-        let lastPage = match lastPage with | Some (UnauthenticatedPage unauthenticatedPage) -> Some unauthenticatedPage | Some (AuthenticatedPage _) | None -> None
+        let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as %s" jwt.UserName)
+        let errorText =
+#if DEBUG
+            //sprintf "AutoSignInResultWs error -> %s" errorText
+            "An unexpected error occurred when automatically signing in"
+#else
+            "An unexpected error occurred when automatically signing in"
+#endif        
+        let lastPage = match lastPage with | Some (UnauthPage unauthPage) -> Some unauthPage | Some (AuthPage _) | None -> None
         let signInState = defaultSignInState (Some jwt.UserName) (Some (Failed errorText))
-        let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthenticatedPage lastPage |> UnauthenticatedInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
-        let state, cmd = defaultUnauthenticatedState None (Some signInState) state
-        state, Cmd.batch [ showPageCmd ; cmd ; toastCmd ]
+        let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthPage lastPage |> UnauthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
+        let state, cmd = defaultUnauthState None (Some signInState) state
+        state, Cmd.batch [ cmd ; showPageCmd ; toastCmd ]
 
-let private handleSignOutResult result authenticatedState state =
-    match authenticatedState.SignOutStatus, result with
-    | Some Pending, Ok _sessionId -> // TODO-NMB-LOW: Check _sessionId vs. authenticatedState.AuthenticatedUser.SessionId?...
-        let currentPage = match authenticatedState.CurrentPage with | UnauthenticatedPage unauthenticatedPage -> Some unauthenticatedPage | _ -> None
-        let state, cmd = defaultUnauthenticatedState currentPage None state
-        state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd "You have signed out" ]
-    | Some Pending, Error errorText ->
-        let state, toastCmd = error (sprintf "SignOutResultWs -> %s" errorText) (Some "Unable to sign out") state // TODO-NMB-MEDIUM: Is this [error] necessary, e.g. if errorText rendered elsewhere?...
-        { state with AppState = Authenticated { authenticatedState with SignOutStatus = Some (Failed errorText) } }, toastCmd
-    | Some (Failed _), _ | None, _ -> shouldNeverHappen (sprintf "Unexpected 'SignOutResult' when SignOutStatus is %A -> %A" authenticatedState.SignOutStatus result) state
+let private handleSignOutResult result authState state =
+    let toastCmd = successToastCmd "You have signed out"
+    match authState.SigningOut, result with
+    | true, Ok _sessionId -> // TODO-NMB-LOW: Check _sessionId vs. authState.AuthUser.SessionId?...
+        let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> Some unauthPage | _ -> None
+        let state, cmd = defaultUnauthState currentPage None state
+        state, Cmd.batch [ cmd ; writePreferencesCmd state ; toastCmd ]
+    | true, Error errorText ->
+        let state, _ =
+#if DEBUG
+            addDebugError (sprintf "SignOutResultWs error -> %s" errorText) None state
+#else
+            addError "An unexpected error occurred when signing out" state, Cmd.none
+#endif        
+        let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> Some unauthPage | _ -> None
+        let state, cmd = defaultUnauthState currentPage None state
+        state, Cmd.batch [ cmd ; writePreferencesCmd state ; toastCmd ]
+    | false, _ -> shouldNeverHappen (sprintf "Unexpected SignOutResultWs when not SigningOut -> %A" result) state
 
-let private handleAutoSignOut _sessionId (authenticatedState:AuthenticatedState) state = // TODO-NMB-LOW: Check _sessionId vs. authenticatedState.AuthenticatedUser.SessionId?...
-    let currentPage = match authenticatedState.CurrentPage with | UnauthenticatedPage unauthenticatedPage -> Some unauthenticatedPage | _ -> None
-    let state, cmd = defaultUnauthenticatedState currentPage None state
+let private handleAutoSignOut _sessionId (authState:AuthState) state = // TODO-NMB-LOW: Check _sessionId vs. authState.AuthUser.SessionId?...
+    let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> Some unauthPage | _ -> None
+    let state, cmd = defaultUnauthState currentPage None state
     state, Cmd.batch [ cmd ; writePreferencesCmd state ; warningToastCmd "You have been automatically signed out" ]
 
 let private handleServerAppWsApi serverAppWsApi state =
     match serverAppWsApi, state.AppState with
     | ServerWsErrorWs serverWsError, _ -> handleServerWsError serverWsError state
     | ConnectedWs (otherConnections, signedIn), Connecting (jwt, lastPage) -> handleConnected (otherConnections, signedIn) jwt lastPage state
-    | SignInResultWs result, Unauthenticated unauthenticatedState -> handleSignInResult result unauthenticatedState state
+    | SignInResultWs result, Unauth unauthState -> handleSignInResult result unauthState state
     | AutoSignInResultWs result, AutomaticallySigningIn (Jwt jwt, lastPage) -> handleAutoSignInResult result jwt lastPage state
-    | SignOutResultWs result, Authenticated authenticatedState -> handleSignOutResult result authenticatedState state
-    | AutoSignOutWs sessionId, Authenticated authenticatedState -> handleAutoSignOut sessionId authenticatedState state
-    | OtherUserSignedIn userName, Authenticated _ -> state, infoToastCmd (sprintf "%s has signed in" userName)
-    | OtherUserSignedOut userName, Authenticated _ -> state, infoToastCmd (sprintf "%s has signed out" userName)
+    | SignOutResultWs result, Auth authState -> handleSignOutResult result authState state
+    | AutoSignOutWs sessionId, Auth authState -> handleAutoSignOut sessionId authState state
+    | OtherUserSignedIn userName, Auth _ -> state, infoToastCmd (sprintf "%s has signed in" userName)
+    | OtherUserSignedOut userName, Auth _ -> state, infoToastCmd (sprintf "%s has signed out" userName)
     | _, appState -> shouldNeverHappen (sprintf "Unexpected ServerAppWsApi when %s -> %A" (appStateText appState) serverAppWsApi) state
 
 let private handleServerWsApi serverWsApi state =
     match serverWsApi, state.AppState with
     | ServerAppWsApi serverAppWsApi, _ -> handleServerAppWsApi serverAppWsApi state
-    | ServerChatWsApi serverChatWsApi, Authenticated _ -> state, ReceiveServerChatWsApi serverChatWsApi |> ChatInput |> AuthenticatedInput |> AppInput |> Cmd.ofMsg
+    | ServerChatWsApi serverChatWsApi, Auth _ -> state, ReceiveServerChatWsApi serverChatWsApi |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | _, appState -> shouldNeverHappen (sprintf "Unexpected ServerWsApi when %s -> %A" (appStateText appState) serverWsApi) state
 
 let private handleReadingPreferencesInput (result:Result<Preferences option, exn>) (state:State) =
@@ -269,88 +289,86 @@ let private handleReadingPreferencesInput (result:Result<Preferences option, exn
         { state with AppState = Connecting (preferences.Jwt, preferences.LastPage) }, Cmd.ofSub initializeWsSub
     | Ok None -> { state with AppState = Connecting (None, None) }, Cmd.ofSub initializeWsSub
     | Error exn ->
-        let state, _ = error (sprintf "ReadPreferencesResult -> %s" exn.Message) None state
+        let state, _ = addDebugError (sprintf "ReadPreferencesResult -> %s" exn.Message) None state
         state, ReadingPreferencesInput (Ok None) |> AppInput |> Cmd.ofMsg
 
 let private handleConnectingInput ws state : State * Cmd<Input> = { state with Ws = Some ws }, Cmd.none
 
-let private handleUnauthenticatedInput unauthenticatedInput unauthenticatedState state =
-    match unauthenticatedInput, unauthenticatedState.SignInState with
-    | ShowSignIn, None ->
-        let unauthenticatedState = { unauthenticatedState with SignInState = Some (defaultSignInState None None) }
-        { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
-    | ShowUnauthenticatedPage unauthenticatedPage, None ->
-        if unauthenticatedState.CurrentPage <> unauthenticatedPage then
+let private handleUnauthInput unauthInput unauthState state =
+    match unauthInput, unauthState.SignInState with
+    | ShowUnauthPage unauthPage, _ ->
+        if unauthState.CurrentUnauthPage <> unauthPage then
             // TODO-NMB-MEDIUM: Initialize "optional" pages (if required) and toggle "IsCurrent" for relevant pages...
-            let unauthenticatedState = { unauthenticatedState with CurrentPage = unauthenticatedPage }
-            let state = { state with AppState = Unauthenticated unauthenticatedState }
+            let unauthState = { unauthState with CurrentUnauthPage = unauthPage }
+            let state = { state with AppState = Unauth unauthState }
             state, writePreferencesCmd state
         else state, Cmd.none
-    | NewsInputU, None -> shouldNeverHappen "Unexpected NewsInputU -> NYI" state
-    | SquadsInputU, None -> shouldNeverHappen "Unexpected SquadsInputU -> NYI" state
+    | UnauthPageInput NewsInput, None -> shouldNeverHappen "Unexpected NewsInput -> NYI" state
+    | UnauthPageInput SquadsInput, None -> shouldNeverHappen "Unexpected SquadsInput -> NYI" state
+    | ShowSignInModal, None ->
+        let unauthState = { unauthState with SignInState = Some (defaultSignInState None None) }
+        { state with AppState = Unauth unauthState }, Cmd.none
     | SignInInput (UserNameTextChanged userNameText), Some signInState ->
         let signInState = { signInState with UserNameText = userNameText ; UserNameErrorText = validateUserNameText userNameText }
-        let unauthenticatedState = { unauthenticatedState with SignInState = Some signInState }
-        { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
+        let unauthState = { unauthState with SignInState = Some signInState }
+        { state with AppState = Unauth unauthState }, Cmd.none
     | SignInInput (PasswordTextChanged passwordText), Some signInState ->
         let signInState = { signInState with PasswordText = passwordText ; PasswordErrorText = validatePasswordText passwordText }
-        let unauthenticatedState = { unauthenticatedState with SignInState = Some signInState }
-        { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
-    | SignInInput SignIn, Some signInState -> // note: assume no need to validate unauthenticatedState.UserNameText or unauthenticatedState.PasswordText (i.e. because App.Render.renderUnauthenticated will ensure that SignIn can only be dispatched when valid)
+        let unauthState = { unauthState with SignInState = Some signInState }
+        { state with AppState = Unauth unauthState }, Cmd.none
+    | SignInInput SignIn, Some signInState -> // note: assume no need to validate unauthState.UserNameText or unauthState.PasswordText (i.e. because App.Render.renderUnauth will ensure that SignIn can only be dispatched when valid)
         let signInState = { signInState with SignInStatus = Some Pending }
-        let unauthenticatedState = { unauthenticatedState with SignInState = Some signInState }
-        let cmd = SignInWs (state.SessionId, signInState.UserNameText, signInState.PasswordText) |> sendUiUnauthenticatedWsApiCmd state.Ws
-        { state with AppState = Unauthenticated unauthenticatedState }, cmd
+        let unauthState = { unauthState with SignInState = Some signInState }
+        let cmd = SignInWs (state.SessionId, signInState.UserNameText, signInState.PasswordText) |> sendUiUnauthWsApiCmd state.Ws
+        { state with AppState = Unauth unauthState }, cmd
     | SignInInput CancelSignIn, Some _ ->
-        let unauthenticatedState = { unauthenticatedState with SignInState = None }
-        { state with AppState = Unauthenticated unauthenticatedState }, Cmd.none
-    | _, _ -> shouldNeverHappen (sprintf "Unexpected UnauthenticatedInput when SignIsState is %A -> %A" unauthenticatedState.SignInState unauthenticatedInput) state
+        let unauthState = { unauthState with SignInState = None }
+        { state with AppState = Unauth unauthState }, Cmd.none
+    | _, _ -> shouldNeverHappen (sprintf "Unexpected UnauthInput when SignIsState is %A -> %A" unauthState.SignInState unauthInput) state
 
-let private handleAuthenticatedInput authenticatedInput authenticatedState state =
-    match authenticatedInput, authenticatedState.SignOutStatus with
-    | ShowPage page, None ->
-        if authenticatedState.CurrentPage <> page then
+let private handleAuthInput authInput authState state =
+    match authInput, authState.SigningOut with
+    | ShowPage page, false ->
+        if authState.CurrentPage <> page then
             let chatState, chatCmd =
-                match page, authenticatedState.ChatState with
-                | AuthenticatedPage ChatPage, None ->
-                    let chatState, chatCmd = Chat.State.initialize authenticatedState.AuthenticatedUser true
+                match page, authState.AuthPageStates.ChatState with
+                | AuthPage ChatPage, None ->
+                    let chatState, chatCmd = Chat.State.initialize authState.AuthUser true
                     Some chatState, chatCmd
-                | _, Some chatState -> Some chatState, ToggleChatIsCurrentPage (page = AuthenticatedPage ChatPage) |> Cmd.ofMsg
+                | _, Some chatState -> Some chatState, ToggleChatIsCurrentPage (page = AuthPage ChatPage) |> Cmd.ofMsg
                 | _, None -> None, Cmd.none
             // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required) and toggle "IsCurrent" for other relevant pages...
-            let authenticatedState = { authenticatedState with CurrentPage = page ; ChatState = chatState }
-            let chatCmd = chatCmd |> Cmd.map (ChatInput >> AuthenticatedInput >> AppInput)
-            let state = { state with AppState = Authenticated authenticatedState }
+            let authPageStates = { authState.AuthPageStates with ChatState = chatState }
+            let authState = { authState with CurrentPage = page ; AuthPageStates = authPageStates }
+            let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+            let state = { state with AppState = Auth authState }
             state, Cmd.batch [ chatCmd ; writePreferencesCmd state ]
         else state, Cmd.none
-    | NewsInputA, None -> shouldNeverHappen "Unexpected NewsInputA -> NYI" state
-    | SquadsInputA, None -> shouldNeverHappen "Unexpected SquadsInputA -> NYI" state
-    | DraftsInput, None -> shouldNeverHappen "Unexpected DraftsInput -> NYI" state
-    | ChatInput ShowMarkdownSyntaxModal, None -> { state with StaticModal = Some MarkdownSyntax }, Cmd.none
-    | ChatInput (SendAuthenticatedWsApi (_authenticatedUser, uiAuthenticatedWsApi)), None -> // TODO-NMB-LOW: Check _authenticatedUser vs. authenticatedState.AuthenticatedUser?...
-        state, UiAuthenticatedWsApi (Jwt authenticatedState.AuthenticatedUser, uiAuthenticatedWsApi) |> sendUiWsApiCmd state.Ws
-    | ChatInput chatInput, None ->
-        match authenticatedState.ChatState with
+    | PageInput (UPageInput NewsInput), false -> shouldNeverHappen "Unexpected NewsInput -> NYI" state
+    | PageInput (UPageInput SquadsInput), false -> shouldNeverHappen "Unexpected SquadsInput -> NYI" state
+    | PageInput (APageInput DraftsInput), false -> shouldNeverHappen "Unexpected DraftsInput -> NYI" state
+    | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), false -> { state with StaticModal = Some MarkdownSyntax }, Cmd.none
+    | PageInput (APageInput (ChatInput (SendAuthWsApi (_authUser, uiAuthWsApi)))), false -> // TODO-NMB-LOW: Check _authUser vs. authState.AuthUser?...
+        state, UiAuthWsApi (Jwt authState.AuthUser, uiAuthWsApi) |> sendUiWsApiCmd state.Ws
+    | PageInput (APageInput (ChatInput chatInput)), false ->
+        match authState.AuthPageStates.ChatState with
         | Some chatState ->
             let chatState, chatCmd = Chat.State.transition chatInput chatState
-            { state with AppState = Authenticated { authenticatedState with ChatState = Some chatState } }, chatCmd |> Cmd.map (ChatInput >> AuthenticatedInput >> AppInput)
+            let authPageStates = { authState.AuthPageStates with ChatState = Some chatState }
+            { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
         | None -> shouldNeverHappen "Unexpected ChatInput when ChatState is None" state
-    | SignOut, None ->
-        let cmd = UiAuthenticatedWsApi (Jwt authenticatedState.AuthenticatedUser, SignOutWs) |> sendUiWsApiCmd state.Ws
-        { state with AppState = Authenticated { authenticatedState with SignOutStatus = Some Pending } }, cmd
-    | CancelSignOut, Some (Failed _) ->
-        let currentPage = match authenticatedState.CurrentPage with | UnauthenticatedPage unauthenticatedPage -> Some unauthenticatedPage | _ -> None
-        let state, cmd = defaultUnauthenticatedState currentPage None state
-        state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd "You have signed out" ]
-    | ChangePassword, None -> state, warningToastCmd "Change password functionality is coming soon"
-    | _, _ -> shouldNeverHappen (sprintf "Unexpected AuthenticatedInput when SignOutStatus is %A -> %A" authenticatedState.SignOutStatus authenticatedInput) state
+    | SignOut, false ->
+        let cmd = UiAuthWsApi (Jwt authState.AuthUser, SignOutWs) |> sendUiWsApiCmd state.Ws
+        { state with AppState = Auth { authState with SigningOut = true } }, cmd
+    | ChangePassword, false -> state, warningToastCmd "Change password functionality is coming soon"
+    | _, true -> shouldNeverHappen (sprintf "Unexpected AuthInput when SigningOut -> %A" authInput) state
 
 let private handleAppInput appInput state =
     match appInput, state.AppState with
     | ReadingPreferencesInput result, ReadingPreferences -> handleReadingPreferencesInput result state
     | ConnectingInput ws, Connecting _ -> handleConnectingInput ws state
-    | UnauthenticatedInput unauthenticatedInput, Unauthenticated unauthenticatedState -> handleUnauthenticatedInput unauthenticatedInput unauthenticatedState state
-    | AuthenticatedInput authenticatedInput, Authenticated authenticatedState -> handleAuthenticatedInput authenticatedInput authenticatedState state
+    | UnauthInput unauthInput, Unauth unauthState -> handleUnauthInput unauthInput unauthState state
+    | AuthInput authInput, Auth authState -> handleAuthInput authInput authState state
     | _, appState -> shouldNeverHappen (sprintf "Unexpected AppInput when %s -> %A" (appStateText appState) appInput) state
 
 let transition input state =
@@ -368,7 +386,7 @@ let transition input state =
     | ShowStaticModal staticModal -> { state with StaticModal = Some staticModal }, Cmd.none
     | HideStaticModal -> { state with StaticModal = None }, Cmd.none
     | WritePreferencesResult (Ok _) -> state, Cmd.none
-    | WritePreferencesResult (Error exn) -> error (sprintf "WritePreferencesResult -> %s" exn.Message) None state // note: no need for toast
+    | WritePreferencesResult (Error exn) -> addDebugError (sprintf "WritePreferencesResult -> %s" exn.Message) None state // note: no need for toast
     | OnUiWsError uiWsError -> handleUiWsError uiWsError state
     | HandleServerWsApi serverWsApi -> handleServerWsApi serverWsApi state
     | AppInput appInput -> handleAppInput appInput state

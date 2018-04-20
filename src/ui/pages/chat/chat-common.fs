@@ -8,7 +8,7 @@ open System
 
 type Input =
     | ShowMarkdownSyntaxModal
-    | SendAuthenticatedWsApi of authenticatedUser : AuthenticatedUser * uiAuthenticatedWsApi : UiAuthenticatedWsApi
+    | SendAuthWsApi of authUser : AuthUser * uiAuthWsApi : UiAuthWsApi
     | ReceiveServerChatWsApi of serverWsApi : ServerChatWsApi
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
@@ -31,7 +31,7 @@ type NewChatMessage = {
     ErrorText : string option }
 
 type State = {
-    AuthenticatedUser : AuthenticatedUser
+    AuthUser : AuthUser
     IsCurrentPage : bool
     ChatMessageUis : ChatMessageUi list
     UnseenCount : int

@@ -21,7 +21,7 @@ type private ConnectionsInput =
     | OnDeserializeUiWsApiError of connectionId : ConnectionId * exn : exn
     | HandleUiWsApi of connectionId : ConnectionId * uiWsApi : UiWsApi
 
-type private AuthenticatedUserSession = {
+type private AuthUserSession = {
     UserId : UserId
     SessionId : SessionId
     UserName : string
@@ -30,12 +30,12 @@ type private AuthenticatedUserSession = {
 type private Connection = {
     ConnectionId : ConnectionId
     Ws : WebSocket
-    AuthenticatedUserSession : AuthenticatedUserSession option }
+    AuthUserSession : AuthUserSession option }
 
 type private SendFilter =
     | OnlyConnectionId of connectionId : ConnectionId
-    | AllAuthenticatedExceptConnectionId of connectionId : ConnectionId
-    | AllAuthenticatedExceptUserId of userId : UserId
+    | AllAuthExceptConnectionId of connectionId : ConnectionId
+    | AllAuthExceptUserId of userId : UserId
     | SameUserSessionExceptConnectionId of userId : UserId * sessionId : SessionId * connectionId : ConnectionId
 
 #if DEBUG
@@ -66,77 +66,77 @@ type ConnectionsAgent () =
             match sendFilter with
             | OnlyConnectionId connectionId ->
                 connections |> List.filter (fun connection -> connection.ConnectionId = connectionId)
-            | AllAuthenticatedExceptConnectionId connectionId ->
+            | AllAuthExceptConnectionId connectionId ->
                 connections
                 |> List.filter (fun connection ->
-                    match connection.AuthenticatedUserSession with
+                    match connection.AuthUserSession with
                     | Some _ -> connection.ConnectionId <> connectionId
                     | None -> false)
-            | AllAuthenticatedExceptUserId userId ->
+            | AllAuthExceptUserId userId ->
                 connections
                 |> List.filter (fun connection ->
-                    match connection.AuthenticatedUserSession with
-                    | Some authenticatedUserSession -> authenticatedUserSession.UserId <> userId
+                    match connection.AuthUserSession with
+                    | Some authUserSession -> authUserSession.UserId <> userId
                     | None -> false)
             | SameUserSessionExceptConnectionId (userId, sessionId, connectionId) ->
                 connections
                 |> List.filter (fun connection ->
-                    match connection.AuthenticatedUserSession with
-                    | Some authenticatedUserSession ->
-                        connection.ConnectionId <> connectionId && authenticatedUserSession.UserId = userId && authenticatedUserSession.SessionId = sessionId
+                    match connection.AuthUserSession with
+                    | Some authUserSession ->
+                        connection.ConnectionId <> connectionId && authUserSession.UserId = userId && authUserSession.SessionId = sessionId
                     | None -> false)
         let recipients = recipients |> List.map (fun connection -> connection.ConnectionId, connection.Ws)
         let! failures = send recipients []
         return connections |> remove failures }
     let signIn (connectionId, userId, sessionId, userName) connections =
-        let authenticatedUserSession = { UserId = userId ; SessionId = sessionId ; UserName = userName ; LastApi = DateTime.Now }
+        let authUserSession = { UserId = userId ; SessionId = sessionId ; UserName = userName ; LastApi = DateTime.Now }
         connections
-        |> List.map (fun connection -> if connection.ConnectionId = connectionId then { connection with AuthenticatedUserSession = Some authenticatedUserSession } else connection)
+        |> List.map (fun connection -> if connection.ConnectionId = connectionId then { connection with AuthUserSession = Some authUserSession } else connection)
     let signOut (connectionId, userId, sessionId) connections =
         connections
         |> List.map (fun connection -> 
-            match connection.AuthenticatedUserSession with
-            | Some authenticatedUserSession when connection.ConnectionId = connectionId && authenticatedUserSession.UserId = userId && authenticatedUserSession.SessionId = sessionId ->
-                { connection with AuthenticatedUserSession = None }
+            match connection.AuthUserSession with
+            | Some authUserSession when connection.ConnectionId = connectionId && authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
+                { connection with AuthUserSession = None }
             | Some _ | None -> connection)
     let autoSignOut (userId, sessionId) connections =
         connections
         |> List.map (fun connection -> 
-            match connection.AuthenticatedUserSession with
-            | Some authenticatedUserSession when authenticatedUserSession.UserId = userId && authenticatedUserSession.SessionId = sessionId ->
-                { connection with AuthenticatedUserSession = None }
+            match connection.AuthUserSession with
+            | Some authUserSession when authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
+                { connection with AuthUserSession = None }
             | Some _ | None -> connection)
     let userIdAndNameForConnectionId connectionId connections =
         connections
         |> List.choose (fun connection -> 
-            match connection.AuthenticatedUserSession with
-            | Some authenticatedUserSession when connection.ConnectionId = connectionId -> Some (authenticatedUserSession.UserId, authenticatedUserSession.UserName)
+            match connection.AuthUserSession with
+            | Some authUserSession when connection.ConnectionId = connectionId -> Some (authUserSession.UserId, authUserSession.UserName)
             | Some _ | None -> None)
         |> List.tryHead // note: expect at most one Connection per connectionId
     // TEMP-NMB?: Might not be needed once SignInWs handled properly, e.g. by using real data...
     let userIdForUserName userName connections =
         connections
         |> List.choose (fun connection -> 
-            match connection.AuthenticatedUserSession with
-            | Some authenticatedUserSession when authenticatedUserSession.UserName = userName -> Some authenticatedUserSession.UserId
+            match connection.AuthUserSession with
+            | Some authUserSession when authUserSession.UserName = userName -> Some authUserSession.UserId
             | Some _ | None -> None)
         |> List.tryHead // note: expect at most one UserId per userName
     // ...NMB-TEMP?
     let countForUserId userId connections =
         connections
         |> List.filter (fun connection ->
-            match connection.AuthenticatedUserSession with
-            | Some authenticatedUserSession when authenticatedUserSession.UserId = userId -> true
+            match connection.AuthUserSession with
+            | Some authUserSession when authUserSession.UserId = userId -> true
             | Some _ | None -> false)
         |> List.length
     let updateLastApi(connectionId, userId, sessionId) connections =
         connections
         |> List.map (fun connection ->
             if connection.ConnectionId = connectionId then
-                match connection.AuthenticatedUserSession with
-                | Some authenticatedUserSession when authenticatedUserSession.UserId = userId && authenticatedUserSession.SessionId = sessionId ->
-                    let authenticatedUserSession = { authenticatedUserSession with LastApi = DateTime.Now }
-                    { connection with AuthenticatedUserSession = Some authenticatedUserSession }
+                match connection.AuthUserSession with
+                | Some authUserSession when authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
+                    let authUserSession = { authUserSession with LastApi = DateTime.Now }
+                    { connection with AuthUserSession = Some authUserSession }
                 | Some _ | None -> connection
             else connection)
     let idAsync x = async { return x }
@@ -152,10 +152,10 @@ type ConnectionsAgent () =
                 let otherConnections = connections |> List.length
                 let signedIn =
                     connections
-                    |> List.choose (fun connection -> connection.AuthenticatedUserSession |> Option.map (fun authenticatedUserSession -> authenticatedUserSession.UserId))
+                    |> List.choose (fun connection -> connection.AuthUserSession |> Option.map (fun authUserSession -> authUserSession.UserId))
                     |> List.distinct
                     |> List.length
-                let connections = { ConnectionId = connectionId ; Ws = ws ; AuthenticatedUserSession = None } :: connections              
+                let connections = { ConnectionId = connectionId ; Ws = ws ; AuthUserSession = None } :: connections              
                 let! connections = sendWs (ConnectedWs (otherConnections, signedIn) |> ServerAppWsApi) (OnlyConnectionId connectionId) connections
                 return! managing connections
             | RemoveConnection connectionId ->
@@ -166,7 +166,7 @@ type ConnectionsAgent () =
                 let! connections =
                     if isFullySignedOut then
                         let userId, userName = match userIdAndName with | Some (userId, userName) -> (userId, userName) | None -> UserId.Create (), "yves strop" // SNH-NMB
-                        sendWs (OtherUserSignedOut userName |> ServerAppWsApi) (AllAuthenticatedExceptUserId userId) connections
+                        sendWs (OtherUserSignedOut userName |> ServerAppWsApi) (AllAuthExceptUserId userId) connections
                     else idAsync connections
                 return! managing connections
             | OnReceiveError (connectionId, exn) ->
@@ -177,48 +177,48 @@ type ConnectionsAgent () =
                 return! managing connections
             | HandleUiWsApi (connectionId, uiWsApi) ->
                 match uiWsApi with
-                | UiUnauthenticatedWsApi (SignInWs (sessionId, userName, _password)) ->
-                    // SNH-NMB: What if connectionId not in connections? What if already have AuthenticatedUserSession for sessionId? (&c.)...
+                | UiUnauthWsApi (SignInWs (sessionId, userName, _password)) ->
+                    // SNH-NMB: What if connectionId not in connections? What if already have AuthUserSession for sessionId? (&c.)...
                     // TODO-NMB-MEDIUM: Handle properly, e.g. by checking userName and _password against real data...
                     let userId, alreadySignedIn = match connections |> userIdForUserName userName with | Some userId -> userId, true | None -> UserId.Create (), false
-                    let authenticatedUser = { UserId = userId ; SessionId = sessionId ; UserName = userName }
+                    let authUser = { UserId = userId ; SessionId = sessionId ; UserName = userName }
                     let result =
 #if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignInWs error -> %A" authenticatedUser)
+                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignInWs error -> %A" authUser)
                         else if userName = "ann ewity" then Error ("Username is reserved")
-                        else Ok authenticatedUser
+                        else Ok authUser
 #else
-                        Ok authenticatedUser
+                        Ok authUser
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
-                    let connections = if isOk then connections |> signIn (connectionId, authenticatedUser.UserId, authenticatedUser.SessionId, authenticatedUser.UserName) else connections
+                    let connections = if isOk then connections |> signIn (connectionId, authUser.UserId, authUser.SessionId, authUser.UserName) else connections
                     let! connections = sendWs (SignInResultWs result |> ServerAppWsApi) (OnlyConnectionId connectionId) connections
                     let! connections =
                         if isOk && not alreadySignedIn then
-                            sendWs (OtherUserSignedIn authenticatedUser.UserName |> ServerAppWsApi) (AllAuthenticatedExceptUserId authenticatedUser.UserId) connections
+                            sendWs (OtherUserSignedIn authUser.UserName |> ServerAppWsApi) (AllAuthExceptUserId authUser.UserId) connections
                         else idAsync connections
                     return! managing connections
-                | UiUnauthenticatedWsApi (AutoSignInWs (Jwt jwt)) ->
+                | UiUnauthWsApi (AutoSignInWs (Jwt jwt)) ->
                     // SNH-NMB: What if connectionId not in connections? (&c.)...
                     // TODO-NMB-MEDIUM: Handle properly, e.g. by verifying jwt (i.e. can decrypt | details match [inc. permissions] | &c.)...
-                    let authenticatedUser = jwt
+                    let authUser = jwt
                     let alreadySignedIn = connections |> countForUserId jwt.UserId > 0
                     let result =
 #if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake AutoSignInWs error -> %A" authenticatedUser) else Ok authenticatedUser
+                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake AutoSignInWs error -> %A" authUser) else Ok authUser
 #else
-                        Ok authenticatedUser
+                        Ok authUser
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
-                    let connections = if isOk then connections |> signIn (connectionId, authenticatedUser.UserId, authenticatedUser.SessionId, authenticatedUser.UserName) else connections
+                    let connections = if isOk then connections |> signIn (connectionId, authUser.UserId, authUser.SessionId, authUser.UserName) else connections
                     let! connections = sendWs (AutoSignInResultWs result |> ServerAppWsApi) (OnlyConnectionId connectionId) connections
                     let! connections =
                         if isOk && not alreadySignedIn then
-                            sendWs (OtherUserSignedIn authenticatedUser.UserName |> ServerAppWsApi) (AllAuthenticatedExceptUserId authenticatedUser.UserId) connections
+                            sendWs (OtherUserSignedIn authUser.UserName |> ServerAppWsApi) (AllAuthExceptUserId authUser.UserId) connections
                         else idAsync connections
                     return! managing connections
-                | UiAuthenticatedWsApi (Jwt jwt, SignOutWs) ->       
-                    // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthenticatedUserSession for connectionId? (&c.)...
+                | UiAuthWsApi (Jwt jwt, SignOutWs) ->       
+                    // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
                         if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignOutWs error -> %A" jwt) else Ok jwt.SessionId
@@ -226,21 +226,21 @@ type ConnectionsAgent () =
                         Ok jwt.SessionId
 #endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
-                    // Note: Okay to sign-out connection-for-connectionId before sending SignOutResultWs (since will always match OnlyConnectedId, even if signed-out).
+                    // Note: Okay to sign out connection-for-connectionId before sending SignOutResultWs (since will always match OnlyConnectedId, even if signed-out).
                     let connections = if isOk then connections |> signOut (connectionId, jwt.UserId, jwt.SessionId) else connections
                     let! connections = sendWs (SignOutResultWs result |> ServerAppWsApi) (OnlyConnectionId connectionId) connections
                     let! connections = 
                         if isOk then sendWs (AutoSignOutWs jwt.SessionId |> ServerAppWsApi) (SameUserSessionExceptConnectionId (jwt.UserId, jwt.SessionId, connectionId)) connections
                         else idAsync connections
-                    // Note: Auto-sign-out connections-for-same-user-session-except-ConnectionId after sending AutoSignOutWs (else would not match SameUserSessionExceptConnectionId once signed-out).
+                    // Note: Auto-sign out connections-for-same-user-session-except-ConnectionId after sending AutoSignOutWs (else would not match SameUserSessionExceptConnectionId once signed-out).
                     let connections = if isOk then connections |> autoSignOut (jwt.UserId, jwt.SessionId) else connections
                     let isFullySignedOut = if isOk then connections |> countForUserId jwt.UserId = 0 else false                    
                     let! connections =
-                        if isFullySignedOut then sendWs (OtherUserSignedOut jwt.UserName |> ServerAppWsApi) (AllAuthenticatedExceptUserId jwt.UserId) connections
+                        if isFullySignedOut then sendWs (OtherUserSignedOut jwt.UserName |> ServerAppWsApi) (AllAuthExceptUserId jwt.UserId) connections
                         else idAsync connections
                     return! managing connections
-                | UiAuthenticatedWsApi (Jwt jwt, (SendChatMessageWs chatMessage)) ->
-                    // SNH-NMB: What if connectionId not in connections? What if no AuthenticatedUserSession for connectionId? (&c.)...
+                | UiAuthWsApi (Jwt jwt, (SendChatMessageWs chatMessage)) ->
+                    // SNH-NMB: What if connectionId not in connections? What if no AuthUserSession for connectionId? (&c.)...
                     let result =
 #if DEBUG
                         if random.NextDouble () < fakeErrorFrequency then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageWs error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
@@ -251,7 +251,7 @@ type ConnectionsAgent () =
                     let connections = if isOk then connections |> updateLastApi (connectionId, jwt.UserId, jwt.SessionId) else connections
                     let! connections = sendWs (SendChatMessageResultWs result |> ServerChatWsApi) (OnlyConnectionId connectionId) connections
                     let! connections =
-                        if isOk then sendWs (OtherUserChatMessageWs chatMessage |> ServerChatWsApi) (AllAuthenticatedExceptConnectionId connectionId) connections
+                        if isOk then sendWs (OtherUserChatMessageWs chatMessage |> ServerChatWsApi) (AllAuthExceptConnectionId connectionId) connections
                         else idAsync connections
                     return! managing connections }
         managing [])

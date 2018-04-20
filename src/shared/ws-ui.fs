@@ -4,14 +4,14 @@ open Aornota.Sweepstake2018.Shared.Domain
 
 // TODO-NMB-MEDIUM: Distinguish between "commands" and "queries"?...
 
-type UiUnauthenticatedWsApi =
+type UiUnauthWsApi =
     | SignInWs of sessionId : SessionId * userName : string * password : string
     | AutoSignInWs of jwt : Jwt
 
-type UiAuthenticatedWsApi =
+type UiAuthWsApi =
     | SignOutWs
     | SendChatMessageWs of chatMessage : ChatMessage
 
 type UiWsApi =
-    | UiUnauthenticatedWsApi of uiUnauthenticatedWsApi : UiUnauthenticatedWsApi
-    | UiAuthenticatedWsApi of jwt : Jwt * uiAuthenticatedWsApi : UiAuthenticatedWsApi
+    | UiUnauthWsApi of uiUnauthWsApi : UiUnauthWsApi
+    | UiAuthWsApi of jwt : Jwt * uiAuthWsApi : UiAuthWsApi
