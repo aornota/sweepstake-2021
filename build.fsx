@@ -34,7 +34,18 @@ let runDotnet workingDir args =
 let platformTool tool winTool = (if isUnix then tool else winTool) |> ProcessHelper.tryFindFileOnPath |> function Some t -> t | _ -> failwithf "%s not found" tool
 
 let nodeTool = platformTool "node" "node.exe"
-let yarnTool = platformTool "yarn" "yarn.cmd"
+
+let installUi yarnTool =
+    printfn "Node version:"
+    run nodeTool "--version" __SOURCE_DIRECTORY__
+    printfn "Yarn version:"
+    run yarnTool "--version" __SOURCE_DIRECTORY__
+    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    runDotnet uiDir "restore"
+
+let build () =
+    runDotnet serverDir "build --configuration Release"
+    runDotnet uiDir "fable webpack -- -p"
 
 let ipAddress = "localhost"
 let port = 8080
@@ -54,8 +65,6 @@ Target "clean" (fun _ ->
     DeleteFiles !! @".\src\ui\obj\*.nuspec"
     CleanDir (uiDir </> "public"))
 
-Target "clean-publish" (fun _ -> CleanDir publishDir)
-
 Target "copy-resources" (fun _ ->
     let publicResourcesDir = uiDir </> @"public\resources"
     CreateDir publicResourcesDir
@@ -64,19 +73,14 @@ Target "copy-resources" (fun _ ->
 
 Target "install-server" (fun _ -> runDotnet serverDir "restore")
 
-Target "install-ui" (fun _ ->
-    printfn "Node version:"
-    run nodeTool "--version" __SOURCE_DIRECTORY__
-    printfn "Yarn version:"
-    run yarnTool "--version" __SOURCE_DIRECTORY__
-    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
-    runDotnet uiDir "restore")
+Target "install-ui-local" (fun _ -> installUi (platformTool "yarn" "yarn.cmd"))
+Target "install-ui-azure" (fun _ -> installUi @"%APPDATA%\npm\yarn.cmd") // note: since yarn not pre-installed on Azure - and installed "globally" via npm (see build.cmd)
 
-Target "install" DoNothing
+Target "install-local" DoNothing
+Target "install-azure" DoNothing
 
-Target "build" (fun _ ->
-    runDotnet serverDir "build --configuration Release"
-    runDotnet uiDir "fable webpack -- -p")
+Target "build-local" (fun _ -> build ())
+Target "build-azure" (fun _ -> build ())
 
 Target "run" (fun _ ->
     let server = async { runDotnet serverDir "watch run" }
@@ -86,7 +90,10 @@ Target "run" (fun _ ->
         Diagnostics.Process.Start (sprintf "http://%s:%d" ipAddress port) |> ignore }
     Async.Parallel [| server ; ui ; openBrowser |] |> Async.RunSynchronously |> ignore)
 
-Target "publish" (fun _ ->
+Target "clean-publish-local" (fun _ -> CleanDir publishDir)
+Target "clean-publish-azure" (fun _ -> CleanDir publishDir)
+
+Target "publish-local" (fun _ ->
     CreateDir publishDir
     CopyFiles publishDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
     let uiDir = publishDir </> "ui"
@@ -112,14 +119,18 @@ Target "help" (fun _ ->
     printfn "\nThe following build targets are defined:"
     printfn "\n\tbuild ... builds server and ui [which writes output to .\\src\\ui\\public]"
     printfn "\tbuild run ... builds and runs server and ui [using webpack dev-server]"
-    printfn "\tbuild publish ... builds server and ui, then copies output to .\\publish\n"
+    printfn "\tbuild publish-local ... builds server and ui, then copies output to .\\publish\n"
     printfn "\tbuild publish-azure ... builds server and ui, then uses Kudu to TODO-NMB-HIGH...\n")
 
-"install-dot-net-core" ==> "install-server" ==> "install"
-"install-dot-net-core" ==> "install-ui" ==> "install"
+"install-dot-net-core" ==> "install-server" ==> "install-local"
+"install-server" ==> "install-azure"
+"install-dot-net-core" ==> "install-ui-local" ==> "install-local"
+"install-dot-net-core" ==> "install-ui-azure" ==> "install-azure"
 "clean" ==> "install-server"
-"clean" ==> "copy-resources" ==> "install-ui"
-"install" ==> "run"
-"install" ==> "build" ==> "clean-publish" ==> "publish" ==> "stage-website-assets" ==> "publish-azure"
+"clean" ==> "copy-resources" ==> "install-ui-local"
+"copy-resources" ==> "install-ui-azure"
+"install-local" ==> "run"
+"install-local" ==> "build-local" ==> "clean-publish-local" ==> "publish-local"
+"install-azure" ==> "build-azure" ==> "clean-publish-azure" ==> "stage-website-assets" ==> "publish-azure"
 
 RunTargetOrDefault "build"
