@@ -164,16 +164,16 @@ let private handleUiWsError uiWsError state : State * Cmd<Input> =
     match uiWsError, state.AppState with
     | WsOnError wsApiUrl, Connecting _ ->
         let uiState = { state with AppState = ServiceUnavailable }
-        addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) (Some "Unable to create a web socket connection to the web server") uiState
-    | WsOnError wsApiUrl, _ -> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some "An unexpected web socket error has occurred") state
-    | SendWsNotOpenError uiWsApi, _ -> addDebugError (sprintf "SendWsNotOpenError -> %A" uiWsApi) (Some "The web socket connection to the web server has been closed") state
-    | SendWsOtherError (uiWsApi, errorText), _ -> addDebugError (sprintf "SendWsOtherError -> %s -> %A" errorText uiWsApi) (Some "Unable to send a web socket message") state
-    | DeserializeServerWsApiError errorText, _ -> addDebugError (sprintf "DeserializeServerWsApiError -> %s" errorText) (Some "Unable to process a received web socket message") state
+        addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) (Some "Unable to create a connection to the web server<br><br>Please try again later") uiState
+    | WsOnError wsApiUrl, _ -> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some "An unexpected error has occurred") state
+    | SendWsNotOpenError uiWsApi, _ -> addDebugError (sprintf "SendWsNotOpenError -> %A" uiWsApi) (Some "The connection to the web server has been closed<br><br>Please try refreshing the page") state
+    | SendWsOtherError (uiWsApi, errorText), _ -> addDebugError (sprintf "SendWsOtherError -> %s -> %A" errorText uiWsApi) (Some "Unable to send a message") state
+    | DeserializeServerWsApiError errorText, _ -> addDebugError (sprintf "DeserializeServerWsApiError -> %s" errorText) (Some "Unable to process a received message") state
 
 let private handleServerWsError serverWsError state =
     match serverWsError with
-    | ReceiveError errorText -> addDebugError (sprintf "Server ReceiveError -> %s" errorText) (Some "The web server was unable to receive a web socket message") state
-    | DeserializeUiWsApiError errorText -> addDebugError (sprintf "Server DeserializeUiWsApiError -> %s" errorText) (Some"The web server was unable to process a web socket message") state
+    | ReceiveError errorText -> addDebugError (sprintf "Server ReceiveError -> %s" errorText) (Some "The web server was unable to receive a message") state
+    | DeserializeUiWsApiError errorText -> addDebugError (sprintf "Server DeserializeUiWsApiError -> %s" errorText) (Some"The web server was unable to process a message") state
 
 let private handleConnected (otherConnections, signedIn) jwt lastPage state =
     let toastCmd =

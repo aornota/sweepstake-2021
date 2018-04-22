@@ -77,12 +77,12 @@ This is a picture by the wonderful Gregory Kondos:
 
 This is a list of Mdou Moctar albums:
 
-| Name |   | Released |
-|:-----|:-:|---------:|
-| [_Sousoume Tamachek_](https://mdoumoctar.bandcamp.com/album/sousoume-tamachek) | ![](https://tinyurl.com/ybjew7oo) | September 2017 |
-| [_Akounak Tedalat Taha Tazoughai_](https://mdoumoctar.bandcamp.com/album/akounak-tedalat-taha-tazoughai-ost) (original soundtrack recording) | ![](https://tinyurl.com/y7hgyc77) | June 2015 |
-| [_Anar_](https://mdoumoctar.bandcamp.com/album/anar) | ![](https://tinyurl.com/y7r3fby3) | September 2014 |
-| [_Afelan_](https://mdoumoctar.bandcamp.com/album/afelan) | ![](https://tinyurl.com/yam6o2zh) | July 2013 |
+| Name | Released |   |
+|:-----|---------:|:-:|
+| [_Sousoume Tamachek_](https://mdoumoctar.bandcamp.com/album/sousoume-tamachek) | September 2017 | ![](https://tinyurl.com/ybjew7oo) |
+| [_Akounak Tedalat Taha Tazoughai_](https://mdoumoctar.bandcamp.com/album/akounak-tedalat-taha-tazoughai-ost) (original soundtrack recording) | June 2015 | ![](https://tinyurl.com/y7hgyc77) |
+| [_Anar_](https://mdoumoctar.bandcamp.com/album/anar) | September 2014 | ![](https://tinyurl.com/y7r3fby3) |
+| [_Afelan_](https://mdoumoctar.bandcamp.com/album/afelan) | July 2013 | ![](https://tinyurl.com/yam6o2zh) |
 
 And here's a Matt Miles quote [from _Dark Mountain_ issue 11]:
 > The immigrants of the Global South, the cultures we've turned our backs on even as we profit from
