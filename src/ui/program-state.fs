@@ -65,7 +65,7 @@ let private initializeWsSub dispatch =
 #if DEBUG
         sprintf "ws://localhost:%i" WS_PORT
 #else       
-        sprintf "wss://sweepstake-2018.azurewebsites.net:%i" WS_PORT // TODO-NMB-MEDIUM: Confirm "production" wsUrl (e.g. Azure app service? use "wss://..."?)...
+        sprintf "ws://sweepstake-2018.azurewebsites.net:%i" WS_PORT // TODO-NMB-MEDIUM: Confirm "production" wsUrl (e.g. Azure app service? use "wss://..."?)...
 #endif
     let wsApiUrl = sprintf "%s%s" wsUrl WS_API_PATH
     try

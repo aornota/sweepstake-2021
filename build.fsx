@@ -38,9 +38,12 @@ let nodeTool = platformTool "node" "node.exe"
 let installUi yarnTool =
     printfn "Node version:"
     run nodeTool "--version" __SOURCE_DIRECTORY__
-    (*printfn "Yarn version:"
-    run yarnTool "--version" __SOURCE_DIRECTORY__
-    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__*)
+    match yarnTool with
+    | Some yarnTool ->
+        printfn "Yarn version:"
+        run yarnTool "--version" __SOURCE_DIRECTORY__
+        run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    | None -> ()
     runDotnet uiDir "restore"
 
 let build () =
@@ -88,15 +91,19 @@ Target "copy-resources" (fun _ ->
 
 Target "install-server" (fun _ -> runDotnet serverDir "restore")
 
-Target "install-ui-local" (fun _ -> installUi (platformTool "yarn" "yarn.cmd"))
+Target "install-ui-local" (fun _ -> installUi (Some (platformTool "yarn" "yarn.cmd")))
 
 (* Note: Requires yarn to have been installed "globally" [via npm] to D:\home\tools as per https://github.com/projectkudu/kudu/issues/2176#issuecomment-328158475, e.g.:
-            - https://sweepstake-2018.scm.azurewebsites.net/...
+            - Kudu Services (https://sweepstake-2018.scm.azurewebsites.net/)...
             - ...Debug console -> CMD...
             - ...D:\home> npm config set prefix "D:\home\tools"...
             - ...D:\home> npm i g yarn@1.5.1...
             - ...D:\home> D:\home\tools\yarn.cmd --version *)
-Target "install-ui-azure" (fun _ -> installUi @"D:\home\tools\yarn.cmd") // 
+// TEMP-NMB: Skip running yarn until resolve "Error while running 'D:\home\tools\yarn.cmd' with args: --version" exception (note: can always run manually via Kudu Services as required)...
+Target "install-ui-azure" (fun _ -> installUi None)
+// ...or not...
+//Target "install-ui-azure" (fun _ -> installUi (Some @"D:\home\tools\yarn.cmd"))
+// ...NMB-TEMP
 
 Target "install-local" DoNothing
 Target "install-azure" DoNothing
