@@ -37,7 +37,7 @@ type State = {
     UnseenCount : int
     NewChatMessage : NewChatMessage }
 
-let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 1000
+let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
 
 let validateChatMessageText (Markdown messageText) =
     if String.IsNullOrWhiteSpace messageText then Some "Chat message must not be blank"

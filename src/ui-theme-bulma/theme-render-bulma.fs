@@ -9,7 +9,6 @@ open Aornota.UI.Theme.Common
 open Fable.Core.JsInterop
 module Rct = Fable.Helpers.React
 open Fable.Helpers.React.Props
-open Fable.Import.React
 
 open Fulma
 open Fulma.Components
@@ -91,6 +90,17 @@ let button theme buttonData children =
         match buttonData.IconLeft with | Some iconDataLeft -> yield icon { iconDataLeft with IconAlignment = Some LeftAligned } | None -> ()
         yield! children
         match buttonData.IconRight with | Some iconDataRight -> yield icon { iconDataRight with IconAlignment = Some RightAligned } | None -> () ]
+
+let cardModal theme title onDismiss body =
+    let (ThemeClass className) = theme.ThemeClass
+    let (AlternativeClass alternativeClassName) = theme.AlternativeClass
+    Modal.modal [ Modal.IsActive true ] [
+        Modal.background [] []
+        Modal.Card.card [] [
+            Modal.Card.head [ CustomClass alternativeClassName ] [
+                yield Modal.Card.title [ CustomClass alternativeClassName ] title
+                match onDismiss with | Some onDismiss -> yield Delete.delete [ Delete.OnClick onDismiss ] [] | None -> () ]
+            Modal.Card.body [ CustomClass className ] body ] ]
 
 let field theme fieldData children =
     let tooltipData = match fieldData.TooltipData with | Some tooltipData -> Some (theme.TransformTooltipData tooltipData) | None -> None
@@ -176,7 +186,8 @@ let navbar theme navbarData children =
         | Some Dark -> Some (Navbar.Color IsDark) | Some Light -> Some (Navbar.Color IsLight) | Some Black -> Some (Navbar.Color IsBlack) | Some White -> Some (Navbar.Color IsWhite)
         | None -> None
     let customClasses = [
-        match navbarData.NavbarFixed with | Some FixedTop -> yield "is-fixed-top" | Some FixedBottom -> yield "is-fixed-bottom" | None -> () ]
+        match navbarData.NavbarFixed with | Some FixedTop -> yield "is-fixed-top" | Some FixedBottom -> yield "is-fixed-bottom" | None -> ()
+        match navbarData.NavbarSemantic with | Some Link -> yield IS_LINK | _ -> () ]
     let customClass = match customClasses with | _ :: _ -> Some (Navbar.CustomClass (String.concat SPACE customClasses)) | _ -> None
     Navbar.navbar [
         match semantic with | Some semantic -> yield semantic | None -> ()
@@ -238,7 +249,7 @@ let para theme paraData children =
     let paraData = theme.TransformParaData paraData
     let alignment = 
         match paraData.ParaAlignment with
-        | Centred -> Some CENTRED | LeftAligned -> Some "left" | RightAligned -> Some "right" | Justified -> Some "justified"
+        | Centred -> Some CENTRED_CLASS | LeftAligned -> Some "left" | RightAligned -> Some "right" | Justified -> Some "justified"
         | _ -> None
     let colour =
         let greyscaleText greyscale =

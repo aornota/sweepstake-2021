@@ -27,6 +27,7 @@
     <Compile Include="pages/chat/chat-render.fs" />
     <Compile Include="program-common.fs" />
     <Compile Include="program-state.fs" />
+    <Compile Include="program-markdown-literals.fs" />
     <Compile Include="program-render.fs" />
     <Compile Include="program-run.fs" />
   </ItemGroup>

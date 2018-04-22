@@ -100,7 +100,7 @@ let levelItem children = Level.item [] children
 
 let navbarBrand children = Navbar.Brand.div [] children
 let navbarBurger onClick isActive =
-    Navbar.burger
+    Navbar.burger 
         [
             if isActive then yield Fulma.Common.CustomClass "is-active"
             yield Fulma.Common.Props [ OnClick onClick ]
@@ -113,6 +113,7 @@ let navbarEnd children = Navbar.End.div [] children
 let thead children = Rct.thead [] children
 let tbody children = Rct.tbody [] children
 let tr isSelected children = Rct.tr [ if isSelected then yield ClassName "is-selected" :> IHTMLProp ] children
+let th children = Rct.th [] children
 let td children = Rct.td [] children
 
 let divTags children = div { divDefault with DivCustomClass = Some "tags" } children

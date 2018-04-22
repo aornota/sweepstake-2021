@@ -19,8 +19,7 @@ open System
 
 let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
-    let renderChildren headerColour userName messageText (timestamp:DateTime) unconfirmed errorText = [
-        let paraHeader = { paraDefaultSmallest with ParaColour = headerColour }
+    let renderChildren userName messageText (timestamp:DateTime) unconfirmed errorText = [
         let rightItem =
             if unconfirmed then icon iconSpinnerPulse
             else
@@ -30,25 +29,26 @@ let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
 #else
                     timestamp.ToString ("HH:mm:ss")
 #endif
-                para theme paraHeader [ str timestampText ]
+                para theme paraDefaultSmallest [ str timestampText ]
         yield level true [
-            levelLeft [ levelItem [ para theme paraHeader [ bold userName ; str " says" ] ] ]
+            levelLeft [ levelItem [ para theme paraDefaultSmallest [ bold userName ; str " says" ] ] ]
             levelRight [ levelItem [ rightItem ] ] ]
-        yield content [ htmlFromMarkdown messageText ]
+        yield notificationContentFromMarkdown theme messageText
         match errorText with
         | Some errorText ->
             yield! [
                 divVerticalSpace 10
                 para theme { paraDefaultSmallest with Weight = Bold } [ str errorText ] ]
         | None -> () ]
-    let notificationData, headerColour, unconfirmed, errorText =
+    let notificationData, unconfirmed, errorText =
         match chatMessageUi.ChatMessageType with
-        | Sent -> notificationLight, GreyscalePara GreyDarker, true, None
-        | SendFailed errorText -> notificationDanger, SemanticPara Semantic.Warning, false, Some errorText
+        | Sent -> notificationLight, true, None
+        | SendFailed errorText -> notificationDanger, false, Some errorText
         // TODO-NMB-LOW: Would it be better to [add and] compare ChatMessage.UserId?...
-        | Received when chatMessageUi.ChatMessage.UserName = authUserName -> notificationInfo, SemanticPara Semantic.Warning, false, None
-        | Received -> notificationPrimary, SemanticPara Semantic.Warning, false, None
-    let children = renderChildren headerColour chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
+        | Received when chatMessageUi.ChatMessage.UserName = authUserName -> notificationSuccess, false, None
+        // TODO-NMB-LOW: Use different semantics for signed-in-and-active (Primary?) | signed-in-but-inactive (Warning? Link?) | not-signed-in (Dark?)?...
+        | Received -> notificationPrimary, false, None
+    let children = renderChildren chatMessageUi.ChatMessage.UserName chatMessageUi.ChatMessage.MessageText chatMessageUi.Timestamp unconfirmed errorText
     let onDismissNotification = if not unconfirmed then Some (fun _ -> DismissChatMessage chatMessageUi.ChatMessage.ChatMessageId |> dispatch) else None
     [
         divVerticalSpace 10
@@ -71,7 +71,8 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
         yield hr theme false
         yield field theme { fieldDefault with Grouped = Some FullWidth } [
             yield textArea theme newChatMessageId messageText state.NewChatMessage.ErrorText helpInfo true false (Markdown >> MessageTextChanged >> dispatch)
-            if not (String.IsNullOrWhiteSpace messageText) then yield notification theme notificationLight [ content [ htmlFromMarkdown state.NewChatMessage.MessageText ] ] ]
+            if not (String.IsNullOrWhiteSpace messageText) then
+                yield notification theme notificationLight [ notificationContentFromMarkdown theme state.NewChatMessage.MessageText ] ]
         yield field theme { fieldDefault with Grouped = Some RightAligned } [ button theme { buttonSuccessSmall with Interaction = sendButtonInteraction } [ str "Send chat message" ] ]
         yield hr theme false
         yield! state.ChatMessageUis

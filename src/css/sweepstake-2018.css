@@ -1,72 +1,109 @@
+/* Note: Some --colour variables correspond to $colour/s defined in ..\sass\custom-bulma.sass (e.g. --dark corresponds to $dark); others do not. */
+:root {
+    --info : #2f96b4 ; --success : #51a351 ; --warning : #f89406 ; --danger : #bd362f ;
+    --dark : #484848 ; --darker : #363636 ; --even-darker : #242424 ; --darkest : #121212 ;
+    --light : #b7b7b7 ; --lighter : #c9c9c9 ; --even-lighter : #dbdbdb ; --lightest : #ededed ;
+    --black : black ; --white : white ;
+    --link-default : #600060 ; --link-default-hover : #a000a0 ; --link-dark : #ffbfbf ; --link-dark-hover : #ff8f8f ;
+    --neutral : #808080 ; --neutral-darker : #777777 ; --neutral-lighter : #898989 }
+
 html { height : 100% ; margin : 0px }
  
 body { min-height : 100% ; margin : 0px }
-body.default { color : #393939 ; background-color : white }
-body.dark { color : #c6c6c6 ; background-color : black }
+body.default { background-color : var(--white) }
+body.dark { background-color : var(--black) }
 
-a.default { color : #600060 }
-a.default:hover { color : #a000a0 }
-a.dark { color : #ffbfbf }
-a.dark:hover { color : #ff8f8f }
+.default { color : var(--darker) }
+.default-alternative { color : var(--even-darker) ; background-color : var(--light) }
+.dark { color : var(--lighter) }
+.dark-alternative { color : var(--even-lighter) ; background-color : var(--dark) }
+
+a.default { color : var(--link-default) }
+a.default:hover { color : var(--link-default-hover) }
+a.dark { color : var(--link-dark) }
+a.dark:hover { color : var(--link-dark-hover) }
 
 div.centered /* sic */ { display : flex ; justify-content : center }
-div.default { color : #393939 ; background-color : white }
-div.dark { color : #c6c6c6 ; background-color : black }
 
 hr { margin-top : 0.75rem ; margin-bottom : 0.75rem }
-hr.default { background-color : #b3b3b3 }
-hr.dark { background-color : #4c4c4c }
+hr.default { background-color : var(--light) }
+hr.dark { background-color : var(--dark) }
+
+/* Note: Icon color/s only seem to take effect when control does not have focus. */
+.default .control.has-icons-left .icon, .default control.has-icons-right .icon { color : var(--lighter) }
+.dark .control.has-icons-left .icon, .dark control.has-icons-right .icon { color : var(--darker) }
+
+/* Note: Needed to prevent use of background-color/s defined for .footer (&c.) by Bulma. */
+.footer.default, .input.default, .modal-card-body.default, .table.default, .textarea.default { background-color : var(--white) }
+.footer.dark, .input.dark, .modal-card-body.dark, .table.dark, .textarea.dark { background-color : var(--black) }
+/* Note: Needed to prevent use of color/s defined for .table thead td (&c.) by Bulma. */
+.table.default thead th { color : var(--darker) }
+.table.dark thead th { color : var(--lighter) }
 
 .footer { padding-top : 0.5rem ; padding-left : 0.5rem ; padding-bottom : 0.5rem ; padding-right : 0.5rem }
-.footer.default { color : #393939 ; background-color : white }
-.footer.default.alternative { color : #262626 ; background-color : #b3b3b3 /* custom $light */ }
-.footer.dark { color : #c6c6c6 ; background-color : black }
-.footer.dark.alternative { color : #d9d9d9 ; background-color : #4c4c4c /* custom $dark */ }
-
-.input.default { color : #393939 ; background-color : white ; border-color : #4c4c4c /* custom $dark */ }
-.input.is-danger.default { color : #393939 ; background-color : white ; border-color : #ff3860 /* default $danger */ }
-.input.dark { color : #c6c6c6 ; background-color : black ; border-color : #b3b3b3 /* custom $light */ }
-.input.is-danger.dark { color : #c6c6c6 ; background-color : black ; border-color : #ff3860 /* default $danger */ }
 
 .level:not(:last-child) { margin-bottom : 1.0rem }
 .level.hasContinuation:not(:last-child) { margin-bottom : 0.5rem }
 
+.markdown p, .markdown li, .markdown th, .markdown td { font-size : 0.875rem }
+.markdown p strong, .markdown li strong, .markdown table thead th, .markdown td strong { color : currentColor }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 { color : currentColor }
+.markdown.default a, .markdown.default-in-notification a { color : var(--link-default) }
+.markdown.default a:hover, .markdown.default-in-notification a:hover { color : var(--link-default-hover) }
+.markdown.default blockquote { background-color : var(--lightest) ; border-left-color : var(--even-lighter) }
+.markdown.default hr { background-color : var(--lighter) }
+.markdown.default table thead tr:hover { background-color : var(--even-lighter) }
+.markdown.default table tbody tr:hover { background-color : var(--lightest) }
+.markdown.default th, .markdown.default td { border-bottom-color : var(--lightest) }
+.markdown.dark a, .markdown.dark-in-notification a { color : var(--link-dark) }
+.markdown.dark a:hover, .markdown.dark-in-notification a:hover { color : var(--link-dark-hover) }
+.markdown.dark blockquote { background-color : var(--darkest) ; border-left-color : var(--even-darker) }
+.markdown.dark hr { background-color : var(--darker) }
+.markdown.dark table thead tr:hover { background-color : var(--even-darker) }
+.markdown.dark table tbody tr:hover { background-color : var(--darkest) }
+.markdown.dark th, .markdown.dark td { border-bottom-color : var(--darkest) }
+/* Note: For "Markdown in notification", we do not know the "current" background-color - so use something neutral (for both default and dark). */
+.markdown.default-in-notification blockquote, .markdown.dark-in-notification blockquote { background-color : var(--neutral-darker) ; border-left-color : var(--neutral-lighter) }
+.markdown.default-in-notification hr, .markdown.dark-in-notification hr { background-color : var(--neutral) }
+.markdown.default-in-notification table tr:hover, .markdown.dark-in-notification table tr:hover { background-color : var(--neutral) }
+.markdown.default-in-notification th, .markdown.default-in-notification td, .markdown.dark-in-notification th, .markdown.dark-in-notification td { border-bottom-color : var(--neutral) }
+
+.modal-background { background-color : rgba(128, 128, 128, 0.75) }
+.modal-card-head.default-alternative { background-color : var(--lightest) ; border-bottom-color : var(--light) }
+.modal-card-head.dark-alternative { background-color : var(--darkest) ; border-bottom-color : var(--dark) }
+.modal-card-title.default-alternative { background-color : var(--lightest) }
+.modal-card-title.dark-alternative { background-color : var(--darkest) }
+
 .navbar-dropdown { border-top-width : 0px }
-.navbar-dropdown.default { background-color : #a0a0a0 }
-.navbar-dropdown.dark { background-color : #5f5f5f }
-
+.navbar-dropdown.default { background-color : var(--lighter) }
+.navbar-dropdown.dark { background-color : var(--darker) }
 .navbar-item { padding-left : 0.5rem ; padding-right : 0.5rem }
-.navbar-item.default { background-color : #b3b3b3 /* custom $light */ }
-.navbar-item.default.is-active a { color : black }
-.navbar-item.dark { background-color : #4c4c4c /* custom $dark */ }
-.navbar-item.dark.is-active a { color : white }
-
-.navbar-link.default { color : #262626 ; background-color : #b3b3b3 /* custom $light */ }
-.navbar-link.dark { color : #d9d9d9 ; background-color : #4c4c4c /* custom $dark */ }
-
-.navbar-menu.light { color : #262626 ; background-color : #b3b3b3 /* custom $light */ }
-.navbar-menu.dark { color : #d9d9d9 ; background-color : #4c4c4c /* custom $dark */ }
+.navbar-item.default.is-active a { color : var(--black) }
+.navbar-item.dark.is-active a { color : var(--white) }
+.navbar-menu.light { background-color : var(--light) }
+.navbar-menu.dark { background-color : var(--dark) }
 
 .notification:not(:last-child) { margin-bottom : 0.0rem }
 
+.toast { font-size : 0.875rem }
+.toast strong { color : currentColor }
+.toast-info { background-color : var(--info) } 
+.toast-success { background-color : var(--success) } 
+.toast-warning { background-color : var(--warning) } 
+.toast-error { background-color : var(--danger) } 
+
+/* TODO-NMB-LOW: Support table.is-striped? tr.is-selected?... */
 .table { margin-bottom : 0.75rem }
-.table.default { background-color : white }
-.table.default td { color : #393939 ; border-bottom-color : #d9d9d9 }
-.table.default tr:hover { background-color : #f3f3f3 } 
-.table.dark { background-color : black }
-.table.dark td { color : #c6c6c6 ; border-bottom-color : #262626 }
-.table.dark tr:hover { background-color : #0a0a0a }
+.table.default thead tr:hover { background-color : var(--even-lighter) }
+.table.default tbody tr:hover { background-color : var(--lightest) }
+.table.default th, .table.default td { border-bottom-color : var(--lightest) }
+.table.dark thead tr:hover { background-color : var(--even-darker) }
+.table.dark tbody tr:hover { background-color : var(--darkest) }
+.table.dark th, .table.dark td { border-bottom-color : var(--darkest) }
 
-.tabs.default { background-color : #b3b3b3 /* custom $light */ }
-.tabs.default ul { border-bottom-color : #b3b3b3 /* custom $light */ }
-.tabs.default a { color : #600060 ; border-bottom-color : #d9d9d9 }
-.tabs.default a:hover { color : #a000a0 ; border-bottom-color : #a000a0 }
-.tabs.default li.is-active a { color : #a000a0 ; border-bottom-color : #393939 }
-.tabs.dark { background-color : #4c4c4c /* custom $dark */ }
-.tabs.dark ul { border-bottom-color : #4c4c4c /* custom $dark */ }
-.tabs.dark a { color : #ffbfbf ; border-bottom-color : #262626 }
-.tabs.dark a:hover { color : #ff8f8f ; border-bottom-color : #ff8f8f }
-.tabs.dark li.is-active a { color : #ff8f8f ; border-bottom-color : #c6c6c6 }
-
-.textarea.default { color : #393939 ; background-color : white ; border-color : #4c4c4c /* custom $dark */ }
-.textarea.dark { color : #c6c6c6 ; background-color : black ; border-color : #b3b3b3 /* custom $light */ }
+.tabs.default a { color : var(--link-default) ; border-bottom-color : var(--even-lighter) }
+.tabs.default a:hover { color : var(--link-default-hover) ; border-bottom-color : var(--link-default-hover)0 }
+.tabs.default li.is-active a { color : var(--link-default-hover) ; border-bottom-color : var(--darker) }
+.tabs.dark a { color : var(--link-dark) ; border-bottom-color : var(--even-darker) }
+.tabs.dark a:hover { color : var(--link-dark-hover) ; border-bottom-color : var(--link-dark-hover) }
+.tabs.dark li.is-active a { color : var(--link-dark-hover); border-bottom-color : var(--lighter) }

@@ -178,8 +178,13 @@ let private handleServerWsError serverWsError state =
 let private handleConnected (otherConnections, signedIn) jwt lastPage state =
     let toastCmd =
 #if DEBUG
-        let plural i = if i = 1 then String.Empty else "s"
-        infoToastCmd (sprintf "%i other web socket connection%s | %i signed-in user%s" otherConnections (plural otherConnections) signedIn (plural signedIn))
+        // TEMP-NMB: Show [ other-web-socket-connection | signed-in-user ] counts (as toast)...
+        let otherConnections = if otherConnections > 0 then sprintf "<strong>%i</strong>" otherConnections else sprintf "%i" otherConnections
+        let signedIn = if signedIn > 0 then sprintf "<strong>%i</strong>" signedIn else sprintf "%i" signedIn
+        infoToastCmd (sprintf "Other web socket connections: %s<br>Signed-in users: %s" otherConnections signedIn)
+        // ...or not...
+        //Cmd.none
+        // ...NMB-TEMP
 #else
         Cmd.none
 #endif
@@ -204,9 +209,9 @@ let private handleSignInResult result unauthState state =
     | Some _, Ok authUser ->
         let currentPage = Some (UnauthPage unauthState.CurrentUnauthPage)
         let state, cmd = defaultAuthState authUser currentPage (Some unauthState) state
-        state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd "You have signed in" ]
+        state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd (sprintf "You have signed in as <strong>%s</strong>" authUser.UserName) ]
     | Some signInState, Error errorText ->
-        let toastCmd = errorToastCmd (sprintf "Unable to sign in as %s" signInState.UserNameText)
+        let toastCmd = errorToastCmd (sprintf "Unable to sign in as <strong>%s</strong>" signInState.UserNameText)
         let errorText =
 #if DEBUG
             sprintf "SignInResultWs error -> %s" errorText
@@ -222,9 +227,9 @@ let private handleAutoSignInResult result (jwt:AuthUser) lastPage state =
     | Ok authUser -> // TODO-NMB-LOW: Check authUser vs. _jwt?...
         let showPageCmd = match lastPage with | Some lastPage -> ShowPage lastPage |> AuthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
         let state, cmd = defaultAuthState authUser None None state
-        state, Cmd.batch [ showPageCmd ; cmd ; successToastCmd "You have been automatically signed in" ]
+        state, Cmd.batch [ showPageCmd ; cmd ; successToastCmd (sprintf "You have been automatically signed in as <strong>%s</strong>" authUser.UserName) ]
     | Error errorText ->
-        let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as %s" jwt.UserName)
+        let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as <strong>%s</strong>" jwt.UserName)
         let errorText =
 #if DEBUG
             sprintf "AutoSignInResultWs error -> %s" errorText
@@ -269,8 +274,8 @@ let private handleServerAppWsApi serverAppWsApi state =
     | AutoSignInResultWs result, AutomaticallySigningIn (Jwt jwt, lastPage) -> handleAutoSignInResult result jwt lastPage state
     | SignOutResultWs result, Auth authState -> handleSignOutResult result authState state
     | AutoSignOutWs sessionId, Auth authState -> handleAutoSignOut sessionId authState state
-    | OtherUserSignedIn userName, Auth _ -> state, infoToastCmd (sprintf "%s has signed in" userName)
-    | OtherUserSignedOut userName, Auth _ -> state, infoToastCmd (sprintf "%s has signed out" userName)
+    | OtherUserSignedIn userName, Auth _ -> state, infoToastCmd (sprintf "<strong>%s</strong> has signed in" userName)
+    | OtherUserSignedOut userName, Auth _ -> state, infoToastCmd (sprintf "<strong>%s</strong> has signed out" userName)
     | _, appState -> shouldNeverHappen (sprintf "Unexpected ServerAppWsApi when %s -> %A" (appStateText appState) serverAppWsApi) state
 
 let private handleServerWsApi serverWsApi state =
@@ -287,7 +292,7 @@ let private handleReadingPreferencesInput (result:Result<Preferences option, exn
         { state with AppState = Connecting (preferences.Jwt, preferences.LastPage) }, Cmd.ofSub initializeWsSub
     | Ok None -> { state with AppState = Connecting (None, None) }, Cmd.ofSub initializeWsSub
     | Error exn ->
-        let state, _ = addDebugError (sprintf "ReadPreferencesResult -> %s" exn.Message) None state
+        let state, _ = addDebugError (sprintf "ReadPreferencesResult -> %s" exn.Message) None state // note: no need for toast
         state, ReadingPreferencesInput (Ok None) |> AppInput |> Cmd.ofMsg
 
 let private handleConnectingInput ws state : State * Cmd<Input> = { state with Ws = Some ws }, Cmd.none

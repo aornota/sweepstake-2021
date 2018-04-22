@@ -4,7 +4,7 @@ open Aornota.UI.Theme.Common
 
 let themeDefault = {
     ThemeClass = ThemeClass "default"
-    AlternativeClass = AlternativeClass "default alternative"
+    AlternativeClass = AlternativeClass "default-alternative"
     TransformButtonData = id
     TransformMessageData = id
     TransformNavbarData = id

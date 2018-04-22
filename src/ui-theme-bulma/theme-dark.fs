@@ -23,7 +23,7 @@ let private transformSpanClassOption spanClass =
 
 let themeDark = {
     ThemeClass = ThemeClass "dark"
-    AlternativeClass = AlternativeClass "dark alternative"
+    AlternativeClass = AlternativeClass "dark-alternative"
     TransformButtonData = (fun buttonData -> { buttonData with ButtonSemantic = transformSemanticOption buttonData.ButtonSemantic })
     TransformMessageData = (fun messageData -> { messageData with MessageSemantic = transformSemanticOption messageData.MessageSemantic })
     TransformNavbarData = (fun navbarData -> { navbarData with NavbarSemantic = transformSemanticOption navbarData.NavbarSemantic })

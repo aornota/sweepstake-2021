@@ -13,7 +13,7 @@ type DivData = {
     PadV : int option
     PadH : int option }
 
-let [<Literal>] CENTRED = "centered" (* sic *)
+let [<Literal>] CENTRED_CLASS = "centered" (* sic *)
 let [<Literal>] SPACE = " "
 
 let private padStyle padV padH =
@@ -36,7 +36,7 @@ let br = Rct.br []
 let div divData children =
     let customClasses = [
         match divData.DivCustomClass with | Some divCustomClass -> yield divCustomClass | None -> ()
-        if divData.IsCentred then yield CENTRED ]
+        if divData.IsCentred then yield CENTRED_CLASS ]
     let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | _ -> None
     Rct.div [
         match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> ()

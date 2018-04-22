@@ -25,13 +25,7 @@ type NotificationMessage = {
     Dismissable : bool }
 
 let private render theme source dispatch notificationMessage =
-    let notificationData, headerColour =
-        match notificationMessage.Type with
-        | Debug -> notificationDark, GreyscalePara GreyLighter
-        | Info -> notificationInfo, SemanticPara Semantic.Warning
-        | Warning -> notificationWarning, SemanticPara Semantic.Info
-        | Danger -> notificationDanger, SemanticPara Semantic.Warning
-    let paraHeader = { paraDefaultSmallest with ParaColour = headerColour }
+    let notificationData = match notificationMessage.Type with | Debug -> notificationDark | Info -> notificationInfo | Warning -> notificationWarning | Danger -> notificationDanger
     let notificationData =
         if notificationMessage.Dismissable then { notificationData with OnDismissNotification = Some (fun _ -> notificationMessage.NotificationId |> dispatch) }
         else notificationData
@@ -46,8 +40,8 @@ let private render theme source dispatch notificationMessage =
         divVerticalSpace 10
         notification theme notificationData [
             level true [
-                levelLeft [ levelItem [ para theme { paraHeader with Weight = Bold } [ str sourceAndTypeText ] ] ]
-                levelRight [ levelItem [ para theme { paraHeader with ParaAlignment = RightAligned } [ str timestampText ] ] ] ]
+                levelLeft [ levelItem [ para theme { paraDefaultSmallest with Weight = Bold } [ str sourceAndTypeText ] ] ]
+                levelRight [ levelItem [ para theme { paraDefaultSmallest with ParaAlignment = RightAligned } [ str timestampText ] ] ] ]
             para theme { paraDefaultSmallest with Weight = SemiBold } [ str notificationMessage.Text ] ]
     ]
 
