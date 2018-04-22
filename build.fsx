@@ -91,7 +91,7 @@ Target "install-server" (fun _ -> runDotnet serverDir "restore")
 Target "install-ui-local" (fun _ -> installUi (platformTool "yarn" "yarn.cmd"))
 Target "install-ui-azure" (fun _ ->
     // Note: Since yarn is not pre-installed on Azure, it will have been installed "globally" via npm (see build.cmd) - so we have to figure out where it is.
-    let appDataLocal = Environment.GetFolderPath (Environment.SpecialFolder.LocalApplicationData) // note: should hopefully correspond to %APPDATA% (see https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system)
+    let appDataLocal = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData) // note: should hopefully correspond to %APPDATA% (see https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system)
     installUi (Path.Combine (appDataLocal, @"npm\yarn.cmd")))
 
 Target "install-local" DoNothing
