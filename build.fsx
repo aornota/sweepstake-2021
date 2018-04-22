@@ -38,9 +38,9 @@ let nodeTool = platformTool "node" "node.exe"
 let installUi yarnTool =
     printfn "Node version:"
     run nodeTool "--version" __SOURCE_DIRECTORY__
-    printfn "Yarn version:"
+    (*printfn "Yarn version:"
     run yarnTool "--version" __SOURCE_DIRECTORY__
-    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__*)
     runDotnet uiDir "restore"
 
 let build () =
