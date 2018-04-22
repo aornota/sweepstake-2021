@@ -40,7 +40,7 @@ type private SendFilter =
 
 #if DEBUG
 let private random = Random ()
-let private fakeErrorFrequency = 0.2
+let private fakeErrorFrequency = 0.05
 #endif
 
 type ConnectionsAgent () =
