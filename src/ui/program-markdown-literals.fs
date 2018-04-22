@@ -73,16 +73,16 @@ But this is a new paragraph.
 
 This is a picture by the wonderful Gregory Kondos:
 
-![River Trees](https://tinyurl.com/y8qlfx5o)
+![Text if image not found...](https://tinyurl.com/y76sbjyr "Sacremento River with 32 Palms")
 
 This is a list of Mdou Moctar albums:
 
-| Name | Released |
-|:-----|---------:|
-| [_Sousoume Tamachek_](https://mdoumoctar.bandcamp.com/album/sousoume-tamachek) | September 2017 |
-| [_Akounak Tedalat Taha Tazoughai_ (original soundtrack)](https://mdoumoctar.bandcamp.com/album/akounak-tedalat-taha-tazoughai-ost) | June 2015 |
-| [_Anar_](https://mdoumoctar.bandcamp.com/album/anar) | September 2014 |
-| [_Afelan_](https://mdoumoctar.bandcamp.com/album/afelan) | July 2013 |
+| Name |   | Released |
+|:-----|:-:|---------:|
+| [_Sousoume Tamachek_](https://mdoumoctar.bandcamp.com/album/sousoume-tamachek) | ![](https://tinyurl.com/ybjew7oo) | September 2017 |
+| [_Akounak Tedalat Taha Tazoughai_](https://mdoumoctar.bandcamp.com/album/akounak-tedalat-taha-tazoughai-ost) (original soundtrack recording) | ![](https://tinyurl.com/y7hgyc77) | June 2015 |
+| [_Anar_](https://mdoumoctar.bandcamp.com/album/anar) | ![](https://tinyurl.com/y7r3fby3) | September 2014 |
+| [_Afelan_](https://mdoumoctar.bandcamp.com/album/afelan) | ![](https://tinyurl.com/yam6o2zh) | July 2013 |
 
 And here's a Matt Miles quote [from _Dark Mountain_ issue 11]:
 > The immigrants of the Global South, the cultures we've turned our backs on even as we profit from
@@ -94,4 +94,4 @@ And here's a Matt Miles quote [from _Dark Mountain_ issue 11]:
 > our front doors, because they have nowhere else to go. On a planet dominated by the movements of
 > human beings, we are our own indicator species.
 ---
-Made possible thanks to [Marked.js](https://marked.js.org/#/README.md)."""
+Made possible thanks to [Marked.js](https://marked.js.org/#/README.md) and [Maxime Mangel](https://github.com/MangelMaxime/Fulma/blob/master/docs/src/Libs/Fable.Import.Marked.fs)."""
