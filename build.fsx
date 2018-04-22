@@ -38,9 +38,9 @@ let nodeTool = platformTool "node" "node.exe"
 let installUi yarnTool =
     printfn "Node version:"
     run nodeTool "--version" __SOURCE_DIRECTORY__
-    (*printfn "Yarn version:"
+    printfn "Yarn version:"
     run yarnTool "--version" __SOURCE_DIRECTORY__
-    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__*)
+    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
     runDotnet uiDir "restore"
 
 let build () =
@@ -89,10 +89,14 @@ Target "copy-resources" (fun _ ->
 Target "install-server" (fun _ -> runDotnet serverDir "restore")
 
 Target "install-ui-local" (fun _ -> installUi (platformTool "yarn" "yarn.cmd"))
-Target "install-ui-azure" (fun _ -> installUi "yarn.cmd")
-    (*// Note: Since yarn is not pre-installed on Azure, it will have been installed "globally" via npm (see build.cmd) - so we have to figure out where it is.
-    let appDataLocal = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData) // note: should hopefully correspond to %APPDATA% (see https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system)
-    installUi (Path.Combine (appDataLocal, @"npm\yarn.cmd")))*)
+
+(* Note: Requires yarn to have been installed "globally" [via npm] to D:\home\tools as per https://github.com/projectkudu/kudu/issues/2176#issuecomment-328158475, e.g.:
+            - https://sweepstake-2018.scm.azurewebsites.net/...
+            - ...Debug console -> CMD...
+            - ...D:\home> npm config set prefix "D:\home\tools"...
+            - ...D:\home> npm i g yarn@1.5.1...
+            - ...D:\home> D:\home\tools\yarn.cmd --version *)
+Target "install-ui-azure" (fun _ -> installUi @"D:\home\tools\yarn.cmd") // 
 
 Target "install-local" DoNothing
 Target "install-azure" DoNothing
@@ -112,6 +116,7 @@ Target "clean-publish-local" (fun _ -> CleanDir publishDir)
 Target "clean-publish-azure" (fun _ -> CleanDir publishDir)
 
 Target "publish-local" (fun _ -> publish ())
+
 Target "publish-and-stage-azure" (fun _ ->
     publish ()
     stageFolder (Path.GetFullPath publishDir) (fun _ -> true))
@@ -138,4 +143,4 @@ Target "help" (fun _ ->
 "install-azure" ==> "build-azure" ==> "publish-and-stage-azure" ==> "publish-azure"
 "clean-publish-azure" ==> "publish-and-stage-azure"
 
-RunTargetOrDefault "build"
+RunTargetOrDefault "build-local"
