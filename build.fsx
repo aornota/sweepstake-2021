@@ -17,7 +17,7 @@ let mutable dotnetExePath = "dotnet"
 let run' timeout cmd args dir =
     if not (execProcess (fun info ->
         info.FileName <- cmd
-        info.UseShellExecute <- cmd.Contains "yarn" && Console.OutputEncoding <> Text.Encoding.GetEncoding(850)
+        info.UseShellExecute <- cmd.Contains "yarn" && Console.OutputEncoding <> Text.Encoding.GetEncoding (850)
         if not (String.IsNullOrWhiteSpace dir) then info.WorkingDirectory <- dir
         info.Arguments <- args
     ) timeout) then failwithf "Error while running '%s' with args: %s" cmd args
@@ -38,9 +38,9 @@ let nodeTool = platformTool "node" "node.exe"
 let installUi yarnTool =
     printfn "Node version:"
     run nodeTool "--version" __SOURCE_DIRECTORY__
-    printfn "Yarn version:"
+    (*printfn "Yarn version:"
     run yarnTool "--version" __SOURCE_DIRECTORY__
-    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__*)
     runDotnet uiDir "restore"
 
 let build () =
