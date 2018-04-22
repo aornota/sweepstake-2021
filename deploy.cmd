@@ -1,4 +1,3 @@
 call npm uninstall yarn
-call npm uninstall yarn -g
 
-build.cmd publish-azure
+call build.cmd publish-azure
