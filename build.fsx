@@ -47,8 +47,23 @@ let build () =
     runDotnet serverDir "build --configuration Release"
     runDotnet uiDir "fable webpack -- -p"
 
-let ipAddress = "localhost"
-let port = 8080
+let publish () =
+    CreateDir publishDir
+    CopyFiles publishDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
+    let uiDir = publishDir </> "ui"
+    CreateDir uiDir
+    CopyFile uiDir @".\src\ui\index.html"
+    let publicDir = uiDir </> "public"
+    CreateDir publicDir
+    let publicJsDir = publicDir </> "js"
+    CreateDir publicJsDir
+    CopyFiles publicJsDir !! @".\src\ui\public\js\*.js"
+    let publicStyleDir = publicDir </> "style"
+    CreateDir publicStyleDir
+    CopyFiles publicStyleDir !! @".\src\ui\public\style\*.css" 
+    let publicResourcesDir = publicDir </> "resources"
+    CreateDir publicResourcesDir
+    CopyFiles publicResourcesDir !! @".\src\ui\public\resources\*.*"
 
 do if not isWindows then
     // We have to set the FrameworkPathOverride so that dotnet SDK invocations know where to look for full-framework base class libraries.
@@ -74,7 +89,10 @@ Target "copy-resources" (fun _ ->
 Target "install-server" (fun _ -> runDotnet serverDir "restore")
 
 Target "install-ui-local" (fun _ -> installUi (platformTool "yarn" "yarn.cmd"))
-Target "install-ui-azure" (fun _ -> installUi @"%APPDATA%\npm\yarn.cmd") // note: since yarn not pre-installed on Azure - and installed "globally" via npm (see build.cmd)
+Target "install-ui-azure" (fun _ ->
+    // Note: Since yarn is not pre-installed on Azure, it will have been installed "globally" via npm (see build.cmd) - so we have to figure out where it is.
+    let appDataLocal = Environment.GetFolderPath (Environment.SpecialFolder.LocalApplicationData) // note: should hopefully correspond to %APPDATA% (see https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system)
+    installUi (Path.Combine (appDataLocal, @"npm\yarn.cmd")))
 
 Target "install-local" DoNothing
 Target "install-azure" DoNothing
@@ -87,31 +105,16 @@ Target "run" (fun _ ->
     let ui = async { runDotnet uiDir "fable webpack-dev-server" }
     let openBrowser = async {
         do! Async.Sleep 5000
-        Diagnostics.Process.Start (sprintf "http://%s:%d" ipAddress port) |> ignore }
+        Diagnostics.Process.Start "http://localhost:8080" |> ignore }
     Async.Parallel [| server ; ui ; openBrowser |] |> Async.RunSynchronously |> ignore)
 
 Target "clean-publish-local" (fun _ -> CleanDir publishDir)
 Target "clean-publish-azure" (fun _ -> CleanDir publishDir)
 
-Target "publish-local" (fun _ ->
-    CreateDir publishDir
-    CopyFiles publishDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
-    let uiDir = publishDir </> "ui"
-    CreateDir uiDir
-    CopyFile uiDir @".\src\ui\index.html"
-    let publicDir = uiDir </> "public"
-    CreateDir publicDir
-    let publicJsDir = publicDir </> "js"
-    CreateDir publicJsDir
-    CopyFiles publicJsDir !! @".\src\ui\public\js\*.js"
-    let publicStyleDir = publicDir </> "style"
-    CreateDir publicStyleDir
-    CopyFiles publicStyleDir !! @".\src\ui\public\style\*.css" 
-    let publicResourcesDir = publicDir </> "resources"
-    CreateDir publicResourcesDir
-    CopyFiles publicResourcesDir !! @".\src\ui\public\resources\*.*")
-
-Target "stage-website-assets" (fun _ -> stageFolder (Path.GetFullPath publishDir) (fun _ -> true))
+Target "publish-local" (fun _ -> publish ())
+Target "publish-and-stage-azure" (fun _ ->
+    publish ()
+    stageFolder (Path.GetFullPath publishDir) (fun _ -> true))
 
 Target "publish-azure" kuduSync
 
@@ -130,7 +133,9 @@ Target "help" (fun _ ->
 "clean" ==> "copy-resources" ==> "install-ui-local"
 "copy-resources" ==> "install-ui-azure"
 "install-local" ==> "run"
-"install-local" ==> "build-local" ==> "clean-publish-local" ==> "publish-local"
-"install-azure" ==> "build-azure" ==> "clean-publish-azure" ==> "stage-website-assets" ==> "publish-azure"
+"install-local" ==> "build-local" ==> "publish-local"
+"clean-publish-local" ==> "publish-local"
+"install-azure" ==> "build-azure" ==> "publish-and-stage-azure" ==> "publish-azure"
+"clean-publish-azure" ==> "publish-and-stage-azure"
 
 RunTargetOrDefault "build"
