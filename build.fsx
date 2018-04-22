@@ -1,9 +1,10 @@
 #r @"packages/build/FAKE/tools/FakeLib.dll"
 
 open System
+open System.IO
 
 open Fake
-// TODO-NMB-MEDIUM?... open Fake.Azure.Kudu
+open Fake.Azure.Kudu
 
 let serverDir = "./src/server" |> FullName
 let uiDir = "./src/ui" |> FullName
@@ -87,9 +88,7 @@ Target "run" (fun _ ->
 
 Target "publish" (fun _ ->
     CreateDir publishDir
-    let serverDir = publishDir </> "server"
-    CreateDir serverDir
-    CopyFiles serverDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
+    CopyFiles publishDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
     let uiDir = publishDir </> "ui"
     CreateDir uiDir
     CopyFile uiDir @".\src\ui\index.html"
@@ -105,17 +104,22 @@ Target "publish" (fun _ ->
     CreateDir publicResourcesDir
     CopyFiles publicResourcesDir !! @".\src\ui\public\resources\*.*")
 
+Target "stage-website-assets" (fun _ -> stageFolder (Path.GetFullPath publishDir) (fun _ -> true))
+
+Target "publish-azure" kuduSync
+
 Target "help" (fun _ ->
     printfn "\nThe following build targets are defined:"
     printfn "\n\tbuild ... builds server and ui [which writes output to .\\src\\ui\\public]"
     printfn "\tbuild run ... builds and runs server and ui [using webpack dev-server]"
-    printfn "\tbuild publish ... builds server and ui, then copies output to .\\publish\n")
+    printfn "\tbuild publish ... builds server and ui, then copies output to .\\publish\n"
+    printfn "\tbuild publish-azure ... builds server and ui, then uses Kudu to TODO-NMB-HIGH...\n")
 
 "install-dot-net-core" ==> "install-server" ==> "install"
 "install-dot-net-core" ==> "install-ui" ==> "install"
 "clean" ==> "install-server"
 "clean" ==> "copy-resources" ==> "install-ui"
-"install" ==> "build" ==> "clean-publish" ==> "publish"
 "install" ==> "run"
+"install" ==> "build" ==> "clean-publish" ==> "publish" ==> "stage-website-assets" ==> "publish-azure"
 
 RunTargetOrDefault "build"

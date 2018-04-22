@@ -13,7 +13,10 @@ open Microsoft.Extensions.DependencyInjection
 
 open Giraffe
 
-let private uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
+// Note: Relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published).
+let private uiPath =
+    let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
+    if Directory.Exists uiPath then uiPath else Path.GetFullPath "ui"
 
 let private configureApp (app:IApplicationBuilder) =
     app.UseStaticFiles () |> ignore
