@@ -1,6 +1,8 @@
 @echo off
 cls
 
+call npm install yarn -g
+
 IF EXIST "paket.lock" (
   .paket\paket.exe restore
 ) ELSE (
