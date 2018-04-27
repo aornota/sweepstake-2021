@@ -1,15 +1,16 @@
 module Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
-open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.Shared.Ws.Server
-open Aornota.Sweepstake2018.Shared.Ws.Ui
+open Aornota.Sweepstake2018.Common.Domain.Chat
+open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
 open System
 
 type Input =
     | ShowMarkdownSyntaxModal
-    | SendAuthWsApi of authUser : AuthUser * uiAuthWsApi : UiAuthWsApi
-    | ReceiveServerChatWsApi of serverWsApi : ServerChatWsApi
+    | SendUiAuthMsg of authUser : AuthUser * uiAuthMsg : UiAuthMsg
+    | ReceiveServerChatMsg of serverChatMsg : ServerChatMsg
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
     | MessageTextChanged of messageText : Markdown
@@ -21,7 +22,7 @@ type ChatMessageType =
     | Received
 
 type ChatMessageUi = {
-    ChatMessage : ChatMessage
+    ChatMessage : ChatMessageOLD
     ChatMessageType : ChatMessageType
     Timestamp : DateTime }
 

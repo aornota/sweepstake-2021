@@ -2,12 +2,7 @@ module Aornota.Sweepstake2018.UI.Program.Render
 
 open Aornota.Common.UnitsOfMeasure
 
-open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.UI.Pages
-open Aornota.Sweepstake2018.UI.Program.Common
-open Aornota.Sweepstake2018.UI.Program.Markdown.Literals
-open Aornota.Sweepstake2018.UI.Shared
-
+open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.Render.Markdown
 open Aornota.UI.Render.Bulma
@@ -15,6 +10,11 @@ open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
+
+open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.UI.Pages
+open Aornota.Sweepstake2018.UI.Program.Common
+open Aornota.Sweepstake2018.UI.Program.Markdown.Literals
 
 open System
 
@@ -41,14 +41,14 @@ let private headerPages (appState:AppState) =
     | Auth authState ->
         // TODO-NMB-LOW: Finesse handling of "unseen" count/s (i.e. something better than count-in-parentheses)...
         let unseenChatCount = match authState.AuthPageStates.ChatState with | Some chatState -> Some chatState.UnseenCount | None -> None
-        let chatText = match unseenChatCount with | Some unseenCount when unseenCount > 0 -> sprintf "Chat (%i)" unseenCount | _ -> "Chat"
+        let chatText = match unseenChatCount with | Some unseenCount when unseenCount > 0 -> sprintf "Chat (%i)" unseenCount | Some _ | None -> "Chat"
         [
             "News", authState.CurrentPage = UnauthPage News, ShowPage (UnauthPage News) |> AuthInput
             "Squads", authState.CurrentPage = UnauthPage Squads, ShowPage (UnauthPage Squads) |> AuthInput
             "Drafts", authState.CurrentPage = AuthPage Drafts, ShowPage (AuthPage Drafts) |> AuthInput
             chatText, authState.CurrentPage = AuthPage ChatPage, ShowPage (AuthPage ChatPage) |> AuthInput
         ]
-    | _ -> []
+    | ReadingPreferences | Connecting _ | ServiceUnavailable | AutomaticallySigningIn _ -> []
 
 let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, headerPages, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
@@ -75,7 +75,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
             Some (navbarDropDown theme (icon iconUserSmall) [
                     navbarDropDownItem theme false [ para theme paraDefaultSmallest [ changePassword ] ]
                     navbarDropDownItem theme false [ para theme paraDefaultSmallest [ signOut ] ] ])
-        | _ -> None
+        | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn -> None
     let pageTabs =
         headerPages |> List.map (fun (text, isActive, appInput) -> { IsActive = isActive ; TabText = text ; TabLinkType = ClickableLink (fun _ -> appInput |> AppInput |> dispatch) })
     // TEMP-NMB...
@@ -84,7 +84,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
         | SignedIn authUser when authUser.UserName = "neph" ->
             let userAdministration = link theme (ClickableLink (fun _ -> UserAdministration |> AuthInput |> AppInput |> dispatch)) [ str "User administration" ]
             Some (navbarDropDown theme (icon iconAdminSmall) [ navbarDropDownItem theme false [ para theme paraDefaultSmallest [ userAdministration ] ] ])
-        | _ -> None
+        | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn | SignedIn _ -> None
     // ...NMB-TEMP
     let otherLinks =
         match headerStatus with
@@ -93,7 +93,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
                 navbarItem [ para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> ShowStaticModal ScoringSystem |> dispatch)) [ str "Scoring system" ] ] ]
                 navbarItem [ para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> ShowStaticModal Payouts |> dispatch)) [ str "Payouts" ] ] ]
             ]
-        | _ -> []
+        | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut -> []
     let toggleThemeTooltipText = match useDefaultTheme with | true -> "Switch to dark theme" | false -> "Switch to light theme"           
     let toggleThemeTooltipData = if navbarBurgerIsActive then tooltipDefaultRight else tooltipDefaultLeft    
     let toggleThemeInteraction = Clickable ((fun _ -> ToggleTheme |> dispatch), Some { toggleThemeTooltipData with TooltipText = toggleThemeTooltipText })

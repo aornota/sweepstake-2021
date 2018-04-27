@@ -5,10 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../common/units-of-measure.fs" />
-    <Compile Include="../shared/literals.fs" />
-    <Compile Include="../shared/domain.fs" />
-    <Compile Include="../shared/ws-ui.fs" />
-    <Compile Include="../shared/ws-server.fs" />
+    <Compile Include="../common/literals.fs" />
+    <Compile Include="../common/json.fs" />
+    <Compile Include="../common/projection.fs" />
+    <Compile Include="../common/domain/core.fs" />
+    <Compile Include="../common/domain/chat.fs" />
+    <Compile Include="../common/ws-api/ui-msg.fs" />
+    <Compile Include="../common/ws-api/server-msg.fs" />
     <Compile Include="../ui-render-bulma/render-common.fs" />
     <Compile Include="../ui-render-bulma/render-bulma.fs" />
     <Compile Include="../ui-theme-bulma/theme-common.fs" />
@@ -17,11 +20,12 @@
     <Compile Include="../ui-theme-bulma/theme-shared.fs" />
     <Compile Include="../ui-theme-bulma/theme-render-bulma.fs" />
     <Compile Include="../ui-common/local-storage.fs" />
+    <Compile Include="../ui-common/lazy-view-or-hmr.fs" />
     <Compile Include="../ui-common/timestamp-helper.fs" />
     <Compile Include="../ui-common/marked.fs" />
     <Compile Include="../ui-common/render-markdown.fs" />
     <Compile Include="../ui-common/notifications.fs" />
-    <Compile Include="ui-shared.fs" />
+    <Compile Include="../ui-common/toasts.fs" />
     <Compile Include="pages/chat/chat-common.fs" />
     <Compile Include="pages/chat/chat-state.fs" />
     <Compile Include="pages/chat/chat-render.fs" />

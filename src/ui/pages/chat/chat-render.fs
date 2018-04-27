@@ -2,9 +2,6 @@ module Aornota.Sweepstake2018.UI.Pages.Chat.Render
 
 open Aornota.Common.UnitsOfMeasure
 
-open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.UI.Pages.Chat.Common
-
 open Aornota.UI.Common.Render.Markdown
 #if TICK
 open Aornota.UI.Common.TimestampHelper
@@ -14,6 +11,10 @@ open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
+
+open Aornota.Sweepstake2018.Common.Domain.Chat
+open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open System
 

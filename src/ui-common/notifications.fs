@@ -13,7 +13,8 @@ open Aornota.UI.Theme.Shared
 
 open System
 
-type NotificationId = | NotificationId of guid : Guid with static member Create () = Guid.NewGuid () |> NotificationId
+type NotificationId = | NotificationId of guid : Guid with
+    static member Create () = Guid.NewGuid () |> NotificationId
 
 type NotificationType = | Debug | Info | Warning | Danger
 

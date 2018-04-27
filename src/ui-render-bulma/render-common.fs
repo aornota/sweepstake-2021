@@ -37,7 +37,7 @@ let div divData children =
     let customClasses = [
         match divData.DivCustomClass with | Some divCustomClass -> yield divCustomClass | None -> ()
         if divData.IsCentred then yield CENTRED_CLASS ]
-    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
     Rct.div [
         match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> ()
         yield padStyle divData.PadV divData.PadH :> IHTMLProp

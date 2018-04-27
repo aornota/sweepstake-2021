@@ -5,4 +5,6 @@ node_modules/
 packages/
 paket-files/
 publish/
+src/server/persisted/
+src/server/secret/
 src/ui/public/

@@ -31,7 +31,7 @@ let runDotnet workingDir args =
         info.Arguments <- args) TimeSpan.MaxValue
     if result <> 0 then failwithf "dotnet %s failed" args
 
-let platformTool tool winTool = (if isUnix then tool else winTool) |> ProcessHelper.tryFindFileOnPath |> function Some t -> t | _ -> failwithf "%s not found" tool
+let platformTool tool winTool = (if isUnix then tool else winTool) |> ProcessHelper.tryFindFileOnPath |> function | Some t -> t | None -> failwithf "%s not found" tool
 
 let nodeTool = platformTool "node" "node.exe"
 

@@ -2,12 +2,12 @@ module Aornota.Sweepstake2018.UI.Program.Common
 
 open Aornota.Common.UnitsOfMeasure
 
-open Aornota.Sweepstake2018.Shared.Domain
-open Aornota.Sweepstake2018.Shared.Ws.Server
-open Aornota.Sweepstake2018.Shared.Ws.Ui
-open Aornota.Sweepstake2018.UI.Pages
-
 open Aornota.UI.Common.Notifications
+
+open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2018.UI.Pages
 
 open System
 
@@ -36,11 +36,11 @@ type StaticModal =
     | Payouts
     | MarkdownSyntax
 
-type UiWsError =
+type WsError =
     | WsOnError of wsApiUrl : string
-    | SendWsNotOpenError of uiWsApi : UiWsApi
-    | SendWsOtherError of uiWsApi : UiWsApi * errorText : string
-    | DeserializeServerWsApiError of errorText : string
+    | SendMsgWsNotOpenError of uiMsg : UiMsg
+    | SendMsgOtherError of uiMsg : UiMsg * errorText : string
+    | DeserializeServerMsgError of errorText : string
 
 type UnauthPageInput =
     | NewsInput
@@ -90,11 +90,9 @@ type Input =
     | ShowStaticModal of staticModal : StaticModal
     | HideStaticModal
     | WritePreferencesResult of result : Result<unit, exn>
-    | OnUiWsError of uiWsError : UiWsError
-    | HandleServerWsApi of serverWsApi : ServerWsApi
+    | WsError of wsError : WsError
+    | HandleServerMsg of serverMsg : ServerMsg
     | AppInput of appInput : AppInput
-
-type ToDo = unit
 
 type SignInStatus =
     | Pending
@@ -145,7 +143,7 @@ type State = {
     SessionId : SessionId
     NavbarBurgerIsActive : bool
     StaticModal : StaticModal option
-    Ws : Brw.WebSocket option
+    Ws : Brw.WebSocket option // TODO-NMB-MEDIUM: Switch to using Fable.Websockets.Elmish?...
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"

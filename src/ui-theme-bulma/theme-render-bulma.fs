@@ -38,10 +38,10 @@ let private getTooltipCustomClass tooltipData =
         | TooltipTop -> Tooltip.IsTooltipTop | TooltipRight -> Tooltip.IsTooltipRight | TooltipBottom -> Tooltip.IsTooltipBottom | TooltipLeft -> Tooltip.IsTooltipLeft
     let customClasses = [
         yield Tooltip.ClassName
-        match semanticText with | Some semanticText -> yield sprintf "is-tooltip-%s" semanticText | _ -> ()
+        match semanticText with | Some semanticText -> yield sprintf "is-tooltip-%s" semanticText | None -> ()
         yield position
         if tooltipData.IsMultiLine then yield "is-tooltip-multiline" ]
-    match customClasses with | _ :: _ -> Some (String.concat SPACE customClasses) | _ -> None
+    match customClasses with | _ :: _ -> Some (String.concat SPACE customClasses) | [] -> None
 
 let private getTooltipProps tooltipData = Tooltip.dataTooltip tooltipData.TooltipText
 
@@ -55,7 +55,11 @@ let box theme useAlternativeClass children =
 
 let button theme buttonData children =
     let buttonData = theme.TransformButtonData buttonData
-    let tooltipData = match buttonData.Interaction with | Clickable (_, Some tooltipData) -> Some tooltipData | NotEnabled (Some tooltipData) -> Some tooltipData | _ -> None
+    let tooltipData =
+        match buttonData.Interaction with
+        | Clickable (_, Some tooltipData) -> Some tooltipData
+        | NotEnabled (Some tooltipData) -> Some tooltipData
+        | Clickable (_, None) | NotEnabled None | Loading | Static -> None
     let tooltipData = match tooltipData with | Some tooltipData -> Some (theme.TransformTooltipData tooltipData) | None -> None
     // TODO-NMB-LOW: Rework Link hack once supported by Fulma...
     let semantic =
@@ -66,11 +70,11 @@ let button theme buttonData children =
         | None -> None
     let size = match buttonData.ButtonSize with | Large -> Some (Button.Size IsLarge) | Medium -> Some (Button.Size IsMedium) | Normal -> None | Small -> Some (Button.Size IsSmall)
     let customClasses = [
-        match buttonData.ButtonSemantic with | Some Link -> yield IS_LINK | _ -> ()
+        match buttonData.ButtonSemantic with | Some Link -> yield IS_LINK | Some _ |  None -> ()
         match tooltipData with 
         | Some tooltipData -> match getTooltipCustomClass tooltipData with | Some tooltipCustomClass -> yield tooltipCustomClass | None -> ()
         | None -> () ]
-    let customClass = match customClasses with | _ :: _ -> Some (Button.CustomClass (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (Button.CustomClass (String.concat SPACE customClasses)) | [] -> None
     Button.button [
         match customClass with | Some customClass -> yield customClass | None -> ()
         match semantic with | Some semantic -> yield semantic | None -> ()
@@ -82,10 +86,10 @@ let button theme buttonData children =
         | Clickable (onClick, _) -> yield Button.OnClick onClick
         | Loading -> yield Button.IsLoading true
         | Static -> yield Button.IsStatic true
-        | _ -> ()
+        | NotEnabled _ -> ()
         yield Button.Props [
             match tooltipData with | Some tooltipData -> yield getTooltipProps tooltipData | None -> ()
-            yield Disabled (match buttonData.Interaction with | NotEnabled _ -> true | _ -> false) :> IHTMLProp ]
+            yield Disabled (match buttonData.Interaction with | NotEnabled _ -> true | Clickable _ | Loading | Static -> false) :> IHTMLProp ]
     ] [
         match buttonData.IconLeft with | Some iconDataLeft -> yield icon { iconDataLeft with IconAlignment = Some LeftAligned } | None -> ()
         yield! children
@@ -110,12 +114,12 @@ let field theme fieldData children =
         | Some LeftAligned -> yield Field.HasAddons
         | Some RightAligned -> yield Field.HasAddonsRight
         | Some FullWidth -> yield Field.HasAddonsFullWidth
-        | _ -> ()
+        | Some Justified | None -> ()
         match fieldData.Grouped with 
         | Some Centred -> yield Field.IsGroupedCentered
         | Some LeftAligned -> yield Field.IsGrouped
         | Some RightAligned -> yield Field.IsGroupedRight
-        | _ -> ()
+        | Some FullWidth | Some Justified | None -> ()
         match tooltipData with
         | Some tooltipData ->
             match getTooltipCustomClass tooltipData with | Some tooltipCustomClass -> yield Field.CustomClass tooltipCustomClass | None -> ()
@@ -188,7 +192,7 @@ let navbar theme navbarData children =
     let customClasses = [
         match navbarData.NavbarFixed with | Some FixedTop -> yield "is-fixed-top" | Some FixedBottom -> yield "is-fixed-bottom" | None -> ()
         match navbarData.NavbarSemantic with | Some Link -> yield IS_LINK | _ -> () ]
-    let customClass = match customClasses with | _ :: _ -> Some (Navbar.CustomClass (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (Navbar.CustomClass (String.concat SPACE customClasses)) | [] -> None
     Navbar.navbar [
         match semantic with | Some semantic -> yield semantic | None -> ()
         match customClass with | Some customClass -> yield customClass | None -> ()
@@ -247,10 +251,9 @@ let pageLoader theme pageLoaderData =
 
 let para theme paraData children =
     let paraData = theme.TransformParaData paraData
-    let alignment = 
+    let alignment =
         match paraData.ParaAlignment with
-        | Centred -> Some CENTRED_CLASS | LeftAligned -> Some "left" | RightAligned -> Some "right" | Justified -> Some "justified"
-        | _ -> None
+        | Centred -> Some CENTRED_CLASS | LeftAligned -> Some "left" | RightAligned -> Some "right" | Justified -> Some "justified" | FullWidth -> None
     let colour =
         let greyscaleText greyscale =
             match greyscale with
@@ -267,7 +270,7 @@ let para theme paraData children =
         match colour with | Some colour -> yield sprintf "has-text-%s" colour | None -> ()
         yield sprintf "is-size-%i" size
         yield sprintf "has-text-weight-%s" weight ]
-    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
     Rct.p [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
 
 let progress theme useAlternativeClass progressData =
@@ -284,7 +287,7 @@ let progress theme useAlternativeClass progressData =
     let customClasses = [
         yield className
         match progressData.ProgressSemantic with | Some Link -> yield IS_LINK | _ -> () ]
-    let customClass = match customClasses with | _ :: _ -> Some (Progress.CustomClass (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (Progress.CustomClass (String.concat SPACE customClasses)) | [] -> None
     Progress.progress [
         match customClass with | Some customClass -> yield customClass | None -> ()
         match semantic with | Some semantic -> yield semantic | None -> ()
@@ -297,7 +300,7 @@ let span theme spanData children =
     let spanData = theme.TransformSpanData spanData
     let customClasses = [
         match spanData.SpanClass with | Some Healthy -> yield "healthy" | Some Unhealthy -> yield "unhealthy" | None -> () ]
-    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
     Rct.span [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
 
 let tabs theme tabsData =
@@ -309,10 +312,10 @@ let tabs theme tabsData =
         yield className
         if tabsData.IsBoxed then yield "is-boxed"
         if tabsData.IsToggle then yield "is-toggle"
-        match tabsData.TabsSize with | Large -> yield "is-large" | Medium -> yield "is-medium" | Small -> yield "is-small" | _ -> ()
-        match tabsData.TabsAlignment with | Centred -> yield "is-centered" | RightAligned -> yield "is-right" | FullWidth -> yield "is-fullwidth" | _ -> ()
+        match tabsData.TabsSize with | Large -> yield "is-large" | Medium -> yield "is-medium" | Small -> yield "is-small" | Normal -> ()
+        match tabsData.TabsAlignment with | Centred -> yield "is-centered" | RightAligned -> yield "is-right" | FullWidth -> yield "is-fullwidth" | LeftAligned | Justified -> ()
     ]
-    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
     Rct.div [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ]
         [ Rct.ul [] [
             for tab in tabsData.Tabs do
@@ -342,7 +345,7 @@ let tag theme tagData children =
     let customClasses = [
         match tagData.TagSemantic with | Some Link -> yield IS_LINK | _ -> ()
         if tagData.IsRounded then yield "is-rounded" ]
-    let customClass = match customClasses with | _ :: _ -> Some (Tag.CustomClass (String.concat SPACE customClasses)) | _ -> None
+    let customClass = match customClasses with | _ :: _ -> Some (Tag.CustomClass (String.concat SPACE customClasses)) | [] -> None
     Tag.tag [
         match semantic with | Some semantic -> yield semantic | None -> ()
         match customClass with | Some customClass -> yield customClass | None -> ()

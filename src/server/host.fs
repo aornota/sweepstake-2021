@@ -1,7 +1,9 @@
 ﻿module Aornota.Sweepstake2018.Server.Host
 
+open Aornota.Sweepstake2018.Common.Literals
+open Aornota.Sweepstake2018.Server.Agents.Persistence
+open Aornota.Sweepstake2018.Server.Agents.Ticker
 open Aornota.Sweepstake2018.Server.WsMiddleware
-open Aornota.Sweepstake2018.Shared.Literals
 
 open System
 open System.IO
@@ -13,8 +15,7 @@ open Microsoft.Extensions.DependencyInjection
 
 open Giraffe
 
-// Note: Relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published).
-let private uiPath =
+let private uiPath = // note: relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published)
     let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
     if Directory.Exists uiPath then uiPath else Path.GetFullPath "ui"
 
@@ -32,6 +33,9 @@ builder.UseContentRoot uiPath |> ignore
 builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
+
+readPersistedEvents ()
+ticker.Start ()
 
 let private host = builder.Build ()
 
