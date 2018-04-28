@@ -3,12 +3,9 @@ module Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Events.Event
 
 open System
+open System.Collections.Generic
 
 type SubscriberId = private | SubscriberId of guid : Guid
-
-type private Subscription = {
-    SubscriberId : SubscriberId
-    OnEvent : Event -> unit }
 
 type private BroadcasterInput =
     | Broadcast of event : Event
@@ -17,23 +14,25 @@ type private BroadcasterInput =
 
 type Broadcaster () =
     let agent = MailboxProcessor.Start (fun inbox ->
-        let rec running subscriptions = async {
+        let rec running (subscriptions:Dictionary<SubscriberId, Event -> unit>) = async {
             let! message = inbox.Receive ()
             match message with
             | Broadcast event ->
-                subscriptions |> List.iter (fun subscription -> subscription.OnEvent event)
+                subscriptions |> List.ofSeq |> List.iter (fun (KeyValue (_, onEvent)) -> onEvent event)
                 return! running subscriptions
             | Subscribe (onEvent, reply) ->
                 let subscriberId = Guid.NewGuid () |> SubscriberId
-                let subscriptions = { SubscriberId = subscriberId ; OnEvent = onEvent } :: subscriptions
+                subscriptions.Add (subscriberId, onEvent)
                 subscriberId |> reply.Reply
                 return! running subscriptions
             | Unsubscribe subscriberId ->
-                let subscriptions = subscriptions |> List.filter (fun subscription -> subscription.SubscriberId <> subscriberId) // note: silently ignore unknown subscriberId
+                if subscriptions.ContainsKey subscriberId then subscriptions.Remove subscriberId |> ignore // note: silently ignore unknown subscriberId
                 return! running subscriptions }
-        running [])
+        running (new Dictionary<SubscriberId, Event -> unit> ()))
     member __.Broadcast event = Broadcast event |> agent.Post
     member __.Subscribe onEvent = (fun reply -> Subscribe (onEvent, reply)) |> agent.PostAndReply
     member __.Unsubscribe subscriberId = Unsubscribe subscriberId |> agent.Post
 
 let broadcaster = Broadcaster ()
+
+// Note: No ensureInstantiated function since host.fs has explicit calls to other agents that will then call Broadcaster agent.

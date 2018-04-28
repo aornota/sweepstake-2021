@@ -3,9 +3,7 @@ module Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
 
-(*type Password = | Password of password : string
-
-type UiUnauthAppMsg =
+(*type UiUnauthAppMsg =
     | SignInCmd of sessionId : SessionId * userName : UserName * password : Password
     | AutoSignInCmd of jwt : Jwt*)
 
@@ -15,11 +13,12 @@ type UiUnauthMsg =
     | AutoSignInMsgOLD of jwt : Jwt // TODO-NMB-HIGH: Retire this...
 
 (*type UiAuthAppMsg =
-    | ChamgePasswordCmd of password : Password
+    | ChamgePasswordCmd of rvn : Rvn * password : Password // note: no need to pass userId (since can get from Jwt)
     | SignOutCmd
 
 type UiAuthUserAdminMsg =
     | InitializeUserAdminProjectionQry
+    | CreateUserCmd of userId : UserId * userName : UserName * password : Password * userType : UserType
     | ResetPasswordCmd of userId : UserId * rvn : Rvn * password : Password
     | ChangeUserTypeCmd of userId : UserId * rvn : Rvn * userType : UserType
 

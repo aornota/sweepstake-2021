@@ -47,7 +47,7 @@ let installUi yarnTool =
     runDotnet uiDir "restore"
 
 let build () =
-    runDotnet serverDir "build --configuration Release"
+    runDotnet serverDir "publish --configuration Release"
     runDotnet uiDir "fable webpack -- -p"
 
 let publish () =
@@ -132,10 +132,10 @@ Target "publish-azure" kuduSync
 
 Target "help" (fun _ ->
     printfn "\nThe following build targets are defined:"
-    printfn "\n\tbuild ... builds server and ui [which writes output to .\\src\\ui\\public]"
-    printfn "\tbuild run ... builds and runs server and ui [using webpack dev-server]"
-    printfn "\tbuild publish-local ... builds server and ui, then copies output to .\\publish\n"
-    printfn "\tbuild publish-azure ... builds server and ui, then uses Kudu to TODO-NMB-HIGH...\n")
+    printfn "\n\tbuild ... builds [Release] server and ui [which writes output to .\\src\\ui\\public]"
+    printfn "\tbuild run ... builds and runs [Debug] server and ui [using webpack dev-server]"
+    printfn "\tbuild publish-local ... builds [Release] server and ui, then copies output to .\\publish\n"
+    printfn "\tbuild publish-azure ... builds [Release] server and ui, then uses Kudu to deploy to Azure...\n")
 
 "install-dot-net-core" ==> "install-server" ==> "install-local"
 "install-server" ==> "install-azure"

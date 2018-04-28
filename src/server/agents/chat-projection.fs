@@ -7,3 +7,5 @@ open Aornota.Sweepstake2018.Server.Events.User*)
 type private ChatProjectionInput = | ToDo
 
 // TODO-NMB-HIGH: agent [MailboxProcessor] | broadcaster.Subscribe (UserEventWritten _ | UserSignedIn | UserApi | UserSignedOut | ...) | ...
+
+let ensureInstantiated () = () // note: ChatProjection agent [chatProjection] is static - so will only be instantiated when ChatProjection module (effectively a static class) is first referenced

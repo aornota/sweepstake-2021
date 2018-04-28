@@ -271,3 +271,5 @@ broadcaster.Subscribe (fun event -> // TODO-NMB-LOW: Subscribe to Tick _, e.g. t
     match event with
     | SendMsg (_serverMsg, _recipients) -> () // TODO-NMB-HIGH... connections.SendMsg (serverMsg, recipients)
     | _ -> ()) |> ignore
+
+// Note: No ensureInstantiated function since will be instantiated "on demand" via WsMiddleware.

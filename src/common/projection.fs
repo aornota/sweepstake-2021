@@ -41,7 +41,7 @@ let applyDelta projection delta =
         match items |> List.filter (getItemId >> projection.Items.ContainsKey >> not) with
         | h :: t -> Error (ModifiedItemsUnknown (h :: t))
         | [] ->
-            items |> List.iter (fun item -> projection.Items.[getItemId item] <- item)
+            items |> List.iter (fun item -> projection.Items.Item (getItemId item) <- item)
             Ok projection
     let removeItemIds (projection:Projection<'a>) (itemIds:IItemId<'a> list) =
         match itemIds |> List.filter (fun itemId -> projection.Items.ContainsKey itemId.ItemId |> not) with

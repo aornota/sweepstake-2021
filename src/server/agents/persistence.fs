@@ -14,38 +14,27 @@ open System
 open System.IO
 open System.Text
 
+type EntityType = // TODO-NMB-MEDIUM: More EntityTypes...
+    | Users
+
+type PersistedEvent = { Rvn : Rvn ; TimestampUtc : DateTime ; EventJson : Json ; AuditUserId : UserId } // note: *not* private because this breaks serialization
+
 type private PersistenceInput = 
     | AcquireReadLock of disposable : IDisposable * reply : AsyncReplyChannel<IDisposable>
     | ReleaseReadLock
-    | ReadUserEvents of reply : AsyncReplyChannel<Result<unit, ServerError<unit>>>
-    | WriteUserEvent of rvn : Rvn * userEvent : UserEvent * auditUserId : UserId * reply : AsyncReplyChannel<Result<unit, ServerError<unit>>>
-
-type PersistedEvent = { Rvn : Rvn ; TimestampUtc : DateTime ; EventJson : Json ; AuditUserId : UserId }
-
-type private EntityType = // TODO-NMB-MEDIUM: More EntityTypes...
-    | Users
+    | ReadUsersEvents of reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | WriteUserEvent of auditUserId : UserId * rvn : Rvn * userEvent : UserEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
 
 let [<Literal>] private PERSISTENCE_ROOT = "./persisted"
 let [<Literal>] private EVENTS_EXTENSION = "events"
 
-// TEMP-NMB...
-let private nephId = UserId.Create ()
-let private nephCreated = UserCreated (nephId, UserName "neph", Salt "TODO-NMB-HIGH: neph Salt", Hash "TODO-NMB-HIGH: neph Hash", SuperUser)
-let private rosieId = UserId.Create ()
-let private rosieCreated = UserCreated (rosieId, UserName "rosie", Salt "TODO-NMB-HIGH: rosie Salt", Hash "TODO-NMB-HIGH: rosie Hash", Administrator)
-let private hughId = UserId.Create ()
-let private hughCreated = UserCreated (hughId, UserName "hugh", Salt "TODO-NMB-HIGH: hugh Salt", Hash "TODO-NMB-HIGH: hugh Hash", Administrator)
-let private willId = UserId.Create ()
-let private willCreated = UserCreated (willId, UserName "will", Salt "TODO-NMB-HIGH: will Salt", Hash "TODO-NMB-HIGH: will Hash", Pleb)
-// ...NMB-TEMP
-
-let private encoding = Encoding.UTF8
-
-let private directory entityType =
+let directory entityType =
     let entityTypeDir =
         match entityType with // TODO-NMB-MEDIUM: More EntityTypes...
         | Users -> "users"
     sprintf "%s/%s" PERSISTENCE_ROOT entityTypeDir
+
+let private encoding = Encoding.UTF8
 
 let private readEvents<'a> entityType =
     let eventsExtensionWithDot = sprintf ".%s" EVENTS_EXTENSION
@@ -71,11 +60,11 @@ let private readEvents<'a> entityType =
     with exn -> Error (PersistenceError exn.Message)
 
 let private writeEvent entityType (entityId:Guid) rvn eventJson auditUserId =
-    let dir = directory entityType
-    let fileName = sprintf "%s/%s.%s" dir (entityId.ToString ()) EVENTS_EXTENSION
+    let entityDir = directory entityType
+    let fileName = sprintf "%s/%s.%s" entityDir (entityId.ToString ()) EVENTS_EXTENSION
     let (Json json) = { Rvn = rvn ; TimestampUtc = DateTime.Now.ToUniversalTime () ; EventJson = eventJson ; AuditUserId = auditUserId } |> toJson
     try
-        if Directory.Exists dir |> not then Directory.CreateDirectory dir |> ignore
+        if Directory.Exists entityDir |> not then Directory.CreateDirectory entityDir |> ignore
         if File.Exists fileName then
             File.AppendAllLines (fileName, [ json ], encoding)
             Ok ()
@@ -93,8 +82,8 @@ type Persistence () =
                     disposable |> reply.Reply
                     Some (reading ())
                 | ReleaseReadLock -> None
-                | ReadUserEvents _ -> None
-                | WriteUserEvent (rvn, userEvent, auditUserId, reply) ->
+                | ReadUsersEvents _ -> None
+                | WriteUserEvent (auditUserId, rvn, userEvent, reply) ->
                     let (UserId userId) = userEvent.UserId
                     let result =
                         match writeEvent Users userId rvn (toJson userEvent) auditUserId with
@@ -109,44 +98,26 @@ type Persistence () =
                 match input with
                 | AcquireReadLock _ -> None
                 | ReleaseReadLock -> Some (running ())
-                | ReadUserEvents reply ->
-                    // TEMP-NMB: Bypass persistent storage...
-                    (*UsersEventsRead [ 
-                        nephId, [ Rvn 1, nephCreated ]
-                        rosieId, [ Rvn 1, rosieCreated ]
-                        hughId, [ Rvn 1, hughCreated ]
-                        willId, [ Rvn 1, willCreated ] ] |> broadcaster.Broadcast
-                    let result = Ok ()*)
-                    // ...or not...
+                | ReadUsersEvents reply ->
                     let result =
                         match readEvents<UserEvent> Users with
                         | Ok usersEvents ->
-                            // TODO-NMB-LOW: For each usersEvents, check fst [Guid] consistent with snd [UserEvent list]?...
+                            // TODO-NMB-LOW: Sanity-check/s, e.g. fst [Guid a.k.a. UserId] consistent with snd:snd/s [UserEvent/s.UserId]? snd:fst/s [Rvn/s] contiguous?...
                             UsersEventsRead (usersEvents |> List.map (fun (id, userEvents) -> UserId id, userEvents)) |> broadcaster.Broadcast
                             Ok ()
                         | Error serverError -> Error serverError
-                    // ...NMB-TEMP
                     result |> reply.Reply
                     Some (reading ())
                 | WriteUserEvent _ -> None) }
         running ())
     member __.AcquireReadLock () = (fun reply -> AcquireReadLock ({ new IDisposable with member __.Dispose () = ReleaseReadLock |> agent.Post }, reply)) |> agent.PostAndReply
-    member __.ReadUserEvents () = ReadUserEvents |> agent.PostAndAsyncReply
-    member __.WriteUserEvent (rvn, userEvent, auditUserId) = (fun reply -> WriteUserEvent (rvn, userEvent, auditUserId, reply)) |> agent.PostAndAsyncReply
+    member __.ReadUsersEventsAsync () = ReadUsersEvents |> agent.PostAndAsyncReply
+    member __.WriteUserEventAsync (auditUserId, rvn, userEvent) = (fun reply -> WriteUserEvent (auditUserId, rvn, userEvent, reply)) |> agent.PostAndAsyncReply
 
 let persistence = Persistence ()
 
 let readPersistedEvents () =
-    // TEMP-NMB: Write "default" users...
-    let writeDefaultUsers = async {
-        if Directory.Exists (directory Users) |> not then // note: silently ignore WriteUserEvent (...) result/s [Result<unit<ServerError<unit>>]
-            let! _ = persistence.WriteUserEvent (Rvn 1, nephCreated, nephId)
-            let! _ = persistence.WriteUserEvent (Rvn 1, rosieCreated, nephId)
-            let! _ = persistence.WriteUserEvent (Rvn 1, hughCreated, nephId)
-            let! _ = persistence.WriteUserEvent (Rvn 1, willCreated, nephId)
-            ()
-        return () }
-    writeDefaultUsers |> Async.Start
-    // ...NMB-TEMP
     use _lock = persistence.AcquireReadLock ()
-    persistence.ReadUserEvents () |> Async.RunSynchronously |> ignore // note: silently ignore ReadUserEvents () result [Result<unit<ServerError<unit>>]
+    persistence.ReadUsersEventsAsync () |> Async.RunSynchronously |> ignore // note: silently ignore ReadUsersEventsAsync result
+
+// Note: No ensureInstantiated function since host.fs has explicit call to readPersistedEvents.

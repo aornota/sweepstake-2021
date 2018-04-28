@@ -38,3 +38,5 @@ let isEveryNSeconds (everyN:int<second>) (ticks, secondsPerTick) =
     else seconds % everyN < secondsPerTick * 1<tick>
 
 let ticker = Ticker SECONDS_PER_TICK
+
+// Note: No ensureInstantiated function since host.fs has explicit call to ticker.Start.
