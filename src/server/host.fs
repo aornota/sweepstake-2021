@@ -75,9 +75,9 @@ builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
-#if DEBUG
+//#if DEBUG
 createDefaultPersistedEvents ()
-#endif
+//#endif
 
 ensureAgentsInstantiated ()
 readPersistedEvents ()
