@@ -176,8 +176,8 @@ let private handleWsError wsError state : State * Cmd<Input> =
 
 let private handleServerUiMsgError serverUiMsgError state =
     match serverUiMsgError with
-    | ReceiveUiMsgError errorText -> addDebugError (sprintf "Server ReceiveUiMsgError -> %s" errorText) (Some "The web server was unable to receive a message") state
-    | DeserializeUiMsgError errorText -> addDebugError (sprintf "Server DeserializeUiMsgError -> %s" errorText) (Some"The web server was unable to process a message") state
+    | ReceiveUiMsgError errorText -> addDebugError (sprintf "Server ReceiveUiMsgError -> %s" errorText) (Some "The web server was unable to receive a message<br><br>Please try refreshing the page") state
+    | DeserializeUiMsgError errorText -> addDebugError (sprintf "Server DeserializeUiMsgError -> %s" errorText) (Some"The web server was unable to process a message<br><br>Please try refreshing the page") state
 
 let private handleConnected (otherConnections, signedIn) jwt lastPage state =
     let toastCmd =

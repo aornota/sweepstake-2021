@@ -148,5 +148,6 @@ type State = {
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
 
+// TODO-NMB-HIGH: Retire these (in favour of similar in Aornota.Sweepstake2018.Common.Domain.Core)...
 let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
 let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None

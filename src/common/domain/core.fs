@@ -47,17 +47,21 @@ type UserAdminDto =
             let (UserId id) = self.UserId
             id *)
  
+let incrementRvn (Rvn rvn) = Rvn (rvn + 1)
+
 let validateNextRvn (currentRvn:Rvn option) (Rvn nextRvn) =
     match currentRvn, nextRvn with
     | None, nextRvn when nextRvn = 1 -> true
     | Some (Rvn currentRvn), nextRvn when currentRvn + 1 = nextRvn -> true
     | _ -> false
 
-let incrementRvn (Rvn rvn) = Rvn (rvn + 1)
-
-let validateUserName (UserName _userName) : string option = None // TODO-NMB-HIGH...
-let validatePassword (Password _password) : string option = None // TODO-NMB-HIGH...
-
-let thingAsync thing = async { return thing }
-
-let tupleError thing result = match result with | Ok ok -> Ok ok | Error error -> Error (thing, error)
+let validateUserName (userNames:UserName list) (UserName userName) =
+    if String.IsNullOrWhiteSpace userName then Some "Username must not be blank"
+    else if (userName.Trim ()).Length < 4 then Some "Username must be at least 4 characters"
+    else if userNames |> List.map (fun (UserName userName) -> userName.ToLower ()) |> List.contains (userName.ToLower ()) then Some "Username has already been used"
+    else None
+let validatePassword (Password password) =
+    if String.IsNullOrWhiteSpace password then Some "Password must not be blank"
+    else if (password.Trim ()).Length < 6 then Some "Password must be at least 6 characters"
+    // TODO-NMB-LOW?... else if password = "password" then Some "'password' is not an acceptable password!"
+    else None

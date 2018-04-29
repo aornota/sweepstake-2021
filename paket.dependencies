@@ -16,6 +16,7 @@ group server
 	nuget Microsoft.AspNetCore.StaticFiles
 	nuget Microsoft.AspNetCore.WebSockets
     nuget Newtonsoft.Json
+    nuget jose-jwt
 	nuget TaskBuilder.fs 1.1.1
 
 	clitool Microsoft.DotNet.Watcher.Tools

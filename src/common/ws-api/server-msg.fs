@@ -28,7 +28,7 @@ type ServerUiMsgError =
     | ReceiveUiMsgError of errorText : string
     | DeserializeUiMsgError of errorText : string
 
-type SignInCmdError = | InvalidCredentials // note: used for various cases, e.g. unknown userName | multiple userName matches [should never happen] | incorrect password | PersonaNonGrata
+type SignInCmdError = | InvalidCredentials of errorText : string option // note: used for various cases, e.g. unknown userName | multiple userName matches [should never happen] | incorrect password | PersonaNonGrata
 
 (*type AutoSignOutReason =
     // TODO-NMB-LOW?... | SessionExpired
@@ -51,14 +51,15 @@ type ServerAppMsg =
     | OtherUserSignedOutMsgOLD of userName : string // TODO-NMB-HIGH: Retire this...
 
 (*type UserAdminProjectionMsg =
-    | UserAdminProjectionQryInitialized of userAdmins : Projection<UserAdminDto> // TODO-NMB-HIGH: What if cannot initialize?...
+    | UserAdminProjectionQryInitialized of userAdmins : Projection<UserAdminDto>
     | UserAdminsDeltaMsg of delta : Delta<UserAdminDto>
 
 type ServerUserAdminMsg =
+    | InitializeUserAdminProjectionQryResult of result : Result<unit, AuthQryError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
-    | CreateUserCmdResult of result : Result<UserId, UserId * AuthCmdError<string>>
-    | ResetPasswordCmdResult of result : Result<UserId, UserId * AuthCmdError<string>>
-    | ChangeUserTypeCmdResult of result : Result<UserId, UserId * AuthCmdError<string>>
+    | CreateUserCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
+    | ResetPasswordCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
+    | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
 
 type ChatProjectionMsg =
     | ChatProjectionQryInitialized of chatUsers : Projection<ChatUserDto> * chatMessages : Projection<ChatMessageDto> // TODO-NMB-HIGH: What if cannot initialize?...
@@ -68,8 +69,9 @@ type ChatProjectionMsg =
     | OtherUserSignedOutMsg of userName : UserName*)
 
 type ServerChatMsg =
-    (*| ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
-    | SendChatMessageCmdResult of result : Result<ChatMessageId, ChatMessageId * AuthCmdError<string>>*)
+    (*| InitializeChatProjectionQryResult of result : Result<unit, AuthQryError<string>>
+    | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
+    | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>*)
     | SendChatMessageResultMsgOLD of result : Result<ChatMessageOLD, ChatMessageId * string> // TODO-NMB-HIGH: Retire this...
     | OtherUserChatMessageMsgOLD of chatMessage : ChatMessageOLD // TODO-NMB-HIGH: Retire this...
 

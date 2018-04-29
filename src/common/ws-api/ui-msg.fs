@@ -13,14 +13,14 @@ type UiUnauthMsg =
     | AutoSignInMsgOLD of jwt : Jwt // TODO-NMB-HIGH: Retire this...
 
 (*type UiAuthAppMsg =
-    | ChamgePasswordCmd of rvn : Rvn * password : Password // note: no need to pass userId (since can get from Jwt)
+    | ChamgePasswordCmd of currentRvn : Rvn * password : Password // note: no need to pass userId (since can get from Jwt)
     | SignOutCmd
 
 type UiAuthUserAdminMsg =
     | InitializeUserAdminProjectionQry
     | CreateUserCmd of userId : UserId * userName : UserName * password : Password * userType : UserType
-    | ResetPasswordCmd of userId : UserId * rvn : Rvn * password : Password
-    | ChangeUserTypeCmd of userId : UserId * rvn : Rvn * userType : UserType
+    | ResetPasswordCmd of userId : UserId * currentRvn : Rvn * password : Password
+    | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
