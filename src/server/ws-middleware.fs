@@ -30,19 +30,19 @@ type WsMiddleware (next:RequestDelegate) =
         let buffer : byte [] = Array.zeroCreate 4096
         try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
             let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
-            log (Info (sprintf "receiving message for %A" connectionId))
+            log (Verbose (sprintf "receiving message for %A" connectionId))
 #if DEBUG
             if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error receiving message for %A" connectionId)
 #endif
             if receiveResult.CloseStatus.HasValue then return Some receiveResult
             else
                 try // note: expect buffer to be deserializable to UiMsg              
-                    log (Info (sprintf "deserializing message for %A" connectionId))
+                    log (Verbose (sprintf "deserializing message for %A" connectionId))
                     let uiMsg = Json (Encoding.UTF8.GetString buffer) |> ofJson<UiMsg>
 #if DEBUG
                     if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
 #endif
-                    log (Info (sprintf "message deserialized for %A -> %A" connectionId uiMsg))
+                    log (Verbose (sprintf "message deserialized for %A -> %A" connectionId uiMsg))
                     connections.HandleUiMsg (connectionId, uiMsg)
                     return! receiving (connectionId, ws) receiveFailureCount
                 with exn ->
@@ -63,21 +63,21 @@ type WsMiddleware (next:RequestDelegate) =
             if ctx.Request.Path = PathString WS_API_PATH then
                 match ctx.WebSockets.IsWebSocketRequest with
                 | true ->
-                    log (Info "new web socket request")
+                    log (Verbose "new web socket request")
 #if DEBUG
                     do! Async.Sleep (random.Next (25, 125))
 #endif
                     let! ws = ctx.WebSockets.AcceptWebSocketAsync () |> Async.AwaitTask
                     let connectionId = ConnectionId.Create ()
-                    log (Info (sprintf "new web socket accepted -> %A" connectionId))
+                    log (Verbose (sprintf "new web socket accepted -> %A" connectionId))
                     connections.AddConnection (connectionId, ws)
                     let! receiveResult = receiving (connectionId, ws) 0u
-                    log (Info (sprintf "web socket closing -> %A" connectionId))
+                    log (Verbose (sprintf "web socket closing -> %A" connectionId))
                     match receiveResult with
                     | Some receiveResult -> ws.CloseAsync (receiveResult.CloseStatus.Value, receiveResult.CloseStatusDescription, CancellationToken.None) |> Async.AwaitTask |> ignore
                     | None -> ()
                     connections.RemoveConnection connectionId
-                    log (Info (sprintf "web socket closed -> %A" connectionId))
+                    log (Verbose (sprintf "web socket closed -> %A" connectionId))
                 | false -> ctx.Response.StatusCode <- 400
             else next.Invoke ctx |> ignore 
         } |> Async.StartAsTask :> Task

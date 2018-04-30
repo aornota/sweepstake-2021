@@ -25,10 +25,11 @@
     <Compile Include="agents/broadcaster.fs" />
     <Compile Include="agents/ticker.fs" />
     <Compile Include="agents/persistence.fs" />
-    <Compile Include="agents/users.fs" />
-    <Compile Include="agents/chat-projection.fs" />
+    <Compile Include="agents/entities/users.fs" />
+    <Compile Include="agents/projections/chat.fs" />
     <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />
+    <Compile Include="default-data.fs" />
     <Compile Include="host.fs" />
     <None Include="web.config" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

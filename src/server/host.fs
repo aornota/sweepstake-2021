@@ -1,9 +1,15 @@
 ﻿module Aornota.Sweepstake2018.Server.Host
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Common.UnitsOfMeasure
+
 open Aornota.Sweepstake2018.Common.Literals
-open Aornota.Sweepstake2018.Server.Agents
+open Aornota.Sweepstake2018.Server.Agents.Broadcaster
+open Aornota.Sweepstake2018.Server.Agents.Connections
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2018.Server.Agents.Entities.Users
+open Aornota.Sweepstake2018.Server.Agents.Persistence
+open Aornota.Sweepstake2018.Server.Agents.Ticker
+open Aornota.Sweepstake2018.Server.DefaultData
 open Aornota.Sweepstake2018.Server.WsMiddleware
 
 open System
@@ -15,6 +21,8 @@ open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
 
 open Giraffe
+
+let [<Literal>] private SECONDS_PER_TICK = 1<second/tick>
 
 let private log category = consoleLogger.Log (Host, category)
 
@@ -38,53 +46,30 @@ builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
+log (Info "starting ConsoleLogger agent") // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started)
+logEverythingExceptVerboseAndTicker |> consoleLogger.Start
+log (Info "starting core agents")
+logAllEventsExceptTick |> broadcaster.Start
+SECONDS_PER_TICK |> ticker.Start
+() |> persistence.Start
+
 // TODO-NMB-HIGH: *Temporarily* remove #if DEBUG restriction to create default persisted events on Azure site (note: also requires similar change in authorization.fs)?...
 #if DEBUG
-async {
-    let createDefaultUsersEvents = async {
-        let usersDir = Persistence.directory Persistence.EntityType.Users
-        // TEMP-NMB: Force (re-)creation of default User/s events even if directory already exists...
-        if Directory.Exists usersDir then
-            log (Info (sprintf "deleting existing User/s events -> %s" usersDir))
-            Directory.GetFiles usersDir |> Array.iter File.Delete
-            Directory.Delete usersDir
-        // ...NMB-TEMP
-        if Directory.Exists usersDir then log (Info (sprintf "preserving existing User/s events -> %s" usersDir))
-        else
-            log (Info (sprintf "creating existing User/s events -> %s" usersDir))
-            log (Info "sending Users agent dummy (empty) OnUsersEventsRead")
-            // Note: Need to send dummy (empty) OnUsersEventsRead to Users agent else HandleCreateUserCmdAsync (&c.) will be skipped (and hence will block).
-            // Note: Although other events will be broadcast (e.g. UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these.
-            [] |> Users.users.OnUsersEventsRead
-            let log cmd result = match result with | Ok ok -> log (Info (sprintf "%s succeeded -> %A" cmd ok)) | Error error -> log (Danger (sprintf "%ss failed -> %A" cmd error))
-            let nephId, rosieId, hughId, willId, trollId = UserId Guid.Empty, UserId (Guid "10000000-0000-0000-0000-000000000000"), UserId (Guid "11000000-0000-0000-0000-000000000000"), UserId (Guid "20000000-0000-0000-0000-000000000000"), UserId (Guid "f0000000-0000-0000-0000-000000000000")
-            let createUserToken, defaultPassword, initialRvn, newPassword = Authorization.createUserAnyToken, Password "password", Rvn 1, Password "arseword"
-            let! _ = (createUserToken, nephId, nephId, UserName "neph", defaultPassword, SuperUser) |> Users.users.HandleCreateUserCmdAsync
-            let! _ = (Authorization.changePasswordToken nephId, nephId, Rvn 1, newPassword) |> Users.users.HandleChangePasswordCmdAsync
-            let! _ = (createUserToken, nephId, rosieId, UserName "rosie", defaultPassword, Administrator) |> Users.users.HandleCreateUserCmdAsync
-            let! _ = (createUserToken, nephId, hughId, UserName "hugh", defaultPassword, Pleb) |> Users.users.HandleCreateUserCmdAsync
-            let! _ = (Authorization.changeUserTypeToken, nephId, hughId, initialRvn, Administrator) |> Users.users.HandleChangeUserTypeCmdAsync
-            let! _ = (createUserToken, nephId, willId, UserName "will", defaultPassword, Pleb) |> Users.users.HandleCreateUserCmdAsync
-            let! _ = (Authorization.resetPasswordToken, nephId, willId, initialRvn, newPassword) |> Users.users.HandleResetPasswordCmdAsync
-            let! _ = (createUserToken, nephId, trollId, UserName "troll", defaultPassword, PersonaNotGrata) |> Users.users.HandleCreateUserCmdAsync
-            // TODO-NMB-HIGH: Test various failing scenarios...
-            ()
-        return () }
-    do! createDefaultUsersEvents } |> Async.RunSynchronously
+log (Info "creating default persisted events (if necessary)")
+createDefaultPersistedEvents |> Async.RunSynchronously
 #endif
 
-// Note: Only for agents with an ensureInstantiated function (e.g. not ConsoleLogger | Broadcaster | Ticker | Persistence | &c.).
-log (Info "ensuring agents instantiated before reading persisted events")
-log (Info "ensuring Users agent instantiated")
-Users.ensureInstantiated ()
-(* TODO-NMB-HIGH: Once ChatProjection agent implemented... log "ensuring ChatProjection agent instantiated"
-ChatProjection.ensureInstantiated ()*)
+// Note: If entity agents were started by #if DEBUG code above [and then "reset"], they will just "bypass" subsequent Start calls (i.e. no new subscription) and not block the caller.
+log (Info "starting entity agents")
+() |> users.Start
 
 log (Info "reading persisted events")
-Persistence.readPersistedEvents ()
+readPersistedEvents ()
 
-log (Info "starting Ticker agent")
-Ticker.ticker.Start ()
+log (Info "starting Connections agent")
+() |> connections.Start
+
+log (Info "ready")
 
 let private host = builder.Build ()
 

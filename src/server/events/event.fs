@@ -22,3 +22,4 @@ type Event =
     | UserSignedIn of userId : UserId
     | UserApi of userId : UserId
     | UserSignedOut of userId : UserId
+    | Disconnected of connectionId : ConnectionId

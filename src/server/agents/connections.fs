@@ -2,6 +2,7 @@ module Aornota.Sweepstake2018.Server.Agents.Connections
 
 open Aornota.Common.Json
 
+open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
 open Aornota.Sweepstake2018.Common.Domain.Core
@@ -20,6 +21,7 @@ open System.Threading
 open FSharp.Control.Tasks.ContextInsensitive
 
 type private ConnectionsInput =
+    | Start of reply : AsyncReplyChannel<unit>
     | AddConnection of connectionId : ConnectionId * ws : WebSocket
     | RemoveConnection of connectionId : ConnectionId
     | OnReceiveUiMsgError of connectionId : ConnectionId * exn : exn
@@ -50,7 +52,8 @@ let private fakeErrorFrequency = 0.02
 
 let private log category = consoleLogger.Log (Connections, category)
 
-type Connections () =
+type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose stuff?)...
+    // TODO-NMB-HIGH: As part of rework, move these functions to be [private] module-level ones...
     let remove connectionIds connections = connections |> List.filter (fun connection -> not (connectionIds |> List.contains connection.ConnectionId))
     let sendMsg (serverMsg:ServerMsg) sendFilter connections = async {
         let (Json json) = serverMsg |> toJson
@@ -146,14 +149,26 @@ type Connections () =
                     { connection with AuthUserSession = Some authUserSession }
                 | Some _ | None -> connection
             else connection)
-    let idAsync x = async { return x }
     let agent = MailboxProcessor.Start (fun inbox ->
-        let rec receiving (connections:Connection list) = async {
+        let rec awaitingStart () = async {
+            let! input = inbox.Receive ()
+            match input with
+            | Start reply ->
+                log (Info "Start when awaitingStart -> managingConnections (0 connections)")
+                () |> reply.Reply
+                return! managingConnections []
+            | AddConnection _ -> log (Agent (IgnoredInput "AddConnection when awaitingStart")) ; return! awaitingStart ()
+            | RemoveConnection _ -> log (Agent (IgnoredInput "RemoveConnection when awaitingStart")) ; return! awaitingStart ()
+            | OnReceiveUiMsgError _ -> log (Agent (IgnoredInput "OnReceiveUiMsgError when awaitingStart")) ; return! awaitingStart ()
+            | OnDeserializeUiMsgError _ -> log (Agent (IgnoredInput "OnDeserializeUiMsgError when awaitingStart")) ; return! awaitingStart ()
+            | HandleUiMsg _ -> log (Agent (IgnoredInput "HandleUiMsg when awaitingStart")) ; return! awaitingStart () }
+        and managingConnections (connections:Connection list) = async {
             let! input = inbox.Receive ()
 #if DEBUG
             do! Async.Sleep (random.Next (100, 500))
 #endif
             match input with
+            | Start _ -> log (Agent (IgnoredInput "Start when managingConnections")) ; return! managingConnections []
             | AddConnection (connectionId, ws) ->
                 // SNH-NMB: What if connectionId already in connections? (&c.)...
                 let otherConnections = connections |> List.length
@@ -164,7 +179,7 @@ type Connections () =
                     |> List.length
                 let connections = { ConnectionId = connectionId ; Ws = ws ; AuthUserSession = None } :: connections              
                 let! connections = sendMsg (ConnectedMsg (otherConnections, signedIn) |> ServerAppMsg) (OnlyConnectionId connectionId) connections
-                return! receiving connections
+                return! managingConnections connections
             | RemoveConnection connectionId ->
                 // SNH-NMB: What if connectionId not in connections? (&c.)...
                 let userIdAndName = connections |> userIdAndNameForConnectionId connectionId
@@ -174,14 +189,14 @@ type Connections () =
                     if isFullySignedOut then
                         let userId, userName = match userIdAndName with | Some (userId, userName) -> (userId, userName) | None -> UserId.Create (), "yves strop" // SNH-NMB
                         sendMsg (OtherUserSignedOutMsgOLD userName |> ServerAppMsg) (AllAuthExceptUserId userId) connections
-                    else idAsync connections
-                return! receiving connections
+                    else thingAsync connections
+                return! managingConnections connections
             | OnReceiveUiMsgError (connectionId, exn) ->
                 let! connections = sendMsg (ServerUiMsgErrorMsg (ReceiveUiMsgError exn.Message) |> ServerAppMsg) (OnlyConnectionId connectionId) connections
-                return! receiving connections
+                return! managingConnections connections
             | OnDeserializeUiMsgError (connectionId, exn) ->                
                 let! connections = sendMsg (ServerUiMsgErrorMsg (DeserializeUiMsgError exn.Message) |> ServerAppMsg) (OnlyConnectionId connectionId) connections  
-                return! receiving connections
+                return! managingConnections connections
             | HandleUiMsg (connectionId, uiMsg) ->
                 match uiMsg with
                 | UiUnauthMsg (SignInMsgOLD (sessionId, userName, _password)) ->
@@ -203,8 +218,8 @@ type Connections () =
                     let! connections =
                         if isOk && not alreadySignedIn then
                             sendMsg (OtherUserSignedInMsgOLD authUser.UserName |> ServerAppMsg) (AllAuthExceptUserId authUser.UserId) connections
-                        else idAsync connections
-                    return! receiving connections
+                        else thingAsync connections
+                    return! managingConnections connections
                 | UiUnauthMsg (AutoSignInMsgOLD (Jwt jwt)) ->
                     // SNH-NMB: What if connectionId not in connections? (&c.)...
                     // TODO-NMB-MEDIUM: Handle properly, e.g. by verifying jwt (i.e. can decrypt | details match [inc. permissions] | &c.)...
@@ -222,8 +237,8 @@ type Connections () =
                     let! connections =
                         if isOk && not alreadySignedIn then
                             sendMsg (OtherUserSignedInMsgOLD authUser.UserName |> ServerAppMsg) (AllAuthExceptUserId authUser.UserId) connections
-                        else idAsync connections
-                    return! receiving connections
+                        else thingAsync connections
+                    return! managingConnections connections
                 | UiAuthMsg (Jwt jwt, SignOutMsgOLD) ->       
                     // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthUserSession for connectionId? (&c.)...
                     let result =
@@ -238,14 +253,14 @@ type Connections () =
                     let! connections = sendMsg (SignOutResultMsg result |> ServerAppMsg) (OnlyConnectionId connectionId) connections
                     let! connections = 
                         if isOk then sendMsg (AutoSignOutMsgOLD jwt.SessionId |> ServerAppMsg) (SameUserSessionExceptConnectionId (jwt.UserId, jwt.SessionId, connectionId)) connections
-                        else idAsync connections
+                        else thingAsync connections
                     // Note: Auto-sign out connections-for-same-user-session-except-ConnectionId after sending AutoSignOutMsg (else would not match SameUserSessionExceptConnectionId once signed-out).
                     let connections = if isOk then connections |> autoSignOut (jwt.UserId, jwt.SessionId) else connections
                     let isFullySignedOut = if isOk then connections |> countForUserId jwt.UserId = 0 else false                    
                     let! connections =
                         if isFullySignedOut then sendMsg (OtherUserSignedOutMsgOLD jwt.UserName |> ServerAppMsg) (AllAuthExceptUserId jwt.UserId) connections
-                        else idAsync connections
-                    return! receiving connections
+                        else thingAsync connections
+                    return! managingConnections connections
                 | UiAuthMsg (Jwt jwt, (SendChatMessageMsgOLD chatMessage)) ->
                     // SNH-NMB: What if connectionId not in connections? What if no AuthUserSession for connectionId? (&c.)...
                     let result =
@@ -259,11 +274,21 @@ type Connections () =
                     let! connections = sendMsg (SendChatMessageResultMsgOLD result |> ServerChatMsg) (OnlyConnectionId connectionId) connections
                     let! connections =
                         if isOk then sendMsg (OtherUserChatMessageMsgOLD chatMessage |> ServerChatMsg) (AllAuthExceptConnectionId connectionId) connections
-                        else idAsync connections
-                    return! receiving connections }
-        log (Info "agent instantiated -> receiving")
-        receiving [])
-    do agent.Error.Add (logAgentExn Source.Connections) // note: an unhandled exception will "kill" the agent - but at least we can log the exception
+                        else thingAsync connections
+                    return! managingConnections connections }
+        log (Info "agent instantiated -> awaitingStart")
+        awaitingStart ())
+    do agent.Error.Add (logAgentException Source.Connections) // note: an unhandled exception will "kill" the agent - but at least we can log the exception
+    member _self.Start () =
+        // TODO-NMB-LOW: Subscribe to Tick (e.g. to auto-sign out "expired" sessions)?...
+        // TODO-NMB-HIGH: Subscribe to UserSignedIn? UserSignedOut? - or will Connections agent cause these in the first place?...
+        let onEvent = (fun event ->
+            match event with
+            | SendMsg (_serverMsg, _recipients) -> () // TODO-NMB-HIGH... (serverMsg, recipients) |> self.SendMsg
+            | _ -> ())
+        let subscriberId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
+        log (Info (sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriberId))
+        Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.AddConnection (connectionId, ws) = AddConnection (connectionId, ws) |> agent.Post
     member __.RemoveConnection connectionId = RemoveConnection connectionId |> agent.Post
     member __.OnReceiveUiMsgError (connectionId, exn) = OnReceiveUiMsgError (connectionId, exn) |> agent.Post
@@ -271,11 +296,3 @@ type Connections () =
     member __.HandleUiMsg (connectionId, uiMsg) = HandleUiMsg (connectionId, uiMsg) |> agent.Post
 
 let connections = Connections ()
-
-let subscriberId = broadcaster.Subscribe (fun event ->
-    match event with // TODO-NMB-LOW: Subscribe to Tick (e.g. to auto-sign out "expired" sessions)? Subscribe to UserSignedIn? UserSignedOut?...
-    | SendMsg (_serverMsg, _recipients) -> () // TODO-NMB-HIGH... connections.OnSendMsg (serverMsg, recipients)
-    | _ -> ())
-log (Info (sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriberId))
-
-// Note: No ensureInstantiated function since will be instantiated "on demand" via WsMiddleware.
