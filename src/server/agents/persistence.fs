@@ -210,10 +210,8 @@ let persistence = Persistence ()
 
 let readPersistedEvents () =
     let acquiredBy = "readPersistedEvents"
-    log (Info (sprintf "acquiring read lock for '%s'" acquiredBy))
     let (readLockId, readLock) = acquiredBy |> persistence.AcquireReadLockAsync |> Async.RunSynchronously
     use _disposable = readLock
-    log (Info (sprintf "acquired %A for '%s'" readLockId acquiredBy))
     (* TEMP-NMB: Try calling WriteUserEventAsync in read lock (should be "skipped" but processed later)...
     log (Info "calling WriteUserEventAsync in read lock")
     let userEvent = UserCreated (UserId (Guid "ffffffff-ffff-ffff-ffff-ffffffffffff"), UserName "skippy", Salt "salt", Hash "hash", Pleb)
@@ -221,6 +219,4 @@ let readPersistedEvents () =
     async {
         let! _ = (UserId Guid.Empty, Rvn 1, userEvent) |> persistence.WriteUserEventAsync
         return () } |> Async.Start*)
-    log (Info "reading persisted User/s events")
     readLockId |> persistence.ReadUsersEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
-    log (Info "persisted events read")
