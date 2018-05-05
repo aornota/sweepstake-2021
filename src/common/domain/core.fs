@@ -30,7 +30,7 @@ type AuthUser = { // TODO-NMB-HIGH: Permissions?...
 
 type Jwt = | Jwt of jwt : AuthUser // TODO-NMB-MEDIUM: Change to string (rather than AuthUser) - once Jwt functionality implemented...
 
-(*type SignedInStatusDto =
+(*type SignedInStatusDto = // TODO-NMB-HIGH: Use UTC (and/or DateTimeOffset) to avoid sinceLastApi stuff?...
     | SignedIn of sinceLastApi : float<second>
     | NotSignedIn
 
@@ -46,7 +46,7 @@ type UserAdminDto =
         member self.ItemId =
             let (UserId id) = self.UserId
             id *)
- 
+
 let incrementRvn (Rvn rvn) = Rvn (rvn + 1)
 
 let validateNextRvn (currentRvn:Rvn option) (Rvn nextRvn) =
@@ -58,7 +58,7 @@ let validateNextRvn (currentRvn:Rvn option) (Rvn nextRvn) =
 let validateUserName (userNames:UserName list) (UserName userName) =
     if String.IsNullOrWhiteSpace userName then Some "Username must not be blank"
     else if (userName.Trim ()).Length < 4 then Some "Username must be at least 4 characters"
-    else if userNames |> List.map (fun (UserName userName) -> userName.ToLower ()) |> List.contains (userName.ToLower ()) then Some "Username has already been used"
+    else if userNames |> List.map (fun (UserName userName) -> userName.ToLower ()) |> List.contains (userName.ToLower ()) then Some "Username already in use"
     else None
 let validatePassword (Password password) =
     if String.IsNullOrWhiteSpace password then Some "Password must not be blank"

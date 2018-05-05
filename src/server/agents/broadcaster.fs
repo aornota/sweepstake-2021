@@ -6,7 +6,7 @@ open Aornota.Sweepstake2018.Server.Events.Event
 open System
 open System.Collections.Generic
 
-type SubscriberId = private | SubscriberId of guid : Guid
+type SubscriptionId = private | SubscriptionId of guid : Guid
 
 type EventFilter = Event -> bool
 type LogEventFilter = string * EventFilter
@@ -14,8 +14,8 @@ type LogEventFilter = string * EventFilter
 type private BroadcasterInput =
     | Start of logEventFilter : LogEventFilter * reply : AsyncReplyChannel<unit>
     | Broadcast of event : Event
-    | Subscribe of onEvent : (Event -> unit) * reply : AsyncReplyChannel<SubscriberId>
-    | Unsubscribe of subscriberId : SubscriberId
+    | Subscribe of onEvent : (Event -> unit) * reply : AsyncReplyChannel<SubscriptionId>
+    | Unsubscribe of subscriptionId : SubscriptionId
     | CurrentLogEventFilter of reply : AsyncReplyChannel<LogEventFilter>
     | ChangeLogEventFilter of logEventFilter : LogEventFilter * reply : AsyncReplyChannel<unit>
 
@@ -37,7 +37,7 @@ type Broadcaster () =
             | Start ((filterName, logEventFilter), reply) ->
                 log (Info (sprintf "Start when awaitingStart -> broadcasting (log event filter: '%s')" filterName))
                 () |> reply.Reply
-                return! broadcasting (new Dictionary<SubscriberId, Event -> unit> (), (filterName, logEventFilter))
+                return! broadcasting (new Dictionary<SubscriptionId, Event -> unit> (), (filterName, logEventFilter))
             | Broadcast _ -> log (Agent (IgnoredInput "Broadcast when awaitingStart")) ; return! awaitingStart ()
             | Subscribe _ -> log (Agent (IgnoredInput "Subscribe when awaitingStart")) ; return! awaitingStart ()
             | Unsubscribe _ -> log (Agent (IgnoredInput "Unsubscribe when awaitingStart")) ; return! awaitingStart ()
@@ -48,20 +48,20 @@ type Broadcaster () =
             match input with
             | Start _ -> log (Agent (IgnoredInput "Start when broadcasting")) ; return! broadcasting (subscriptions, (filterName, eventFilter))
             | Broadcast event ->
-                if eventFilter event then log (Info (sprintf "Broadcast -> %i subscriber/s -> %A" subscriptions.Count event))
+                if eventFilter event then log (Info (sprintf "Broadcast -> %i subscription/s -> %A" subscriptions.Count event))
                 subscriptions |> List.ofSeq |> List.iter (fun (KeyValue (_, onEvent)) -> onEvent event)
                 return! broadcasting (subscriptions, (filterName, eventFilter))
             | Subscribe (onEvent, reply) ->
-                let subscriberId = Guid.NewGuid () |> SubscriberId
-                subscriptions.Add (subscriberId, onEvent)
-                log (Info (sprintf "Subscribe when broadcasting -> added %A -> %i subscriber/s" subscriberId subscriptions.Count))
-                subscriberId |> reply.Reply
+                let subscriptionId = Guid.NewGuid () |> SubscriptionId
+                subscriptions.Add (subscriptionId, onEvent)
+                log (Info (sprintf "Subscribe when broadcasting -> added %A -> %i subscription/s" subscriptionId subscriptions.Count))
+                subscriptionId |> reply.Reply
                 return! broadcasting (subscriptions, (filterName, eventFilter))
-            | Unsubscribe subscriberId ->
-                if subscriptions.ContainsKey subscriberId then
-                    subscriptions.Remove subscriberId |> ignore
-                    log (Info (sprintf "Unsubscribe when broadcasting -> removed %A -> %i subscriber/s" subscriberId subscriptions.Count))
-                else log (Agent (IgnoredInput (sprintf "Unsubscribe when broadcasting -> unknown %A" subscriberId)))
+            | Unsubscribe subscriptionId ->
+                if subscriptions.ContainsKey subscriptionId then
+                    subscriptions.Remove subscriptionId |> ignore
+                    log (Info (sprintf "Unsubscribe when broadcasting -> removed %A -> %i subscription/s" subscriptionId subscriptions.Count))
+                else log (Agent (IgnoredInput (sprintf "Unsubscribe when broadcasting -> unknown %A" subscriptionId)))
                 return! broadcasting (subscriptions, (filterName, eventFilter))
             | CurrentLogEventFilter reply ->
                 (filterName, eventFilter) |> reply.Reply
@@ -76,7 +76,7 @@ type Broadcaster () =
     member __.Start logEventFilter = (fun reply -> Start (logEventFilter, reply)) |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.Broadcast event = Broadcast event |> agent.Post
     member __.SubscribeAsync onEvent = (fun reply -> Subscribe (onEvent, reply)) |> agent.PostAndAsyncReply
-    member __.Unsubscribe subscriberId = Unsubscribe subscriberId |> agent.Post
+    member __.Unsubscribe subscriptionId = Unsubscribe subscriptionId |> agent.Post
     member __.CurrentLogFilter () = CurrentLogEventFilter |> agent.PostAndReply
     member __.ChangeLogEventFilter logEventFilter = (fun reply -> ChangeLogEventFilter (logEventFilter, reply)) |> agent.PostAndReply
 

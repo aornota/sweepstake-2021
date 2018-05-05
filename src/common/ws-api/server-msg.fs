@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 
+open Aornota.Common.IfDebug
 (*open Aornota.Common.Projection*)
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
@@ -80,6 +81,6 @@ type ServerMsg =
     (*| ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg*)
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
-let otherError errorSource errorText = Error (OtherError (sprintf "%s: %s" errorSource errorText))
-let otherCmdError errorSource errorText = Error (OtherCmdError (OtherError (sprintf "%s: %s" errorSource errorText)))
-let otherQryError errorSource errorText = Error (OtherQryError (OtherError (sprintf "%s: %s" errorSource errorText)))
+let otherError debugSource errorText = Error (OtherError (ifDebugSource debugSource errorText))
+let otherCmdError debugSource errorText = Error (OtherCmdError (OtherError (ifDebugSource debugSource errorText)))
+let otherQryError debugSource errorText = Error (OtherQryError (OtherError (ifDebugSource debugSource errorText)))

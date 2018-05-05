@@ -59,15 +59,16 @@ type AuthorizedUser = {
     UserName : UserName
     UserAuthorizationTokens : UserAuthorizationTokens }*)
 
-// TODO-NMB-HIGH: If = private | Xyz of thing : 'a, cannot access thing from other modules ;( ...
+// TODO-NMB-HIGH: If = private | Xyz of thing : 'a, cannot access thing from other modules ;( - so use above approach?...
+// TODO-NMB-HIGH: But if tokens have private constructors, might need to reinstate #if DEBUG code to "expose" them to default-data.fs...
 type ChangePasswordToken = ChangePasswordToken of onlyUserId : UserId
 type CreateUserToken = CreateUserToken of onlyUserTypes : UserType list
 type ResetPasswordToken = ResetPasswordToken // TODO-NMB-HIGH: of "targets" [not self; UserType list]...
 type ChangeUserTypeToken = ChangeUserTypeToken // TODO-NMB-HIGH: of "targets" [not self; UserType list] * UserType list...
 
-//#if DEBUG
+(*#if DEBUG
 let changePasswordToken userId = ChangePasswordToken userId
 let createUserAnyToken = CreateUserToken [ SuperUser ; Administrator ; Pleb ; PersonaNotGrata ]
 let resetPasswordToken = ResetPasswordToken
 let changeUserTypeToken = ChangeUserTypeToken
-//#endif
+#endif*)

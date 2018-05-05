@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.Server.Agents.Connections
 
+open Aornota.Common.IfDebug
 open Aornota.Common.Json
 
 open Aornota.Server.Common.Helpers
@@ -44,11 +45,6 @@ type private SendFilter =
     | AllAuthExceptConnectionId of connectionId : ConnectionId
     | AllAuthExceptUserId of userId : UserId
     | SameUserSessionExceptConnectionId of userId : UserId * sessionId : SessionId * connectionId : ConnectionId
-
-#if DEBUG
-let private random = Random ()
-let private fakeErrorFrequency = 0.02
-#endif
 
 let private log category = consoleLogger.Log (Connections, category)
 
@@ -164,9 +160,7 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
             | HandleUiMsg _ -> log (Agent (IgnoredInput "HandleUiMsg when awaitingStart")) ; return! awaitingStart () }
         and managingConnections (connections:Connection list) = async {
             let! input = inbox.Receive ()
-#if DEBUG
-            do! Async.Sleep (random.Next (100, 500))
-#endif
+            do! ifDebugSleepAsync 100 500
             match input with
             | Start _ -> log (Agent (IgnoredInput "Start when managingConnections")) ; return! managingConnections []
             | AddConnection (connectionId, ws) ->
@@ -205,13 +199,9 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
                     let userId, alreadySignedIn = match connections |> userIdForUserName userName with | Some userId -> userId, true | None -> UserId.Create (), false
                     let authUser = { UserId = userId ; SessionId = sessionId ; UserName = userName }
                     let result =
-#if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignInApi error -> %A" authUser)
+                        if debugFakeError () then Error (sprintf "Fake SignInApi error -> %A" authUser)
                         else if userName = "ann ewity" then Error ("Username is reserved")
                         else Ok authUser
-#else
-                        Ok authUser
-#endif
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> signIn (connectionId, authUser.UserId, authUser.SessionId, authUser.UserName) else connections
                     let! connections = sendMsg (SignInResultMsg result |> ServerAppMsg) (OnlyConnectionId connectionId) connections
@@ -225,12 +215,7 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
                     // TODO-NMB-MEDIUM: Handle properly, e.g. by verifying jwt (i.e. can decrypt | details match [inc. permissions] | &c.)...
                     let authUser = jwt
                     let alreadySignedIn = connections |> countForUserId jwt.UserId > 0
-                    let result =
-#if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake AutoSignInApi error -> %A" authUser) else Ok authUser
-#else
-                        Ok authUser
-#endif
+                    let result = if debugFakeError () then Error (sprintf "Fake AutoSignInApi error -> %A" authUser) else Ok authUser
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> signIn (connectionId, authUser.UserId, authUser.SessionId, authUser.UserName) else connections
                     let! connections = sendMsg (AutoSignInResultMsg result |> ServerAppMsg) (OnlyConnectionId connectionId) connections
@@ -241,12 +226,7 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
                     return! managingConnections connections
                 | UiAuthMsg (Jwt jwt, SignOutMsgOLD) ->       
                     // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthUserSession for connectionId? (&c.)...
-                    let result =
-#if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (sprintf "Fake SignOutApi error -> %A" jwt) else Ok jwt.SessionId
-#else
-                        Ok jwt.SessionId
-#endif
+                    let result = if debugFakeError () then Error (sprintf "Fake SignOutApi error -> %A" jwt) else Ok jwt.SessionId
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     // Note: Okay to sign out connection-for-connectionId before sending SignOutResultMsg (since will always match OnlyConnectedId, even if signed-out).
                     let connections = if isOk then connections |> signOut (connectionId, jwt.UserId, jwt.SessionId) else connections
@@ -263,12 +243,7 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
                     return! managingConnections connections
                 | UiAuthMsg (Jwt jwt, (SendChatMessageMsgOLD chatMessage)) ->
                     // SNH-NMB: What if connectionId not in connections? What if no AuthUserSession for connectionId? (&c.)...
-                    let result =
-#if DEBUG
-                        if random.NextDouble () < fakeErrorFrequency then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageApi error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
-#else
-                        Ok chatMessage
-#endif
+                    let result = if debugFakeError () then Error (chatMessage.ChatMessageId, (sprintf "Fake SendChatMessageApi error -> %A -> %A" jwt chatMessage)) else Ok chatMessage
                     let isOk = match result with | Ok _ -> true | Error _ -> false
                     let connections = if isOk then connections |> updateLastApi (connectionId, jwt.UserId, jwt.SessionId) else connections
                     let! connections = sendMsg (SendChatMessageResultMsgOLD result |> ServerChatMsg) (OnlyConnectionId connectionId) connections
@@ -286,8 +261,8 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
             match event with
             | SendMsg (_serverMsg, _recipients) -> () // TODO-NMB-HIGH... (serverMsg, recipients) |> self.SendMsg
             | _ -> ())
-        let subscriberId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
-        log (Info (sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriberId))
+        let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
+        log (Info (sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriptionId))
         Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.AddConnection (connectionId, ws) = AddConnection (connectionId, ws) |> agent.Post
     member __.RemoveConnection connectionId = RemoveConnection connectionId |> agent.Post

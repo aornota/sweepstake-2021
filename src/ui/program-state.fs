@@ -1,6 +1,8 @@
 module Aornota.Sweepstake2018.UI.Program.State
 
+open Aornota.Common.IfDebug
 open Aornota.Common.Json
+open Aornota.Common.UnexpectedError
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LocalStorage
@@ -27,17 +29,11 @@ module Brw = Fable.Import.Browser
 
 let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preferences"
 
-#if DEBUG
-let private random = Random ()
-#endif
-
 let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
 
 let private readPreferencesCmd =
     let readPreferences () = async {
-#if DEBUG
-        do! Async.Sleep (random.Next (20, 100))
-#endif
+        do! ifDebugSleepAsync 20 100
         return readJson (Key APP_PREFERENCES_KEY) |> Option.map (fun (Json json) -> json |> ofJson<Preferences>) }
     Cmd.ofAsync readPreferences () (Ok >> ReadingPreferencesInput >> AppInput) (Error >> ReadingPreferencesInput >> AppInput)
 
@@ -60,17 +56,10 @@ let private initializeWsSub dispatch =
     let receiveServerMsg (wsMessage:Brw.MessageEvent) : unit =
         try // note: expect wsMessage.data to be deserializable to ServerMsg
             let serverMsg = unbox wsMessage.data |> ofJson<ServerMsg>
-#if DEBUG
-            if random.NextDouble () < 0.02 then failwith (sprintf "Fake error deserializing %A" serverMsg)
-#endif
+            ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A" serverMsg)
             HandleServerMsg serverMsg |> dispatch
         with exn -> WsError (DeserializeServerMsgError exn.Message) |> dispatch
-    let wsUrl =
-#if DEBUG
-        sprintf "ws://localhost:%i" WS_PORT
-#else       
-        "wss://sweepstake-2018.azurewebsites.net:443" // note: WS_PORT irrelevant (since effectively "internal" to Azure)
-#endif
+    let wsUrl = ifDebug (sprintf "ws://localhost:%i" WS_PORT) "wss://sweepstake-2018.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
     let wsApiUrl = sprintf "%s%s" wsUrl WS_API_PATH
     try
         let ws = Brw.WebSocket.Create wsApiUrl
@@ -84,9 +73,7 @@ let private sendMsg (ws:Brw.WebSocket) (uiMsg:UiMsg) =
     if ws.readyState <> ws.OPEN then WsError (SendMsgWsNotOpenError uiMsg) |> Cmd.ofMsg
     else
         try
-#if DEBUG
-            if random.NextDouble () < 0.02 then failwith "Fake sendMsg error"
-#endif
+            ifDebugFakeErrorFailWith "Fake sendMsg error"
             ws.send (uiMsg |> toJson)
             Cmd.none
         with exn -> WsError (SendMsgOtherError (uiMsg, exn.Message)) |> Cmd.ofMsg
@@ -169,10 +156,10 @@ let private handleWsError wsError state : State * Cmd<Input> =
     | WsOnError wsApiUrl, Connecting _ ->
         let uiState = { state with AppState = ServiceUnavailable }
         addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) (Some "Unable to create a connection to the web server<br><br>Please try again later") uiState
-    | WsOnError wsApiUrl, _ -> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some "An unexpected error has occurred") state
+    | WsOnError wsApiUrl, _ -> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (Some UNEXPECTED_ERROR) state
     | SendMsgWsNotOpenError uiMsg, _ -> addDebugError (sprintf "SendMsgWsNotOpenError -> %A" uiMsg) (Some "The connection to the web server has been closed<br><br>Please try refreshing the page") state
-    | SendMsgOtherError (uiMsg, errorText), _ -> addDebugError (sprintf "SendMsgOtherError -> %s -> %A" errorText uiMsg) (Some "Unable to send a message") state
-    | DeserializeServerMsgError errorText, _ -> addDebugError (sprintf "DeserializeServerMsgError -> %s" errorText) (Some "Unable to process a received message") state
+    | SendMsgOtherError (uiMsg, errorText), _ -> addDebugError (sprintf "SendMsgOtherError -> %s -> %A" errorText uiMsg) (Some (unexpectedErrorWhen "sending a message")) state
+    | DeserializeServerMsgError errorText, _ -> addDebugError (sprintf "DeserializeServerMsgError -> %s" errorText) (Some (unexpectedErrorWhen "processing a received message")) state
 
 let private handleServerUiMsgError serverUiMsgError state =
     match serverUiMsgError with
@@ -216,12 +203,7 @@ let private handleSignInResult result unauthState state =
         state, Cmd.batch [ cmd ; writePreferencesCmd state ; successToastCmd (sprintf "You have signed in as <strong>%s</strong>" authUser.UserName) ]
     | Some signInState, Error errorText ->
         let toastCmd = errorToastCmd (sprintf "Unable to sign in as <strong>%s</strong>" signInState.UserNameText)
-        let errorText =
-#if DEBUG
-            sprintf "SignInResultMsg error -> %s" errorText
-#else
-            "An unexpected error occurred when signing in"
-#endif        
+        let errorText = ifDebug (sprintf "SignInResultMsg error -> %s" errorText) (unexpectedErrorWhen "signing in")
         let signInState = { signInState with SignInStatus = Some (Failed errorText) }
         { state with AppState = Unauth { unauthState with SignInState = Some signInState } }, toastCmd
     | None, _ -> shouldNeverHappen (sprintf "Unexpected SignInResultMsg when SignInState is None -> %A" result) state
@@ -234,12 +216,7 @@ let private handleAutoSignInResult result (jwt:AuthUser) lastPage state =
         state, Cmd.batch [ showPageCmd ; cmd ; successToastCmd (sprintf "You have been automatically signed in as <strong>%s</strong>" authUser.UserName) ]
     | Error errorText ->
         let toastCmd = errorToastCmd (sprintf "Unable to automatically sign in as <strong>%s</strong>" jwt.UserName)
-        let errorText =
-#if DEBUG
-            sprintf "AutoSignInResultMsg error -> %s" errorText
-#else
-            "An unexpected error occurred when automatically signing in"
-#endif        
+        let errorText = ifDebug (sprintf "AutoSignInResultMsg error -> %s" errorText) (unexpectedErrorWhen "automatically signing in")
         let lastPage = match lastPage with | Some (UnauthPage unauthPage) -> Some unauthPage | Some (AuthPage _) | None -> None
         let signInState = defaultSignInState (Some jwt.UserName) (Some (Failed errorText))
         let showPageCmd = match lastPage with | Some lastPage -> ShowUnauthPage lastPage |> UnauthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
@@ -254,12 +231,7 @@ let private handleSignOutResult result authState state =
         let state, cmd = defaultUnauthState currentPage None state
         state, Cmd.batch [ cmd ; writePreferencesCmd state ; toastCmd ]
     | true, Error errorText ->
-        let state, _ =
-#if DEBUG
-            addDebugError (sprintf "SignOutResultMsg error -> %s" errorText) None state
-#else
-            addError "An unexpected error occurred when signing out" state, Cmd.none
-#endif        
+        let state, _ = ifDebug (addDebugError (sprintf "SignOutResultMsg error -> %s" errorText) None state) (addError (unexpectedErrorWhen "signing out") state, Cmd.none)
         let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> Some unauthPage | AuthPage _ -> None
         let state, cmd = defaultUnauthState currentPage None state
         state, Cmd.batch [ cmd ; writePreferencesCmd state ; toastCmd ]

@@ -1,0 +1,41 @@
+module Aornota.Common.IfDebug
+
+open System
+
+#if DEBUG
+let [<Literal>] private FAKE_ERROR_FREQUENCY = 0.02
+#endif
+
+#if DEBUG
+let private random = Random ()
+#endif
+
+let ifDebug (debugThing:'a) (_notDebugThing:'a) =
+#if DEBUG
+    debugThing
+#else
+    _notDebugThing
+#endif
+
+let ifDebugSource debugSource text =
+#if DEBUG
+    sprintf "%s: %s" debugSource text
+#else
+    text
+#endif
+
+let ifDebugSleepAsync min max = async {
+#if DEBUG
+    do! Async.Sleep (random.Next (min, max)) }
+#else
+    return () }
+#endif
+
+let debugFakeError () =
+#if DEBUG
+    random.NextDouble () < FAKE_ERROR_FREQUENCY
+#else
+    false
+#endif
+
+let ifDebugFakeErrorFailWith errorText = if debugFakeError () then failwith errorText

@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.Server.WsMiddleware
 
+open Aornota.Common.IfDebug
 open Aornota.Common.Json
 
 open Aornota.Server.Common.JsonConverter
@@ -18,11 +19,6 @@ open System.Threading.Tasks
 
 open Microsoft.AspNetCore.Http
     
-#if DEBUG
-let private random = Random ()
-let private fakeErrorFrequency = 0.02
-#endif
-
 let private log category = consoleLogger.Log (WsMiddleware, category)
 
 type WsMiddleware (next:RequestDelegate) =
@@ -31,17 +27,13 @@ type WsMiddleware (next:RequestDelegate) =
         try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
             let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
             log (Verbose (sprintf "receiving message for %A" connectionId))
-#if DEBUG
-            if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error receiving message for %A" connectionId)
-#endif
+            ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
             if receiveResult.CloseStatus.HasValue then return Some receiveResult
             else
                 try // note: expect buffer to be deserializable to UiMsg              
                     log (Verbose (sprintf "deserializing message for %A" connectionId))
                     let uiMsg = Json (Encoding.UTF8.GetString buffer) |> ofJson<UiMsg>
-#if DEBUG
-                    if random.NextDouble () < fakeErrorFrequency then failwith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
-#endif
+                    ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
                     log (Verbose (sprintf "message deserialized for %A -> %A" connectionId uiMsg))
                     connections.HandleUiMsg (connectionId, uiMsg)
                     return! receiving (connectionId, ws) receiveFailureCount
@@ -64,9 +56,7 @@ type WsMiddleware (next:RequestDelegate) =
                 match ctx.WebSockets.IsWebSocketRequest with
                 | true ->
                     log (Verbose "new web socket request")
-#if DEBUG
-                    do! Async.Sleep (random.Next (25, 125))
-#endif
+                    do! ifDebugSleepAsync 25 125
                     let! ws = ctx.WebSockets.AcceptWebSocketAsync () |> Async.AwaitTask
                     let connectionId = ConnectionId.Create ()
                     log (Verbose (sprintf "new web socket accepted -> %A" connectionId))

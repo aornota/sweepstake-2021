@@ -41,6 +41,8 @@ type private ConsoleLoggerInput =
     | CurrentLogFilter of reply : AsyncReplyChannel<LogFilter>
     | ChangeLogFilter of logFilter : LogFilter * reply : AsyncReplyChannel<unit>
 
+let [<Literal>] private IGNORED_INPUT = "ignored input"
+
 let private sourceTextAndColour source =
     match source with
     | ConsoleLogger -> "ConsoleLogger", ConsoleColor.White
@@ -76,11 +78,13 @@ let logEverythingExceptVerboseAndTicker : LogFilter = "everything except Verbose
 let logWarningsAndWorseOnly : LogFilter = "only warnings and worse", warningsAndWorseOnly
 let logNothing : LogFilter = "nothing", nothing
 
-let formatIgnoredInput text = sprintf "ignored input -> %s" text
+let formatIgnoredInput text = sprintf "%s -> %s" IGNORED_INPUT text
 let formatSkippedInput text = sprintf "skipped input -> %s" text
 
 let private log sourceFilter source category =
 #if DEBUG
+    let warningColours = ConsoleColor.DarkRed, ConsoleColor.White
+    let dangerColours = ConsoleColor.White, ConsoleColor.Red
     if sourceFilter source category then
         let prefix, text, colour =
             let sourceText, sourceColour = sourceTextAndColour source
@@ -88,17 +92,17 @@ let private log sourceFilter source category =
             match category with
             | Verbose text -> None, formatText text, sourceColour
             | Info text -> None, formatText text, sourceColour
-            | Warning text -> Some (" Warning ", ConsoleColor.Black, ConsoleColor.White), formatText text, ConsoleColor.DarkRed
-            | Danger text -> Some (" Danger ", ConsoleColor.White, ConsoleColor.Red), formatText text, ConsoleColor.Red
-            | Agent (IgnoredInput text) -> None, formatText (formatIgnoredInput text), ConsoleColor.DarkGray
+            | Warning text -> Some (" Warning ", warningColours), formatText text, ConsoleColor.DarkRed
+            | Danger text -> Some (" Danger ", dangerColours), formatText text, ConsoleColor.Red
+            | Agent (IgnoredInput text) -> Some (sprintf " %s " IGNORED_INPUT, warningColours), formatText text, ConsoleColor.DarkGray
             | Agent (SkippedInput text) -> None, formatText (formatSkippedInput text), ConsoleColor.Gray
-            | Agent (Exception exn) -> Some (" CRITICAL ", ConsoleColor.White, ConsoleColor.Red), formatText (sprintf "agent terminated -> %s" exn.Message), ConsoleColor.Red
+            | Agent (Exception exn) -> Some (" CRITICAL ", dangerColours), formatText (sprintf "agent terminated -> %s" exn.Message), ConsoleColor.Red
         // Note: No need for lock since only called from ConsoleLogger agent (though can still get mixed up with ASP.Net Core logging output, i.e. since Console not thread-safe).
         let timestampText = sprintf "%s " ((DateTime.Now.ToUniversalTime ()).ToString ("HH:mm:ss.fff"))
         let previousForegroundColour = Console.ForegroundColor
         Console.Write timestampText
         match prefix with
-        | Some (prefixText, foregroundColour, backgroundColor) ->
+        | Some (prefixText, (foregroundColour, backgroundColor)) ->
             let previousBackgroundColour = Console.BackgroundColor
             Console.ForegroundColor <- foregroundColour
             Console.BackgroundColor <- backgroundColor 

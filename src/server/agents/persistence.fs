@@ -1,7 +1,10 @@
 module Aornota.Sweepstake2018.Server.Agents.Persistence
 
+open Aornota.Common.IfDebug
 open Aornota.Common.Json
+open Aornota.Common.UnexpectedError
 
+open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
 open Aornota.Sweepstake2018.Common.Domain.Core
@@ -40,11 +43,20 @@ let [<Literal>] private EVENTS_EXTENSION = "events"
 
 let private log category = consoleLogger.Log (Persistence, category)
 
+let private logResult resultSource successText result =
+    match result with
+    | Ok ok ->
+        let successText = match successText ok with | Some successText -> sprintf " -> %s" successText | None -> String.Empty
+        log (Info (sprintf "%s Ok%s" resultSource successText))
+    | Error error -> log (Danger (sprintf "%s Error -> %A" resultSource error))
+
 let directory entityType = // note: not private since used by #if DEBUG code elsewhere (e.g. to create default User/s events)
     let entityTypeDir = match entityType with | Users -> "users"
     sprintf "%s/%s" PERSISTENCE_ROOT entityTypeDir
 
 let private encoding = Encoding.UTF8
+
+let private persistenceError debugSource errorText = Error (PersistenceError (ifDebugSource debugSource errorText))
 
 let private readEvents<'a> entityType =
     let eventsExtensionWithDot = sprintf ".%s" EVENTS_EXTENSION
@@ -70,24 +82,30 @@ let private readEvents<'a> entityType =
             |> List.ofArray       
             |> List.choose readFile
             |> Ok
-        with exn -> Error (PersistenceError exn.Message)
+        with exn -> persistenceError (sprintf "Persistence.readEvents<%s>" typeof<'a>.Name) (ifDebug exn.Message UNEXPECTED_ERROR)
     else Ok []
 
 let private writeEvent entityType (entityId:Guid) rvn eventJson auditUserId =
+    let debugSource = "Persistence.writeEvent"
     let entityTypeDir = directory entityType
     let fileName = sprintf "%s/%s.%s" entityTypeDir (entityId.ToString ()) EVENTS_EXTENSION
     let (Json json) = { Rvn = rvn ; TimestampUtc = DateTime.Now.ToUniversalTime () ; EventJson = eventJson ; AuditUserId = auditUserId } |> toJson
     try
         if Directory.Exists entityTypeDir |> not then Directory.CreateDirectory entityTypeDir |> ignore
         if File.Exists fileName then
-            // TODO-NMB-HIGH: Sanity-check, e.g. rvn vs. existing line count?...
-            File.AppendAllLines (fileName, [ json ], encoding)
-            Ok ()
+            let lineCount = (File.ReadAllLines fileName).Length
+            if validateNextRvn (Some (Rvn lineCount)) rvn |> not then
+                persistenceError debugSource (ifDebug (sprintf "File %s contains %i lines (Rvns) when writing %A (%A)" fileName lineCount rvn eventJson) UNEXPECTED_ERROR)
+            else
+                File.AppendAllLines (fileName, [ json ], encoding)
+                Ok ()
         else
-            // TODO-NMB-HIGH: Sanity-check, e.g. rvn should be Rvn 1?...
-            File.WriteAllLines (fileName, [ json ], encoding)
-            Ok ()
-    with exn -> Error (PersistenceError exn.Message)
+            if rvn <> Rvn 1 then
+                persistenceError debugSource (ifDebug (sprintf "No existing file %s when writing %A (%A)" fileName rvn eventJson) UNEXPECTED_ERROR)
+            else
+                File.WriteAllLines (fileName, [ json ], encoding)
+                Ok ()
+    with exn -> persistenceError debugSource (ifDebug exn.Message UNEXPECTED_ERROR)
 
 type Persistence () =
     let agent = MailboxProcessor.Start (fun inbox ->
@@ -119,17 +137,15 @@ type Persistence () =
                 Error (PersistenceError errorText) |> reply.Reply
                 return! notLockedForReading ()
             | WriteUserEvent (auditUserId, rvn, userEvent, reply) ->
-                log (Info (sprintf "WriteUserEvent when notLockedForReading -> %A %A %A" auditUserId rvn userEvent))
+                log (Verbose (sprintf "WriteUserEvent when notLockedForReading -> Audit%A %A %A" auditUserId rvn userEvent))
                 let (UserId userId) = userEvent.UserId
-                let result = // note: log success/failure here (rather than assuming that calling code will do so)
+                let result =
                     match writeEvent Users userId rvn (toJson userEvent) auditUserId with
                     | Ok _ ->
-                        log (Info "WriteUserEvent succeeded")
                         UserEventWritten (rvn, userEvent) |> broadcaster.Broadcast
                         Ok ()
-                    | Error error -> 
-                        log (Danger (sprintf "WriteUserEvent failed -> %A" error))
-                        Error error
+                    | Error error -> Error error
+                logResult "WriteUserEvent" (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn userEvent)) result // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
                 return! notLockedForReading () }
         and lockedForReading readLocks = async {
@@ -160,30 +176,29 @@ type Persistence () =
                         log (Danger (sprintf "ReleaseReadLock when lockedForReading (%i lock/s) -> %A is not valid (not in use)" readLocks.Count readLockId))
                         Some (lockedForReading readLocks)
                 | ReadUsersEvents (readLockId, reply) ->
-                    log (Info (sprintf "ReadUsersEvents (%A) when lockedForReading (%i lock/s)" readLockId readLocks.Count))
-                    let result = // note: log success/failure here (rather than assuming that calling code will do so)
+                    log (Verbose (sprintf "ReadUsersEvents (%A) when lockedForReading (%i lock/s)" readLockId readLocks.Count))
+                    let result =
                         if readLocks.ContainsKey readLockId |> not then // note: should never happen
-                            log (Danger (formatIgnoredInput (sprintf "ReadUsersEvents when lockedForReading (%i lock/s) -> %A is not valid (not in use)" readLocks.Count readLockId)))
-                            Error (PersistenceError (sprintf "ReadUsersEvents failed -> %A is not valid" readLockId))
+                            let errorText = sprintf "ReadUsersEvents when lockedForReading (%i lock/s) -> %A is not valid (not in use)" readLocks.Count readLockId
+                            Error (PersistenceError (ifDebug errorText UNEXPECTED_ERROR))
                         else Ok ()
                         |> Result.bind (fun _ ->
                             match readEvents Users with
                             | Ok usersEvents ->
-                                // TODO-NMB-LOW: Sanity-check/s, e.g. fst [Guid a.k.a. UserId] consistent with snd:snd/s [UserEvent/s.UserId]? snd:fst/s [Rvn/s] contiguous?...
-                                let eventsCount = usersEvents |> List.sumBy (fun (_, events) -> events.Length)
-                                log (Info (sprintf "ReadUsersEvents succeeded -> %i UserEvent/s for %i UserId/s" eventsCount usersEvents.Length))
                                 UsersEventsRead (usersEvents |> List.map (fun (id, userEvents) -> UserId id, userEvents)) |> broadcaster.Broadcast
-                                Ok ()
-                            | Error error ->
-                                log (Danger (sprintf "ReadUsersEvents failed -> %A" error))
-                                Error error)
-                    result |> reply.Reply
+                                Ok usersEvents
+                            | Error error -> Error error)
+                    let successText = (fun usersEvents ->
+                        let eventsCount = usersEvents |> List.sumBy (fun (_, events) -> events |> List.length)
+                        Some (sprintf "%i UserEvent/s for %i UserId/s" eventsCount usersEvents.Length))
+                    logResult "ReadUsersEvents" successText result // note: log success/failure here (rather than assuming that calling code will do so)
+                    result |> discardOk |> reply.Reply
                     Some (lockedForReading readLocks)
                 | WriteUserEvent _ -> log (Agent (SkippedInput (sprintf "WriteUserEvent when lockedForReading (%i lock/s)" readLocks.Count))) ; None) }
         log (Info "agent instantiated -> awaitingStart")
         awaitingStart ())
     do agent.Error.Add (logAgentException Source.Persistence) // note: an unhandled exception will "kill" the agent - but at least we can log the exception
-    // TODO-NMB-MEDIUM: Subscribe to Tick (in Start) - then periodically "auto-backup" everything in PERSISTENCE_ROOT?...
+    // TODO-NMB-MEDIUM: Subscribe to Tick [in Start] - then periodically "auto-backup" everything in PERSISTENCE_ROOT?...
     member __.Start () = Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.AcquireReadLockAsync acquiredBy = (fun reply ->
         let readLockId = Guid.NewGuid () |> ReadLockId
@@ -202,7 +217,7 @@ let readPersistedEvents () =
     (* TEMP-NMB: Try calling WriteUserEventAsync in read lock (should be "skipped" but processed later)...
     log (Info "calling WriteUserEventAsync in read lock")
     let userEvent = UserCreated (UserId (Guid "ffffffff-ffff-ffff-ffff-ffffffffffff"), UserName "skippy", Salt "salt", Hash "hash", Pleb)
-    // Note: Need to call via Async.Start since WriteUserEventAsync will block (i.e. input "skipped") until _disposable disposed.
+    // Note: Need to call via Async.Start since WriteUserEventAsync will block (since input will be "skipped" when in read lock) until _disposable disposed (which will release the read lock).
     async {
         let! _ = (UserId Guid.Empty, Rvn 1, userEvent) |> persistence.WriteUserEventAsync
         return () } |> Async.Start*)

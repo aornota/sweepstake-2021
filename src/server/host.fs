@@ -46,20 +46,16 @@ builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
-log (Info "starting ConsoleLogger agent") // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started)
+log (Info "starting ConsoleLogger agent") // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
 logEverythingExceptVerboseAndTicker |> consoleLogger.Start
 log (Info "starting core agents")
 logAllEventsExceptTick |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
 () |> persistence.Start
 
-// TODO-NMB-HIGH: *Temporarily* remove #if DEBUG restriction to create default persisted events on Azure site (note: also requires similar change in authorization.fs)?...
-#if DEBUG
-log (Info "creating default persisted events (if necessary)")
-createDefaultPersistedEvents |> Async.RunSynchronously
-#endif
+ifDebugCreateInitialPersistedEvents |> Async.RunSynchronously
 
-// Note: If entity agents were started by #if DEBUG code above [and then "reset"], they will just "bypass" subsequent Start calls (i.e. no new subscription) and not block the caller.
+// Note: If entity agents were started by ifDebugCreateInitialPersistedEvents [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
 log (Info "starting entity agents")
 () |> users.Start
 

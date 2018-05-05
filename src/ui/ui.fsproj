@@ -6,6 +6,8 @@
   <ItemGroup>
     <Compile Include="../common/units-of-measure.fs" />
     <Compile Include="../common/literals.fs" />
+    <Compile Include="../common/unexpected-error.fs" />
+    <Compile Include="../common/if-debug.fs" />
     <Compile Include="../common/json.fs" />
     <Compile Include="../common/projection.fs" />
     <Compile Include="../common/domain/core.fs" />
