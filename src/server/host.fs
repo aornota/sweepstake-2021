@@ -54,9 +54,9 @@ logAllEventsExceptTick |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
 () |> persistence.Start
 
-ifDebugCreateInitialPersistedEvents |> Async.RunSynchronously
+createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 
-// Note: If entity agents were started by ifDebugCreateInitialPersistedEvents [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
+// Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
 log (Info "starting entity agents")
 () |> users.Start
 

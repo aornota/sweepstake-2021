@@ -20,14 +20,17 @@ let private logResult shouldSucceed scenario result =
 let private logShouldSucceed scenario result = logResult true scenario result
 let private logShouldFail scenario result = logResult false scenario result
 
-let private createInitialUsersEvents = async {
+let private delete dir =
+    Directory.GetFiles dir |> Array.iter File.Delete
+    Directory.Delete dir
+
+let private createInitialUsersEventsIfNecessary = async {
     let usersDir = directory EntityType.Users
 
-    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists... *)
+    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists...
     if Directory.Exists usersDir then
         log (Info (sprintf "deleting existing User/s events -> %s" usersDir))
-        Directory.GetFiles usersDir |> Array.iter File.Delete
-        Directory.Delete usersDir
+        delete usersDir *)
 
     if Directory.Exists usersDir then log (Info (sprintf "preserving existing User/s events -> %s" usersDir))
     else
@@ -134,15 +137,10 @@ let private createInitialUsersEvents = async {
         () |> users.Reset
     return () }
 
-let ifDebugCreateInitialPersistedEvents = async {
-// TODO-NMB-HIGH: *Temporarily* remove #if DEBUG restriction to create default persisted events on Azure site (note: might also require similar change in authorization.fs)?...
-//#if DEBUG
+let createInitialPersistedEventsIfNecessary = async {
     log (Info "creating initial persisted events (if necessary)")
     let previousLogFilter = () |> consoleLogger.CurrentLogFilter
-    let customLogFilter = "createInitialPersistedEvents", function | Host -> allCategories | Entity _ -> allExceptVerbose | _ -> onlyWarningsAndWorse
+    let customLogFilter = "createInitialPersistedEventsIfNecessary", function | Host -> allCategories | Entity _ -> allExceptVerbose | _ -> onlyWarningsAndWorse
     customLogFilter |> consoleLogger.ChangeLogFilter
-    do! createInitialUsersEvents // note: although this can cause various events to be broadcast (UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these.
+    do! createInitialUsersEventsIfNecessary // note: although this can cause various events to be broadcast (UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these
     previousLogFilter |> consoleLogger.ChangeLogFilter }
-(*#else
-    return () }
-#endif*)
