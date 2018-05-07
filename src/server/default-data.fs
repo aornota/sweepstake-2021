@@ -23,11 +23,11 @@ let private logShouldFail scenario result = logResult false scenario result
 let private createInitialUsersEvents = async {
     let usersDir = directory EntityType.Users
 
-    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists...
+    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists... *)
     if Directory.Exists usersDir then
         log (Info (sprintf "deleting existing User/s events -> %s" usersDir))
         Directory.GetFiles usersDir |> Array.iter File.Delete
-        Directory.Delete usersDir *)
+        Directory.Delete usersDir
 
     if Directory.Exists usersDir then log (Info (sprintf "preserving existing User/s events -> %s" usersDir))
     else
