@@ -9,17 +9,17 @@
   "dependencies": {
     "babel-polyfill": "6.26.0",
     "babel-runtime": "6.26.0",
-    "react": "16.3.0",
-    "react-dom": "16.3.0",
+    "react": "16.3.2",
+    "react-dom": "16.3.2",
     "remotedev": "0.2.7",
     "toastr": "^2.1.4"
   },
   "devDependencies": {
-    "babel-core": "6.26.0",
+    "babel-core": "6.26.3",
     "babel-loader": "7.1.4",
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-env": "1.6.1",
-    "bulma": "^0.6.2",
+    "bulma": "^0.7.1",
     "bulma-pageloader": "^0.1.7",
     "bulma-tooltip": "^0.1.7",
     "concurrently": "3.5.1",
@@ -27,9 +27,9 @@
     "extract-text-webpack-plugin": "^3.0.2",
     "fable-loader": "1.1.6",
     "fable-utils": "1.0.6",
-    "node-sass": "4.8.3",
+    "node-sass": "4.9.0",
     "sass-loader": "^6.0.7",
-    "style-loader": "^0.20.3",
+    "style-loader": "^0.21.0",
     "webpack": "3.11.0",
     "webpack-dev-server": "2.11.1",
     "webpack-sass": "^2.2.1"

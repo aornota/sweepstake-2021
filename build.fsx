@@ -46,9 +46,9 @@ let installUi yarnTool =
     | None -> ()
     runDotnet uiDir "restore"
 
-let build () =
+let build webpackFlags =
     runDotnet serverDir "publish --configuration Release"
-    runDotnet uiDir "fable webpack -- -p"
+    runDotnet uiDir (sprintf "fable webpack -- %s" webpackFlags)
 
 let publish () =
     CreateDir publishDir
@@ -108,8 +108,8 @@ Target "install-ui-azure" (fun _ -> installUi None)
 Target "install-local" DoNothing
 Target "install-azure" DoNothing
 
-Target "build-local" (fun _ -> build ())
-Target "build-azure" (fun _ -> build ())
+Target "build-local" (fun _ -> build "-p --verbose") // note: need something to distinguish between "local" and "azure" production builds in webpack.config.js
+Target "build-azure" (fun _ -> build "-p")
 
 Target "run" (fun _ ->
     let server = async { runDotnet serverDir "watch run" }

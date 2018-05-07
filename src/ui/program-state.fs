@@ -59,7 +59,12 @@ let private initializeWsSub dispatch =
             ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A" serverMsg)
             HandleServerMsg serverMsg |> dispatch
         with exn -> WsError (DeserializeServerMsgError exn.Message) |> dispatch
-    let wsUrl = ifDebug (sprintf "ws://localhost:%i" WS_PORT) "wss://sweepstake-2018.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
+    let wsUrl =
+#if AZURE
+        "wss://sweepstake-2018.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
+#else
+        sprintf "ws://localhost:%i" WS_PORT
+#endif
     let wsApiUrl = sprintf "%s%s" wsUrl WS_API_PATH
     try
         let ws = Brw.WebSocket.Create wsApiUrl

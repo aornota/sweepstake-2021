@@ -29,7 +29,8 @@ var babelOptions = fableUtils.resolveBabelOptions({
 });
 
 var isProduction = process.argv.indexOf("-p") >= 0;
-console.log("Bundling for " + (isProduction ? "production" : "development") + "...");
+var isLocal = process.argv.indexOf("--verbose") >= 0;
+console.log("Bundling for " + (isProduction ? (isLocal ? "production (local)" : "production (azure)") : "development") + "...");
 
 module.exports = {
   devtool: "source-map",
@@ -54,7 +55,7 @@ module.exports = {
           loader: "fable-loader",
           options: {
             babel: babelOptions,
-            define: isProduction ? [ "TICK" ] : [ "DEBUG" , "HMR" /*, "TICK"*/ ]
+            define: (isProduction ? (isLocal ? [ "TICK" ] : [ "AZURE" , "TICK" ]) : [ "DEBUG" , "HMR" /*, "TICK"*/ ])
           }
         }
       },

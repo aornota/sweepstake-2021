@@ -81,8 +81,8 @@ let logNothing : LogFilter = "nothing", nothing
 let formatIgnoredInput text = sprintf "%s -> %s" IGNORED_INPUT text
 let formatSkippedInput text = sprintf "skipped input -> %s" text
 
+// TODO-NMB-HIGH: Should logging to Console be restricted based on #if DEBUG?...
 let private log sourceFilter source category =
-#if DEBUG
     let warningColours = ConsoleColor.DarkRed, ConsoleColor.White
     let dangerColours = ConsoleColor.White, ConsoleColor.Red
     if sourceFilter source category then
@@ -113,9 +113,6 @@ let private log sourceFilter source category =
         Console.ForegroundColor <- colour
         Console.WriteLine text
         Console.ForegroundColor <- previousForegroundColour
-#else
-    ()
-#endif
 
 type ConsoleLogger () =
     let agent = MailboxProcessor.Start (fun inbox ->

@@ -1,5 +1,6 @@
 ﻿module Aornota.Sweepstake2018.Server.Host
 
+open Aornota.Common.IfDebug
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Sweepstake2018.Common.Literals
@@ -47,7 +48,7 @@ builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
 log (Info "starting ConsoleLogger agent") // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
-logEverythingExceptVerboseAndTicker |> consoleLogger.Start
+(ifDebug logEverythingExceptVerboseAndTicker logWarningsAndWorseOnly) |> consoleLogger.Start
 log (Info "starting core agents")
 logAllEventsExceptTick |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
