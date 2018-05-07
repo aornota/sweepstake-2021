@@ -33,7 +33,7 @@
     <Compile Include="ws-middleware.fs" />
     <Compile Include="default-data.fs" />
     <Compile Include="host.fs" />
-    <None Include="web.config" />
+    <None Include="web.config" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
