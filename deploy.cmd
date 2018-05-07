@@ -1,3 +1,3 @@
 D:\home\tools\yarn.cmd install --frozen-lockfile
 
-build.cmd publish-azure
+call build.cmd publish-azure
