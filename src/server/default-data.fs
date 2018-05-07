@@ -136,13 +136,13 @@ let private createInitialUsersEvents = async {
 
 let ifDebugCreateInitialPersistedEvents = async {
 // TODO-NMB-HIGH: *Temporarily* remove #if DEBUG restriction to create default persisted events on Azure site (note: might also require similar change in authorization.fs)?...
-#if DEBUG
+//#if DEBUG
     log (Info "creating initial persisted events (if necessary)")
     let previousLogFilter = () |> consoleLogger.CurrentLogFilter
     let customLogFilter = "createInitialPersistedEvents", function | Host -> allCategories | Entity _ -> allExceptVerbose | _ -> onlyWarningsAndWorse
     customLogFilter |> consoleLogger.ChangeLogFilter
     do! createInitialUsersEvents // note: although this can cause various events to be broadcast (UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these.
     previousLogFilter |> consoleLogger.ChangeLogFilter }
-#else
+(*#else
     return () }
-#endif
+#endif*)
