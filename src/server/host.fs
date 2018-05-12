@@ -25,11 +25,11 @@ open Giraffe
 
 let [<Literal>] private SECONDS_PER_TICK = 1<second/tick>
 
-let private log category = consoleLogger.Log (Host, category)
+let private log category = (Host, category) |> consoleLogger.Log
 
 let private uiPath = // note: relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published)
     let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
-    if Directory.Exists uiPath then uiPath else Path.GetFullPath "ui"
+    if Directory.Exists uiPath then uiPath else "ui" |> Path.GetFullPath
 
 let private configureApp (app:IApplicationBuilder) =
     app.UseStaticFiles () |> ignore
@@ -47,9 +47,9 @@ builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
-log (Info "starting ConsoleLogger agent") // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
-(ifDebug logEverythingExceptVerboseAndTicker logWarningsAndWorseOnly) |> consoleLogger.Start
-log (Info "starting core agents")
+"starting ConsoleLogger agent" |> Info |> log // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
+ifDebug logEverythingExceptVerboseAndTicker logWarningsAndWorseOnly |> consoleLogger.Start
+"starting core agents" |> Info |> log
 logAllEventsExceptTick |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
 () |> persistence.Start
@@ -57,16 +57,16 @@ SECONDS_PER_TICK |> ticker.Start
 createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 
 // Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
-log (Info "starting entity agents")
+"starting entity agents" |> Info |> log
 () |> users.Start
 
-log (Info "reading persisted events")
+"reading persisted events" |> Info |> log
 readPersistedEvents ()
 
-log (Info "starting Connections agent")
+"starting Connections agent" |> Info |> log
 () |> connections.Start
 
-log (Info "ready")
+"ready" |> Info |> log
 
 let private host = builder.Build ()
 

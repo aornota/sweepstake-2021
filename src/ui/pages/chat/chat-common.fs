@@ -9,7 +9,7 @@ open System
 
 type Input =
     | ShowMarkdownSyntaxModal
-    | SendUiAuthMsg of authUser : AuthUser * uiAuthMsg : UiAuthMsg
+    | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
     | ReceiveServerChatMsg of serverChatMsg : ServerChatMsg
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
@@ -41,6 +41,6 @@ type State = {
 let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
 
 let validateChatMessageText (Markdown messageText) =
-    if String.IsNullOrWhiteSpace messageText then Some "Chat message must not be blank"
-    else if messageText.Length > MAX_CHAT_MESSAGE_LENGTH then Some "Chat message is too long"
+    if String.IsNullOrWhiteSpace messageText then "Chat message must not be blank" |> Some
+    else if messageText.Length > MAX_CHAT_MESSAGE_LENGTH then "Chat message is too long" |> Some
     else None

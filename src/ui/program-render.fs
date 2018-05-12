@@ -66,7 +66,9 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
                 para theme paraStatus [ str "Not signed-in" ]
                 para theme paraDefaultSmallest [ link theme (ClickableLink (fun _ -> ShowSignInModal |> UnauthInput |> AppInput |> dispatch)) [ str "Sign in" ] ]
             ]
-        | SignedIn authUser -> [ para theme paraStatus [ str "Signed-in as " ; bold authUser.UserName ] ]
+        | SignedIn authUser ->
+            let (UserName userName) = authUser.UserName
+            [ para theme paraStatus [ str "Signed-in as " ; bold userName ] ]
     let authUserDropDown =
         match headerStatus with
         | SignedIn _ -> 
@@ -81,7 +83,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
     // TEMP-NMB...
     let adminUserDropDown =
         match headerStatus with
-        | SignedIn authUser when authUser.UserName = "neph" ->
+        | SignedIn authUser when authUser.UserName = UserName "neph" ->
             let userAdministration = link theme (ClickableLink (fun _ -> UserAdministration |> AuthInput |> AppInput |> dispatch)) [ str "User administration" ]
             Some (navbarDropDown theme (icon iconAdminSmall) [ navbarDropDownItem theme false [ para theme paraDefaultSmallest [ userAdministration ] ] ])
         | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn | SignedIn _ -> None
@@ -143,7 +145,7 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         match signInState.SignInStatus with
         | Some Pending -> true, Loading, ignore
         | Some (Failed _) | None ->
-            match validateUserNameText signInState.UserNameText, validatePasswordText signInState.PasswordText with
+            match validateUserName [] (UserName signInState.UserNameText), validatePassword (Password signInState.PasswordText) with
             | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore
             | None, None -> false, Clickable (signIn, None), signIn
     let errorText = match signInState.SignInStatus with | Some (Failed errorText) -> Some errorText | Some Pending | None -> None

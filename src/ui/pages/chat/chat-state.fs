@@ -60,7 +60,7 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
                 match chatMessageUi.ChatMessageType with
                 | Sent when chatMessageUi.ChatMessage.ChatMessageId = chatMessageId -> { chatMessageUi with ChatMessageType = SendFailed errorText }
                 | Sent _ | SendFailed _ | Received -> chatMessageUi)
-        { state with ChatMessageUis = chatMessageUis }, errorToastCmd "Unable to send chat message"
+        { state with ChatMessageUis = chatMessageUis }, "Unable to send chat message" |> errorToastCmd
     | OtherUserChatMessageMsgOLD chatMessage ->
         let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Received ; Timestamp = DateTime.Now } :: state.ChatMessageUis
         { state with ChatMessageUis = chatMessageUis ; UnseenCount = state.UnseenCount + match state.IsCurrentPage with | true -> 0 | false -> 1 }, Cmd.none
@@ -78,7 +78,8 @@ let transition input state =
         let newChatMessage = { state.NewChatMessage with MessageText = messageText ; ErrorText = validateChatMessageText messageText }
         { state with NewChatMessage = newChatMessage }, Cmd.none
     | SendChatMessage -> // note: assume no need to validate state.NewChatMessage.MessageText (i.e. because Chat.Render.render will ensure that SendChatMessage can only be dispatched when valid)
-        let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = state.AuthUser.UserName ; MessageText = state.NewChatMessage.MessageText }
+        let (UserName userName) = state.AuthUser.UserName
+        let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = userName ; MessageText = state.NewChatMessage.MessageText }
         let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Sent ; Timestamp = DateTime.Now } :: state.ChatMessageUis
-        let cmd = SendUiAuthMsg (state.AuthUser, SendChatMessageMsgOLD chatMessage) |> Cmd.ofMsg
+        let cmd = chatMessage |> SendChatMessageCmd |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
         { state with ChatMessageUis = chatMessageUis ; NewChatMessage = defaultNewChatMessage () }, cmd

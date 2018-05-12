@@ -29,7 +29,7 @@ type Preferences = {
     UseDefaultTheme : bool
     SessionId : SessionId
     LastPage : Page option
-    Jwt : Jwt option }
+    User : (UserName * Jwt) option }
 
 type StaticModal =
     | ScoringSystem
@@ -130,9 +130,9 @@ type AuthState = {
 
 type AppState =
     | ReadingPreferences
-    | Connecting of jwt : Jwt option * lastPage : Page option
+    | Connecting of user : (UserName * Jwt) option * lastPage : Page option
     | ServiceUnavailable
-    | AutomaticallySigningIn of jwt : Jwt * lastPage : Page option
+    | AutomaticallySigningIn of user : (UserName * Jwt) * lastPage : Page option
     | Unauth of unauthState : UnauthState
     | Auth of authState : AuthState
 
@@ -147,7 +147,3 @@ type State = {
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
-
-// TODO-NMB-HIGH: Retire these (in favour of similar in Aornota.Sweepstake2018.Common.Domain.Core)...
-let validateUserNameText userNameText = if String.IsNullOrWhiteSpace userNameText then Some "Username must not be blank" else None
-let validatePasswordText passwordText = if String.IsNullOrWhiteSpace passwordText then Some "Password must not be blank" else None

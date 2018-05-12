@@ -2,73 +2,56 @@ module Aornota.Sweepstake2018.Server.Authorization
 
 open Aornota.Sweepstake2018.Common.Domain.Core
 
-(* TEMP-NMB: Copied from serf-web-app: server-semantics.fs | authorization.fs...
 open Newtonsoft.Json
-
-type IAuthorizationToken = interface end
 
 type MetaToken = private | MetaToken
 
-type UnauthenticatedUserToken [<JsonConstructor>] private () =
-    new (_:MetaToken) = UnauthenticatedUserToken ()
-    interface IAuthorizationToken
+type ChangePasswordToken [<JsonConstructor>] private (userId) =
+    new (_:MetaToken, userId:UserId) = ChangePasswordToken userId
+    member __.UserId = userId
 
-type DatabaseInfoToken [<JsonConstructor>] private (allowedSqlServers:AllowedSqlServers) =
-    new (_:MetaToken, allowedSqlServers:AllowedSqlServers) = DatabaseInfoToken allowedSqlServers
-    member dit.AllowedSqlServers = allowedSqlServers
-    interface IAuthorizationToken
+type CreateUserToken [<JsonConstructor>] private (userTypes) =
+    new (_:MetaToken, userTypes:UserType list) = CreateUserToken userTypes
+    member __.UserTypes = userTypes
 
-type private ValidatedUserAuthorizationTokens = {
-    UnauthenticatedUserToken : UnauthenticatedUserToken option
-    AuthenticatedUserToken : AuthenticatedUserToken option
-    DatabaseInfoToken : DatabaseInfoToken option
-    BackupsToken : BackupsToken option
-    RestoreBackupToken : RestoreBackupToken option }
+type ResetPasswordToken [<JsonConstructor>] private (userTarget) =
+    new (_:MetaToken, userTarget:UserTarget) = ResetPasswordToken userTarget
+    member __.UserTarget = userTarget
 
-type UserAuthorizationTokens [<JsonConstructor>] private (vuat:ValidatedUserAuthorizationTokens) =
-    new userAuthorizations =
-        UserAuthorizationTokens {
-            UnauthenticatedUserToken = None
-            AuthenticatedUserToken = Some (AuthenticatedUserToken MetaToken)
-            DatabaseInfoToken =
-                match userAuthorizations.DatabaseInfoAuthorization with
-                | DatabaseInfoAuthorization.Authorized allowedSqlServers -> Some (DatabaseInfoToken (MetaToken, allowedSqlServers))
-                | _ -> None
-            BackupsToken =
-                match userAuthorizations.BackupsAuthorization with
-                | Authorized _ -> Some (BackupsToken MetaToken)
-                | _ -> None
-            RestoreBackupToken =
-                match userAuthorizations.BackupsAuthorization with
-                | Authorized (RestoreBackupAuthorization.Authorized allowedSqlServers) -> Some (RestoreBackupToken (MetaToken, allowedSqlServers))
-                | _ -> None }
-    static member ForUnauthenticatedUser =
-        UserAuthorizationTokens {
-            UnauthenticatedUserToken = Some (UnauthenticatedUserToken MetaToken)
-            AuthenticatedUserToken = None
-            DatabaseInfoToken = None
-            BackupsToken = None
-            RestoreBackupToken = None }
-    member uat.UnauthenticatedUserToken = vuat.UnauthenticatedUserToken
-    member uat.AuthenticatedUserToken = vuat.AuthenticatedUserToken
-    member uat.DatabaseInfoToken = vuat.DatabaseInfoToken
-    member uat.BackupsToken = vuat.BackupsToken
-    member uat.RestoreBackupToken = vuat.RestoreBackupToken
+type ChangeUserTypeToken [<JsonConstructor>] private (userTarget, userTypes) =
+    new (_:MetaToken, userTarget:UserTarget, userTypes:UserType list) = ChangeUserTypeToken (userTarget, userTypes)
+    member __.UserTarget = userTarget
+    member __.UserTypes = userTypes
 
-type AuthorizedUser = {
-    UserName : UserName
-    UserAuthorizationTokens : UserAuthorizationTokens }*)
+type private ValidatedUserTokens = {
+    ChangePasswordToken : ChangePasswordToken option
+    CreateUserToken : CreateUserToken option
+    ResetPasswordToken : ResetPasswordToken option
+    ChangeUserTypeToken : ChangeUserTypeToken option }
 
-// TODO-NMB-HIGH: If = private | Xyz of thing : 'a, cannot access thing from other modules ;( - so use above approach?...
-// TODO-NMB-HIGH: But if tokens have private constructors, might need to reinstate #if DEBUG code to "expose" them to default-data.fs...
-type ChangePasswordToken = ChangePasswordToken of onlyUserId : UserId
-type CreateUserToken = CreateUserToken of onlyUserTypes : UserType list
-type ResetPasswordToken = ResetPasswordToken // TODO-NMB-HIGH: of "targets" [not self; UserType list]...
-type ChangeUserTypeToken = ChangeUserTypeToken // TODO-NMB-HIGH: of "targets" [not self; UserType list] * UserType list...
-
-(*#if DEBUG
-let changePasswordToken userId = ChangePasswordToken userId
-let createUserAnyToken = CreateUserToken [ SuperUser ; Administrator ; Pleb ; PersonaNotGrata ]
-let resetPasswordToken = ResetPasswordToken
-let changeUserTypeToken = ChangeUserTypeToken
-#endif*)
+type UserTokens [<JsonConstructor>] private (validatedUserTokens:ValidatedUserTokens) =
+    new (permissions:Permissions) =
+        let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> ChangePasswordToken (MetaToken, userId) |> Some | None -> None
+        let createUserToken, resetPasswordToken, changeUserTypeToken =
+            match permissions.UserAdministrationPermissions with
+            | Some userAdministrationPermissions ->
+                let createUserToken = CreateUserToken (MetaToken, userAdministrationPermissions.CreateUserPermission) |> Some
+                let resetPasswordToken =
+                    match userAdministrationPermissions.ResetPasswordPermission with
+                    | Some userTarget -> ResetPasswordToken (MetaToken, userTarget) |> Some
+                    | None -> None
+                let changeUserTypeToken =
+                    match userAdministrationPermissions.ChangeUserTypePermission with
+                    | Some (userTarget, userTypes) -> ChangeUserTypeToken (MetaToken, userTarget, userTypes) |> Some
+                    | None -> None
+                createUserToken, resetPasswordToken, changeUserTypeToken
+            | None -> None, None, None           
+        UserTokens {
+            ChangePasswordToken = changePasswordToken
+            CreateUserToken = createUserToken
+            ResetPasswordToken = resetPasswordToken
+            ChangeUserTypeToken = changeUserTypeToken }
+    member __.ChangePasswordToken = validatedUserTokens.ChangePasswordToken
+    member __.CreateUserToken = validatedUserTokens.CreateUserToken
+    member __.ResetPasswordToken = validatedUserTokens.ResetPasswordToken
+    member __.ChangeUserTypeToken = validatedUserTokens.ChangeUserTypeToken

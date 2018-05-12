@@ -17,7 +17,7 @@ type Event =
     | Tick of ticks : int<tick> * secondsPerTick : int<second/tick>
     | SendMsg of serverMsg : ServerMsg * recipients : Recipients
     | UsersEventsRead of usersEvents : (UserId * (Rvn * UserEvent) list) list
-    | UsersRead of users : (UserId * UserName * UserType) list
+    | UsersRead of users : (UserId * Rvn * UserName * UserType) list
     | UserEventWritten of rvn : Rvn * userEvent : UserEvent
     | UserSignedIn of userId : UserId
     | UserApi of userId : UserId

@@ -18,7 +18,7 @@ open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open System
 
-let private renderChatMessageUi theme authUserName dispatch chatMessageUi =
+let private renderChatMessageUi theme (UserName authUserName) dispatch chatMessageUi =
     // TODO-NMB-MEDIUM: Finesse text colours depending on whether Sent | SendFailed | Received [self] | Received [other]?...
     let renderChildren userName messageText (timestamp:DateTime) unconfirmed errorText = [
         let rightItem =
