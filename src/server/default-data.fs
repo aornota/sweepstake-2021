@@ -27,10 +27,10 @@ let private delete dir =
 let private createInitialUsersEventsIfNecessary = async {
     let usersDir = directory EntityType.Users
 
-    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists... *)
+    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists...
     if Directory.Exists usersDir then
         sprintf "deleting existing User/s events -> %s" usersDir |> Info |> log
-        delete usersDir
+        delete usersDir *)
 
     if Directory.Exists usersDir then sprintf "preserving existing User/s events -> %s" usersDir |> Info |> log
     else
@@ -41,18 +41,18 @@ let private createInitialUsersEventsIfNecessary = async {
         "sending dummy OnUsersEventsRead to Users agent" |> Info |> log
         [] |> users.OnUsersEventsRead
         // Note: Only create initial SuperUser.
-        let nephId, neph, dummyPassword, nephType = UserId Guid.Empty, UserName "neph", Password "password", SuperUser
-        let nephTokens, auditUserId = permissions nephId nephType |> UserTokens, nephId
-        let! result = (nephTokens.CreateUserToken, auditUserId, nephId, neph, dummyPassword, nephType) |> users.HandleCreateUserCmdAsync
+        let nephId, neph, dummyPassword, nephType = Guid.Empty |> UserId, UserName "neph", Password "drowssap", SuperUser
+        let nephTokens = permissions nephId nephType |> UserTokens
+        let! result = (nephTokens.CreateUserToken, nephId, nephId, neph, dummyPassword, nephType) |> users.HandleCreateUserCmdAsync
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" neph)
             
         (* TEMP-NMB: Test various scenarios... *)
-        let sessionId, initialRvn, newDummyPassword = SessionId.Create (), Rvn 1, Password "drowssap"
-        let rosieId, rosie = UserId (Guid "10000000-0000-0000-0000-000000000000"), UserName "rosie"
-        let hughId, hugh = UserId (Guid "11000000-0000-0000-0000-000000000000"), UserName "hugh"
-        let willId, will = UserId (Guid "20000000-0000-0000-0000-000000000000"), UserName "will"
-        let personaNonGrataId, personaNonGrata = UserId (Guid "f0000000-0000-0000-0000-000000000000"), UserName "persona non grata"
-        let unknownUserId, unknownUser = UserId (Guid.NewGuid ()), UserName "unknown"
+        let sessionId, initialRvn, newDummyPassword = SessionId.Create (), Rvn 1, Password "password"
+        let rosieId, rosie = Guid "10000000-0000-0000-0000-000000000000" |> UserId, UserName "rosie"
+        let hughId, hugh = Guid "11000000-0000-0000-0000-000000000000" |> UserId, UserName "hugh"
+        let willId, will = Guid "20000000-0000-0000-0000-000000000000" |> UserId, UserName "will"
+        let personaNonGrataId, personaNonGrata = Guid "f0000000-0000-0000-0000-000000000000" |> UserId, UserName "persona non grata"
+        let unknownUserId, unknownUser = Guid.NewGuid () |> UserId, UserName "unknown"
         let rosieTokens = permissions rosieId Administrator |> UserTokens
         let personaNonGrataTokens = permissions personaNonGrataId PersonaNonGrata |> UserTokens
         let unknownUserTokens = permissions unknownUserId Pleb |> UserTokens
@@ -76,70 +76,77 @@ let private createInitialUsersEventsIfNecessary = async {
         let! result = (sessionId, personaNonGrata, dummyPassword) |> users.HandleSignInCmdAsync
         result |> logShouldFail "HandleSignInCmdAsync (PersonaNonGrata)"
         // Test HandleChangePasswordCmdAsync:
-        let! result = (nephTokens.ChangePasswordToken, auditUserId, initialRvn, newDummyPassword) |> users.HandleChangePasswordCmdAsync
+        let! result = (nephTokens.ChangePasswordToken, nephId, initialRvn, newDummyPassword) |> users.HandleChangePasswordCmdAsync
         result |> logShouldSucceed (sprintf "HandleChangePasswordCmdAsync (%A)" neph)
-        let! result = (rosieTokens.ChangePasswordToken, auditUserId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
+        let! result = (rosieTokens.ChangePasswordToken, hughId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid ChangePasswordToken: userId differs from auditUserId)"
-        let! result = (personaNonGrataTokens.ChangePasswordToken, auditUserId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
+        let! result = (personaNonGrataTokens.ChangePasswordToken, personaNonGrataId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (no ChangePasswordToken)"
         let! result = (unknownUserTokens.ChangePasswordToken, unknownUserId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (unknown auditUserId)"
-        let! result = (nephTokens.ChangePasswordToken, auditUserId, Rvn 2, Password String.Empty) |> users.HandleChangePasswordCmdAsync
+        let! result = (nephTokens.ChangePasswordToken, nephId, Rvn 2, Password String.Empty) |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid password: blank)"
-        let! result = (nephTokens.ChangePasswordToken, auditUserId, Rvn 2, Password "1234") |> users.HandleChangePasswordCmdAsync
+        let! result = (nephTokens.ChangePasswordToken, nephId, Rvn 2, Password "1234") |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid password: too short)"
-        let! result = (nephTokens.ChangePasswordToken, auditUserId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
+        let! result = (nephTokens.ChangePasswordToken, nephId, Rvn 2, newDummyPassword) |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid password: same as current)"
-        let! result = (nephTokens.ChangePasswordToken, auditUserId, Rvn 3, Password "pa$$word") |> users.HandleChangePasswordCmdAsync
+        let! result = (nephTokens.ChangePasswordToken, nephId, Rvn 3, Password "pa$$word") |> users.HandleChangePasswordCmdAsync
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid current Rvn)"
         // Test HandleCreateUserCmdAsync:
-        let! result = (nephTokens.CreateUserToken, auditUserId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" rosie)
-        let! result = (nephTokens.CreateUserToken, auditUserId, hughId, hugh, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync
+        let! result = (rosieTokens.CreateUserToken, rosieId, hughId, hugh, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" hugh)
-        let! result = (nephTokens.CreateUserToken, auditUserId, willId, will, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync
+        let! result = (rosieTokens.CreateUserToken, rosieId, willId, will, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" will)
-        let! result = (rosieTokens.CreateUserToken, auditUserId, unknownUserId, unknownUser, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (rosieTokens.CreateUserToken, rosieId, unknownUserId, unknownUser, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (invalid CreateUserToken: UserType not allowed)"
-        let! result = (personaNonGrataTokens.CreateUserToken, auditUserId, unknownUserId, unknownUser, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (personaNonGrataTokens.CreateUserToken, personaNonGrataId, unknownUserId, unknownUser, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (no CreateUserToken)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, unknownUserId, UserName String.Empty, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, unknownUserId, UserName String.Empty, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (invalid userName: blank)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, unknownUserId, UserName "bob", dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, unknownUserId, UserName "bob", dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (invalid userName: too short)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, unknownUserId, unknownUser, Password String.Empty, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, unknownUserId, unknownUser, Password String.Empty, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (invalid password: blank)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, unknownUserId, unknownUser, Password "1234", Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, unknownUserId, unknownUser, Password "1234", Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (invalid password: too short)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (userId already exists)"
-        let! result = (nephTokens.CreateUserToken, auditUserId, unknownUserId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
+        let! result = (nephTokens.CreateUserToken, nephId, unknownUserId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync
         result |> logShouldFail "HandleCreateUserCmdAsync (userName already exists)"
         // Test HandleResetPasswordCmdAsync:
-        let! result = (nephTokens.ResetPasswordToken, auditUserId, willId, initialRvn, newDummyPassword) |> users.HandleResetPasswordCmdAsync
+        let! result = (nephTokens.ResetPasswordToken, nephId, rosieId, initialRvn, newDummyPassword) |> users.HandleResetPasswordCmdAsync
         result |> logShouldSucceed (sprintf "HandleResetPasswordCmdAsync (%A)" will)
-
-        // TODO-NMB-HIGH: Invalid ResetPasswordToken...
-
-        let! result = (nephTokens.ResetPasswordToken, auditUserId, unknownUserId, initialRvn, newDummyPassword) |> users.HandleResetPasswordCmdAsync
+        let! result = (rosieTokens.ResetPasswordToken, rosieId, willId, initialRvn, newDummyPassword) |> users.HandleResetPasswordCmdAsync
+        result |> logShouldSucceed (sprintf "HandleResetPasswordCmdAsync (%A)" will)
+        let! result = (nephTokens.ResetPasswordToken, nephId, nephId, Rvn 2, dummyPassword) |> users.HandleResetPasswordCmdAsync
+        result |> logShouldFail "HandleResetPasswordCmdAsync (invalid ResetPasswordToken: UserTarget is NotSelf)"
+        let! result = (rosieTokens.ResetPasswordToken, rosieId, nephId, Rvn 2, dummyPassword) |> users.HandleResetPasswordCmdAsync
+        result |> logShouldFail "HandleResetPasswordCmdAsync (invalid ResetPasswordToken: UserType for UserTarget not allowed)"
+        let! result = (personaNonGrataTokens.ResetPasswordToken, personaNonGrataId, nephId, Rvn 2, dummyPassword) |> users.HandleResetPasswordCmdAsync
+        result |> logShouldFail "HandleResetPasswordCmdAsync (no ResetPasswordToken)"
+        let! result = (nephTokens.ResetPasswordToken, nephId, unknownUserId, initialRvn, newDummyPassword) |> users.HandleResetPasswordCmdAsync
         result |> logShouldFail "HandleResetPasswordCmdAsync (unknown userId)"
-        let! result = (nephTokens.ResetPasswordToken, auditUserId, willId, Rvn 2, Password String.Empty) |> users.HandleResetPasswordCmdAsync
+        let! result = (nephTokens.ResetPasswordToken, nephId, willId, Rvn 2, Password String.Empty) |> users.HandleResetPasswordCmdAsync
         result |> logShouldFail "HandleResetPasswordCmdAsync (invalid password; blank)"
-        let! result = (nephTokens.ResetPasswordToken, auditUserId, willId, Rvn 2, Password "1234") |> users.HandleResetPasswordCmdAsync
+        let! result = (nephTokens.ResetPasswordToken, nephId, willId, Rvn 2, Password "1234") |> users.HandleResetPasswordCmdAsync
         result |> logShouldFail "HandleResetPasswordCmdAsync (invalid password; too short)"
-        let! result = (nephTokens.ResetPasswordToken, auditUserId, willId, Rvn 0, Password "pa$$word") |> users.HandleResetPasswordCmdAsync
+        let! result = (nephTokens.ResetPasswordToken, nephId, willId, Rvn 0, Password "pa$$word") |> users.HandleResetPasswordCmdAsync
         result |> logShouldFail "HandleResetPasswordCmdAsync (invalid current Rvn)"
         // Test HandleChangeUserTypeCmdAsync:
-        let! result = (nephTokens.ChangeUserTypeToken, auditUserId, hughId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync
+        let! result = (nephTokens.ChangeUserTypeToken, nephId, hughId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync
         result |> logShouldSucceed (sprintf "HandleChangeUserTypeCmdAsync (%A %A)" hugh Administrator)
-
-        // TODO-NMB-HIGH: Invalid ChangeUserTypeToken...
-
-        let! result = (nephTokens.ChangeUserTypeToken, auditUserId, unknownUserId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync
+        let! result = (nephTokens.ChangeUserTypeToken, nephId, nephId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync
+        result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid ChangeUserTypeToken: UserTarget is NotSelf)"
+        // Note: Cannot test "UserType for UserTarget not allowed" or "UserType not allowed" as only SuperUsers have ChangeUserTypePermission - and they have it for all UserTypes.
+        let! result = (rosieTokens.ChangeUserTypeToken, rosieId, nephId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync
+        result |> logShouldFail "HandleChangeUserTypeCmdAsync (no ChangeUserTypeToken)"
+        let! result = (nephTokens.ChangeUserTypeToken, nephId, unknownUserId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (unknown userId)"
-        let! result = (nephTokens.ChangeUserTypeToken, auditUserId, hughId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync
+        let! result = (nephTokens.ChangeUserTypeToken, nephId, hughId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid userType: same as current)"
-        let! result = (nephTokens.ChangeUserTypeToken, auditUserId, hughId, initialRvn, SuperUser) |> users.HandleChangeUserTypeCmdAsync
+        let! result = (nephTokens.ChangeUserTypeToken, nephId, hughId, initialRvn, SuperUser) |> users.HandleChangeUserTypeCmdAsync
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid current Rvn)"
 
         // Note: Reset Users agent [to pendingOnUsersEventsRead] so that it handles subsequent UsersEventsRead event appropriately (i.e. from readPersistedEvents).

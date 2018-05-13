@@ -31,27 +31,27 @@ let applyDelta projection delta =
     let checkDeltaRvn lastRvn deltaRvn =
         let ProjectionRvn lastRvn', ProjectionRvn deltaRvn' = lastRvn, deltaRvn
         if deltaRvn' = lastRvn' + 1 then Ok () else Error (MissedDelta (lastRvn, deltaRvn))
-    let addItems projection items =
+    let addItems items projection =
         match items |> List.filter (getItemId >> projection.Items.ContainsKey) with
         | h :: t -> Error (AddedItemsAlreadyKnown (h :: t))
         | [] ->
             items |> List.iter (fun item -> projection.Items.Add (getItemId item, item))
-            Ok projection
-    let modifyItems projection items =
+            projection |> Ok
+    let modifyItems items projection =
         match items |> List.filter (getItemId >> projection.Items.ContainsKey >> not) with
         | h :: t -> Error (ModifiedItemsUnknown (h :: t))
         | [] ->
             items |> List.iter (fun item -> projection.Items.Item (getItemId item) <- item)
-            Ok projection
-    let removeItemIds (projection:Projection<'a>) (itemIds:IItemId<'a> list) =
+            projection |> Ok
+    let removeItemIds (itemIds:IItemId<'a> list) (projection:Projection<'a>) =
         match itemIds |> List.filter (fun itemId -> projection.Items.ContainsKey itemId.ItemId |> not) with
         | h :: t -> Error (RemovedItemIdsUnknown (h :: t))
         | [] ->
             itemIds |> List.iter (fun itemId -> projection.Items.Remove itemId.ItemId |> ignore)
-            Ok projection
+            projection |> Ok
     checkDeltaRvn projection.LastRvn delta.DeltaRvn
-    |> Result.bind (fun _ -> addItems projection delta.AddedItems)
-    |> Result.bind (fun projection -> modifyItems projection delta.ModifiedItems)
-    |> Result.bind (fun projection -> removeItemIds projection delta.RemovedItemIds)
+    |> Result.bind (fun _ -> projection |> addItems delta.AddedItems)
+    |> Result.bind (fun projection -> projection |> modifyItems delta.ModifiedItems)
+    |> Result.bind (fun projection -> projection |> removeItemIds delta.RemovedItemIds)
 
 // TODO-NMB-HIGH... let makeDelta previous current = ...

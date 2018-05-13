@@ -7,7 +7,7 @@ open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 
 type private ChatInput = | ToDo
 
-let private log category = consoleLogger.Log (Projection Chat, category)
+let private log category = (Projection Chat, category) |> consoleLogger.Log
 
 // TODO-NMB-HIGH: Chat agent | broadcaster.Subscribe (UsersRead | UserEventWritten [only UserCreated and UserTypeChanged?] | UserSignedIn | UserApi | UserSignedOut | Disconnected |...) | ...
 

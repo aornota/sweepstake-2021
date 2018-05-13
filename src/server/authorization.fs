@@ -2,23 +2,21 @@ module Aornota.Sweepstake2018.Server.Authorization
 
 open Aornota.Sweepstake2018.Common.Domain.Core
 
-open Newtonsoft.Json
-
 type MetaToken = private | MetaToken
 
-type ChangePasswordToken [<JsonConstructor>] private (userId) =
+type ChangePasswordToken private (userId) =
     new (_:MetaToken, userId:UserId) = ChangePasswordToken userId
     member __.UserId = userId
 
-type CreateUserToken [<JsonConstructor>] private (userTypes) =
+type CreateUserToken private (userTypes) =
     new (_:MetaToken, userTypes:UserType list) = CreateUserToken userTypes
     member __.UserTypes = userTypes
 
-type ResetPasswordToken [<JsonConstructor>] private (userTarget) =
+type ResetPasswordToken private (userTarget) =
     new (_:MetaToken, userTarget:UserTarget) = ResetPasswordToken userTarget
     member __.UserTarget = userTarget
 
-type ChangeUserTypeToken [<JsonConstructor>] private (userTarget, userTypes) =
+type ChangeUserTypeToken private (userTarget, userTypes) =
     new (_:MetaToken, userTarget:UserTarget, userTypes:UserType list) = ChangeUserTypeToken (userTarget, userTypes)
     member __.UserTarget = userTarget
     member __.UserTypes = userTypes
@@ -29,20 +27,20 @@ type private ValidatedUserTokens = {
     ResetPasswordToken : ResetPasswordToken option
     ChangeUserTypeToken : ChangeUserTypeToken option }
 
-type UserTokens [<JsonConstructor>] private (validatedUserTokens:ValidatedUserTokens) =
+type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
-        let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> ChangePasswordToken (MetaToken, userId) |> Some | None -> None
+        let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> (MetaToken, userId) |> ChangePasswordToken |> Some | None -> None
         let createUserToken, resetPasswordToken, changeUserTypeToken =
             match permissions.UserAdministrationPermissions with
             | Some userAdministrationPermissions ->
-                let createUserToken = CreateUserToken (MetaToken, userAdministrationPermissions.CreateUserPermission) |> Some
+                let createUserToken = (MetaToken, userAdministrationPermissions.CreateUserPermission) |> CreateUserToken |> Some
                 let resetPasswordToken =
                     match userAdministrationPermissions.ResetPasswordPermission with
-                    | Some userTarget -> ResetPasswordToken (MetaToken, userTarget) |> Some
+                    | Some userTarget -> (MetaToken, userTarget) |> ResetPasswordToken |> Some
                     | None -> None
                 let changeUserTypeToken =
                     match userAdministrationPermissions.ChangeUserTypePermission with
-                    | Some (userTarget, userTypes) -> ChangeUserTypeToken (MetaToken, userTarget, userTypes) |> Some
+                    | Some (userTarget, userTypes) -> (MetaToken, userTarget, userTypes) |> ChangeUserTypeToken |> Some
                     | None -> None
                 createUserToken, resetPasswordToken, changeUserTypeToken
             | None -> None, None, None           
@@ -51,7 +49,7 @@ type UserTokens [<JsonConstructor>] private (validatedUserTokens:ValidatedUserTo
             CreateUserToken = createUserToken
             ResetPasswordToken = resetPasswordToken
             ChangeUserTypeToken = changeUserTypeToken }
-    member __.ChangePasswordToken = validatedUserTokens.ChangePasswordToken
-    member __.CreateUserToken = validatedUserTokens.CreateUserToken
-    member __.ResetPasswordToken = validatedUserTokens.ResetPasswordToken
-    member __.ChangeUserTypeToken = validatedUserTokens.ChangeUserTypeToken
+    member __.ChangePasswordToken = vut.ChangePasswordToken
+    member __.CreateUserToken = vut.CreateUserToken
+    member __.ResetPasswordToken = vut.ResetPasswordToken
+    member __.ChangeUserTypeToken = vut.ChangeUserTypeToken

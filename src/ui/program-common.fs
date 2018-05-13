@@ -14,12 +14,13 @@ open System
 module Brw = Fable.Import.Browser
 
 type UnauthPage =
-    | News
-    | Squads
+    | NewsPage
+    | SquadsPage
 
 type AuthPage =
-    | Drafts
+    | DraftsPage
     | ChatPage
+    | UserAdministrationPage
 
 type Page =
     | UnauthPage of unauthPage : UnauthPage
@@ -61,17 +62,24 @@ type UnauthInput =
 type AuthPageInput =
     | DraftsInput
     | ChatInput of chatInput : Chat.Common.Input
+    | UserAdministrationInput
 
 type PageInput =
     | UPageInput of unauthPageInput : UnauthPageInput
     | APageInput of authPageInput : AuthPageInput
 
+type ChangePasswordInput =
+    | NewPasswordTextChanged of newPasswordText : string
+    | ConfirmPasswordTextChanged of confirmPasswordText : string
+    | ChangePassword
+    | CancelChangePassword
+
 type AuthInput =
     | ShowPage of page : Page
     | PageInput of pageInput : PageInput
-    | ChangePassword
+    | ShowChangePasswordModal
+    | ChangePasswordInput of changePasswordInput : ChangePasswordInput
     | SignOut
-    | UserAdministration
 
 type AppInput =
     | ReadingPreferencesInput of result : Result<Preferences option, exn>
@@ -95,8 +103,8 @@ type Input =
     | AppInput of appInput : AppInput
 
 type SignInStatus =
-    | Pending
-    | Failed of errorText : string
+    | SignInPending
+    | SignInFailed of errorText : string
 
 type SignInState = {
     UserNameKey : Guid
@@ -117,15 +125,31 @@ type UnauthState = {
     UnauthPageStates : UnauthPageStates
     SignInState : SignInState option }
 
+type ChangePasswordStatus =
+    | ChangePasswordPending
+    | ChangePasswordFailed of errorText : string
+
+type ChangePasswordState = {
+    MustChangePasswordReason : MustChangePasswordReason option
+    NewPasswordKey : Guid
+    NewPasswordText : string
+    NewPasswordErrorText : string option
+    ConfirmPasswordKey : Guid
+    ConfirmPasswordText : string
+    ConfirmPasswordErrorText : string option
+    ChangePasswordStatus : ChangePasswordStatus option }
+
 type AuthPageStates = {
     DraftsState : ToDo
-    ChatState : Chat.Common.State option }
+    ChatState : Chat.Common.State option
+    UserAdministrationState : ToDo }
 
 type AuthState = {
     AuthUser : AuthUser
     CurrentPage : Page
     UnauthPageStates : UnauthPageStates
     AuthPageStates : AuthPageStates
+    ChangePasswordState : ChangePasswordState option
     SigningOut : bool }
 
 type AppState =
@@ -147,3 +171,7 @@ type State = {
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
+
+let validateConfirmPassword (Password newPassword) (Password confirmPassword) =
+    if newPassword <> confirmPassword then "Confirmation password must match new password" |> Some
+    else validatePassword (Password confirmPassword)

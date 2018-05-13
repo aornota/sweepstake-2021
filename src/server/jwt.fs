@@ -5,7 +5,6 @@ open Aornota.Common.Json
 open Aornota.Server.Common.JsonConverter
 
 open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Server.Authorization
 
 open System.IO
 open System.Security.Cryptography
@@ -26,16 +25,13 @@ let private jwtKey =
 let private encode (Json json) = JWT.Encode (json, jwtKey, JweAlgorithm.A256KW, JweEncryption.A256CBC_HS512)
 let private decode text = JWT.Decode (text, jwtKey, JweAlgorithm.A256KW, JweEncryption.A256CBC_HS512) |> Json
 
-let private authUser userId userName userType permissions jwt = { UserId = userId ; UserName = userName ; UserType = userType ; Permissions = permissions ; Jwt = jwt }
-
-let toAuthUser (sessionId:SessionId, userId, userName, userType, permissions, userTokens:UserTokens) =
+let toJwt (sessionId:SessionId, userId:UserId, userName:UserName, permissions:Permissions) =
     try
-        let jwt = (sessionId, userId, userName, userType, permissions, userTokens) |> toJson |> encode |> Jwt
-        authUser userId userName userType permissions jwt |> Ok
+        (sessionId, userId, userName, permissions) |> toJson |> encode |> Jwt |> Ok
     with | exn -> exn.Message |> Error
 
 let fromJwt (Jwt jwt) =
     try
-        let sessionId, userId, userName, userType, permissions, userTokens = jwt |> decode |> ofJson<SessionId * UserId * UserName * UserType * Permissions * UserTokens>
-        (sessionId, authUser userId userName userType permissions (Jwt jwt), userTokens) |> Ok
+        let sessionId, userId, userName, permissions = jwt |> decode |> ofJson<SessionId * UserId * UserName * Permissions>
+        (sessionId, userId, userName, permissions) |> Ok
     with | exn -> exn.Message |> Error

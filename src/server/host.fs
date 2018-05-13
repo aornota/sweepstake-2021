@@ -66,6 +66,9 @@ readPersistedEvents ()
 "starting Connections agent" |> Info |> log
 () |> connections.Start
 
+(* TEMP-NMB...
+("custom", function | Host | Entity Entity.Users | Connections -> allCategories | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+
 "ready" |> Info |> log
 
 let private host = builder.Build ()

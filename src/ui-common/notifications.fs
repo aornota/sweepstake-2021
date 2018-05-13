@@ -28,7 +28,7 @@ type NotificationMessage = {
 let private render theme source dispatch notificationMessage =
     let notificationData = match notificationMessage.Type with | Debug -> notificationDark | Info -> notificationInfo | Warning -> notificationWarning | Danger -> notificationDanger
     let notificationData =
-        if notificationMessage.Dismissable then { notificationData with OnDismissNotification = Some (fun _ -> notificationMessage.NotificationId |> dispatch) }
+        if notificationMessage.Dismissable then { notificationData with OnDismissNotification = (fun _ -> notificationMessage.NotificationId |> dispatch) |> Some }
         else notificationData
     let sourceAndTypeText = sprintf "%s | %s" source (match notificationMessage.Type with | Debug -> "DEBUG" | Info -> "INFORMATION" | Warning -> "WARNING" | Danger -> "ERROR")
     let timestampText =

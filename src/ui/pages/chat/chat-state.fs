@@ -69,7 +69,7 @@ let transition input state =
     match input with
     | ShowMarkdownSyntaxModal -> state, Cmd.none // note: expected to be handled by Program.State.transition
     | SendUiAuthMsg _ -> state, Cmd.none // note: expected to be handled by Program.State.transition
-    | ReceiveServerChatMsg serverChatMsg -> handleServerChatMsg serverChatMsg state
+    | ReceiveServerChatMsg serverChatMsg -> state |> handleServerChatMsg serverChatMsg
     | ToggleChatIsCurrentPage isCurrentPage -> { state with IsCurrentPage = isCurrentPage ; UnseenCount = if isCurrentPage then 0 else state.UnseenCount }, Cmd.none
     | DismissChatMessage chatMessageId -> // note: silently ignore unknown chatMessageId
         let chatMessageUis = state.ChatMessageUis |> List.filter (fun chatMessageUi -> chatMessageUi.ChatMessage.ChatMessageId <> chatMessageId)

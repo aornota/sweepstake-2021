@@ -36,7 +36,7 @@ let private ticker dispatch =
         dispatch Tick
     , int millisecondsPerTick) |> ignore
 
-let private tickSubscription (_:State) = Cmd.ofSub ticker
+let private tickSubscription (_:State) = ticker |> Cmd.ofSub
 #endif
 
 Marked.Globals.marked.setOptions (unbox (createObj [ "sanitize" ==> true ])) |> ignore // note: "sanitize" ensures Html rendered as text

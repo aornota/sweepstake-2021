@@ -19,32 +19,34 @@ open System.Threading.Tasks
 
 open Microsoft.AspNetCore.Http
     
-let private log category = consoleLogger.Log (WsMiddleware, category)
+let private log category = (WsMiddleware, category) |> consoleLogger.Log
+
+let private encoding = Encoding.UTF8
 
 type WsMiddleware (next:RequestDelegate) =
     let rec receiving (connectionId, ws:WebSocket) receiveFailureCount = async {
         let buffer : byte [] = Array.zeroCreate 4096
         try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
             let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
-            log (Verbose (sprintf "receiving message for %A" connectionId))
+            sprintf "receiving message for %A" connectionId |> Verbose |> log
             ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
-            if receiveResult.CloseStatus.HasValue then return Some receiveResult
+            if receiveResult.CloseStatus.HasValue then return receiveResult |> Some
             else
                 try // note: expect buffer to be deserializable to UiMsg              
-                    log (Verbose (sprintf "deserializing message for %A" connectionId))
-                    let uiMsg = Json (Encoding.UTF8.GetString buffer) |> ofJson<UiMsg>
+                    sprintf "deserializing message for %A" connectionId |> Verbose |> log
+                    let uiMsg = buffer |> encoding.GetString |> Json |> ofJson<UiMsg>
                     ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
-                    log (Verbose (sprintf "message deserialized for %A -> %A" connectionId uiMsg))
-                    connections.HandleUiMsg (connectionId, uiMsg)
+                    sprintf "message deserialized for %A -> %A" connectionId uiMsg |> Verbose |> log
+                    (connectionId, uiMsg) |> connections.HandleUiMsg
                     return! receiving (connectionId, ws) receiveFailureCount
                 with exn ->
-                    log (Danger (sprintf "deserializing message failed for %A -> %A" connectionId exn.Message))
-                    connections.OnDeserializeUiMsgError (connectionId, exn)
+                    sprintf "deserializing message failed for %A -> %A" connectionId exn.Message |> Danger |> log
+                    (connectionId, exn) |> connections.OnDeserializeUiMsgError
                     return! receiving (connectionId, ws) receiveFailureCount
         with exn ->
             let receiveFailureCount = receiveFailureCount + 1u
-            log (Danger (sprintf "receiving message failed for %A -> receive failure count %i -> %A" connectionId receiveFailureCount exn.Message))
-            if ws.State = WebSocketState.Open then connections.OnReceiveUiMsgError (connectionId, exn) // note: attempt to send message
+            sprintf "receiving message failed for %A -> receive failure count %i -> %A" connectionId receiveFailureCount exn.Message |> Danger |> log
+            if ws.State = WebSocketState.Open then (connectionId, exn) |> connections.OnReceiveUiMsgError // note: attempt to send message
             // Note: Try to avoid infinite loop, e.g. of exceptions from ws.ReceiveAsync (...) calls.
             if ws.State = WebSocketState.Open && receiveFailureCount < 3u then
                 do! Async.Sleep 1000 // note: just in case it helps
@@ -55,19 +57,19 @@ type WsMiddleware (next:RequestDelegate) =
             if ctx.Request.Path = PathString WS_API_PATH then
                 match ctx.WebSockets.IsWebSocketRequest with
                 | true ->
-                    log (Verbose "new web socket request")
+                    "new web socket request" |> Verbose |> log
                     do! ifDebugSleepAsync 25 125
                     let! ws = ctx.WebSockets.AcceptWebSocketAsync () |> Async.AwaitTask
                     let connectionId = ConnectionId.Create ()
-                    log (Verbose (sprintf "new web socket accepted -> %A" connectionId))
-                    connections.AddConnection (connectionId, ws)
+                    sprintf "new web socket accepted -> %A" connectionId |> Verbose |> log
+                    (connectionId, ws) |> connections.AddConnection
                     let! receiveResult = receiving (connectionId, ws) 0u
-                    log (Verbose (sprintf "web socket closing -> %A" connectionId))
+                    sprintf "web socket closing -> %A" connectionId |> Verbose |> log
                     match receiveResult with
                     | Some receiveResult -> ws.CloseAsync (receiveResult.CloseStatus.Value, receiveResult.CloseStatusDescription, CancellationToken.None) |> Async.AwaitTask |> ignore
                     | None -> ()
-                    connections.RemoveConnection connectionId
-                    log (Verbose (sprintf "web socket closed -> %A" connectionId))
+                    connectionId |> connections.RemoveConnection
+                    sprintf "web socket closed -> %A" connectionId |> Verbose |> log
                 | false -> ctx.Response.StatusCode <- 400
-            else next.Invoke ctx |> ignore 
+            else ctx |> next.Invoke |> ignore 
         } |> Async.StartAsTask :> Task

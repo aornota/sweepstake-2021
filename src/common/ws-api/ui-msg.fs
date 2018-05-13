@@ -11,7 +11,7 @@ type UiUnauthMsg =
     | UiUnauthAppMsg of uiUnauthAppMsg : UiUnauthAppMsg
 
 type UiAuthAppMsg =
-    // TODO-NMB-HIGH...| ChangePasswordCmd of currentRvn : Rvn * password : Password
+    | ChangePasswordCmd of currentRvn : Rvn * password : Password
     | SignOutCmd
 
 (*type UiAuthUserAdminMsg =

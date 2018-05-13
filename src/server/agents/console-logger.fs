@@ -90,13 +90,13 @@ let private log sourceFilter source category =
             let sourceText, sourceColour = sourceTextAndColour source
             let formatText text = sprintf "%s => %s" sourceText text
             match category with
-            | Verbose text -> None, formatText text, sourceColour
-            | Info text -> None, formatText text, sourceColour
-            | Warning text -> Some (" Warning ", warningColours), formatText text, ConsoleColor.DarkRed
-            | Danger text -> Some (" Danger ", dangerColours), formatText text, ConsoleColor.Red
-            | Agent (IgnoredInput text) -> Some (sprintf " %s " IGNORED_INPUT, warningColours), formatText text, ConsoleColor.DarkGray
-            | Agent (SkippedInput text) -> None, formatText (formatSkippedInput text), ConsoleColor.Gray
-            | Agent (Exception exn) -> Some (" CRITICAL ", dangerColours), formatText (sprintf "agent terminated -> %s" exn.Message), ConsoleColor.Red
+            | Verbose text -> None, text |> formatText, sourceColour
+            | Info text -> None, text |> formatText, sourceColour
+            | Warning text -> (" Warning ", warningColours) |> Some, text |> formatText, ConsoleColor.DarkRed
+            | Danger text -> (" Danger ", dangerColours) |> Some, text |> formatText, ConsoleColor.Red
+            | Agent (IgnoredInput text) -> (sprintf " %s " IGNORED_INPUT, warningColours) |> Some, text |> formatText, ConsoleColor.DarkGray
+            | Agent (SkippedInput text) -> None, text |> formatSkippedInput |> formatText, ConsoleColor.Gray
+            | Agent (Exception exn) -> (" CRITICAL ", dangerColours) |> Some, sprintf "agent terminated -> %s" exn.Message |> formatText, ConsoleColor.Red
         // Note: No need for lock since only called from ConsoleLogger agent (though can still get mixed up with ASP.Net Core logging output, i.e. since Console not thread-safe).
         let timestampText = sprintf "%s " ((DateTime.Now.ToUniversalTime ()).ToString ("HH:mm:ss.fff"))
         let previousForegroundColour = Console.ForegroundColor
@@ -120,16 +120,16 @@ type ConsoleLogger () =
             let! input = inbox.Receive ()
             match input with
             | Start ((filterName, sourceFilter), reply) ->
-                log everything Source.ConsoleLogger (Info (sprintf "Start when awaitingStart -> logging (filter: '%s')" filterName)) // note: always log (irrespective of sourceFilter)
+                sprintf "Start when awaitingStart -> logging (filter: '%s')" filterName |> Info |> log everything Source.ConsoleLogger // note: always log (irrespective of sourceFilter)
                 () |> reply.Reply
                 return! logging (filterName, sourceFilter)
-            | Log _ -> log everything Source.ConsoleLogger (Agent (IgnoredInput "Log when awaitingStart")) ; return! awaitingStart ()
-            | CurrentLogFilter _ -> log everything Source.ConsoleLogger (Agent (IgnoredInput "CurrentLogFilter when awaitingStart")) ; return! awaitingStart ()
-            | ChangeLogFilter _ -> log everything Source.ConsoleLogger (Agent (IgnoredInput "ChangeLogFilter when awaitingStart")) ; return! awaitingStart () }
+            | Log _ -> "Log when awaitingStart" |> IgnoredInput |> Agent |> log everything Source.ConsoleLogger ; return! awaitingStart ()
+            | CurrentLogFilter _ -> "CurrentLogFilter when awaitingStart" |> IgnoredInput |> Agent |> log everything Source.ConsoleLogger ; return! awaitingStart ()
+            | ChangeLogFilter _ -> "ChangeLogFilter when awaitingStart" |> IgnoredInput |> Agent |> log everything Source.ConsoleLogger ; return! awaitingStart () }
         and logging (filterName, sourceFilter) = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> log everything Source.ConsoleLogger (Agent (IgnoredInput "Start when logging")) ; return! logging (filterName, sourceFilter) // note: always log (irrespective of sourceFilter)
+            | Start _ -> "Start when logging" |> IgnoredInput |> Agent |> log everything Source.ConsoleLogger ; return! logging (filterName, sourceFilter) // note: always log (irrespective of sourceFilter)
             | Log (source, category) ->
                 log sourceFilter source category
                 return! logging (filterName, sourceFilter)
@@ -137,16 +137,16 @@ type ConsoleLogger () =
                 (filterName, sourceFilter) |> reply.Reply
                 return! logging (filterName, sourceFilter)
             | ChangeLogFilter ((filterName, sourceFilter), reply) ->
-                log everything Source.ConsoleLogger (Info (sprintf "ChangeLogFilter when logging -> logging (filter: '%s')" filterName)) // note: always log (irrespective of sourceFilter)
+                sprintf "ChangeLogFilter when logging -> logging (filter: '%s')" filterName |> Info |> log everything Source.ConsoleLogger // note: always log (irrespective of sourceFilter)
                 () |> reply.Reply
                 return! logging (filterName, sourceFilter) }
-        log everything Source.ConsoleLogger (Info "agent instantiated -> awaitingStart")
+        "agent instantiated -> awaitingStart" |> Info |> log everything Source.ConsoleLogger
         awaitingStart ())
-    do agent.Error.Add (fun exn -> log everything Source.ConsoleLogger (Agent (Exception exn))) // note: an unhandled exception will "kill" the agent - but at least we can log the exception
-    member __.Start logFilter = (fun reply -> Start (logFilter, reply)) |> agent.PostAndReply // note: not async (since need to start agents deterministically)
-    member __.Log (source, category) = Log (source, category) |> agent.Post
+    do (fun exn -> exn |> Exception |> Agent |> log everything Source.ConsoleLogger) |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
+    member __.Start logFilter = (fun reply -> (logFilter, reply) |> Start) |> agent.PostAndReply // note: not async (since need to start agents deterministically)
+    member __.Log (source, category) = (source, category) |> Log |> agent.Post
     member __.CurrentLogFilter () = CurrentLogFilter |> agent.PostAndReply
-    member __.ChangeLogFilter logFilter = (fun reply -> ChangeLogFilter (logFilter, reply)) |> agent.PostAndReply
+    member __.ChangeLogFilter logFilter = (fun reply -> (logFilter, reply) |> ChangeLogFilter) |> agent.PostAndReply
 
 let consoleLogger = ConsoleLogger ()
 

@@ -6,6 +6,6 @@ open Fable.Import
 
 type Key = | Key of key : string
 
-let readJson (Key key) = unbox (Browser.localStorage.getItem key) |> Option.map (string >> Json)
-let writeJson (Key key) (Json json) = Browser.localStorage.setItem (key, json)
-let delete (Key key) = Browser.localStorage.removeItem key
+let readJson (Key key) = key |> Browser.localStorage.getItem |> unbox |> Option.map (string >> Json)
+let writeJson (Key key) (Json json) = (key, json) |> Browser.localStorage.setItem
+let delete (Key key) = key |> Browser.localStorage.removeItem

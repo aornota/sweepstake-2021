@@ -40,7 +40,7 @@ type AuthQryError<'a> =
 
 type AutoSignOutReason =
     // TODO-NMB-LOW?...| SessionExpired
-    | PasswordReset of resetBy : UserName
+    | PasswordReset
     | PermissionsChanged of isPersonaNonGrata : bool
 
 type ServerAppMsg =
@@ -48,19 +48,19 @@ type ServerAppMsg =
     | ConnectedMsg of otherConnections : int * signedIn : int
     | SignInCmdResult of result : Result<AuthUser, SignInCmdError<string>>
     | AutoSignInCmdResult of result : Result<AuthUser, AutoSignInCmdError<string>>
-    (*| ChangePasswordCmdResult of result : Result<unit, AuthCmdError<string>>*)
+    | ChangePasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
     | OtherUserSignedInMsgOLD of userName : string // TODO-NMB-HIGH: Retire this...
     | OtherUserSignedOutMsgOLD of userName : string // TODO-NMB-HIGH: Retire this...
 
-(*type UserAdminProjectionMsg =
-    | UserAdminProjectionQryInitialized of userAdmins : Projection<UserAdminDto>
-    | UserAdminsDeltaMsg of delta : Delta<UserAdminDto>
+(*type UserAdministrationProjectionMsg =
+    | UserAdministrationProjectionQryInitialized of userAdmins : Projection<UserAdminDto>
+    | UserAdministrationDeltaMsg of delta : Delta<UserAdminDto>
 
-type ServerUserAdminMsg =
-    | InitializeUserAdminProjectionQryResult of result : Result<unit, AuthQryError<string>>
-    | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
+type ServerUserAdministrationMsg =
+    | InitializeUserAdministrationProjectionQryResult of result : Result<unit, AuthQryError<string>>
+    | UserAdministrationProjectionMsg of userAdministrationProjectionMsg : UserAdministrationProjectionMsg
     | CreateUserCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
     | ResetPasswordCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
     | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
@@ -81,7 +81,7 @@ type ServerChatMsg =
 
 type ServerMsg =
     | ServerAppMsg of serverAppMsg : ServerAppMsg
-    (*| ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg*)
+    (*| ServerUserAdministrationMsg of serverUserAdministrationMsg : ServerUserAdministrationMsg*)
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> Error

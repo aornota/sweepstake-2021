@@ -33,13 +33,19 @@ type Permissions = {
     ChangePasswordPermission : UserId option
     UserAdministrationPermissions : UserAdministrationPermissions option }
 
+type MustChangePasswordReason =
+    | FirstSignIn
+    | PasswordReset
+
 type Jwt = | Jwt of jwt : string
 
 type AuthUser = { // TODO-NMB-HIGH: Should this be a projection?...
     UserId : UserId
+    Rvn : Rvn
     UserName : UserName
     UserType : UserType
     Permissions : Permissions
+    MustChangePasswordReason : MustChangePasswordReason option
     Jwt : Jwt }
 
 (*type SignedInStatusDto = // TODO-NMB-HIGH: Use UTC (and/or DateTimeOffset) to avoid sinceLastApi stuff?...
@@ -75,11 +81,11 @@ let permissions userId userType =
         match userType with
         | SuperUser -> (NotSelf [ SuperUser ; Administrator ; Pleb ; PersonaNonGrata ], [ SuperUser ; Administrator ; Pleb ; PersonaNonGrata ]) |> Some
         | Administrator | Pleb | PersonaNonGrata -> None
-    let userAdministrationPermissions = {
-        CreateUserPermission = createUserPermission
-        ResetPasswordPermission = resetPasswordPermission
-        ChangeUserTypePermission = changeUserTypePermission }
-    { ChangePasswordPermission = changePasswordPermission ; UserAdministrationPermissions = userAdministrationPermissions |> Some }
+    let userAdministrationPermissions =
+        match createUserPermission, resetPasswordPermission, changeUserTypePermission with
+        | [], None, None -> None
+        | _ -> { CreateUserPermission = createUserPermission ; ResetPasswordPermission = resetPasswordPermission ; ChangeUserTypePermission = changeUserTypePermission } |> Some
+    { ChangePasswordPermission = changePasswordPermission ; UserAdministrationPermissions = userAdministrationPermissions }
 
 let incrementRvn (Rvn rvn) = Rvn (rvn + 1)
 
