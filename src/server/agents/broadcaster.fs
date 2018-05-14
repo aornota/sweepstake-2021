@@ -1,5 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Broadcaster
 
+// Note: Broadcaster agent broadcasts nothing itself - and subscribes to nothing.
+
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Events.Event
 

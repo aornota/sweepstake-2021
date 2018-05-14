@@ -29,6 +29,10 @@ module Brw = Fable.Import.Browser
 
 let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preferences"
 
+#if TICK
+let [<Literal>] private PING_INTERVAL = 30.<second>
+#endif
+
 let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
 
 let private readPreferencesCmd =
@@ -160,6 +164,7 @@ let private defaultAuthState authUser currentPage (unauthState:UnauthState optio
 let initialize () =
     let state = {
         Ticks = 0<tick>
+        LastPing = DateTime.Now
         NotificationMessages = []
         UseDefaultTheme = true
         SessionId = SessionId.Create ()
@@ -175,7 +180,7 @@ let private handleWsError wsError state : State * Cmd<Input> =
     | WsOnError wsApiUrl, Connecting _ ->
         let state = { state with AppState = ServiceUnavailable }
         state |> addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) ("Unable to create a connection to the web server<br><br>Please try again later" |> Some)
-    | WsOnError wsApiUrl, _ -> state |> addDebugError (sprintf "WsOnError not when Connecting -> %s" wsApiUrl) (UNEXPECTED_ERROR |> Some)
+    | WsOnError wsApiUrl, _ -> state |> addDebugError (sprintf "WsOnError when not Connecting -> %s" wsApiUrl) (UNEXPECTED_ERROR |> Some)
     | SendMsgWsNotOpenError uiMsg, _ ->
         state |> addDebugError (sprintf "SendMsgWsNotOpenError -> %A" uiMsg) ("The connection to the web server has been closed<br><br>Please try refreshing the page" |> Some)
     | SendMsgOtherError (uiMsg, errorText), _ -> state |> addDebugError (sprintf "SendMsgOtherError -> %s -> %A" errorText uiMsg) (unexpectedErrorWhen "sending a message" |> Some)
@@ -188,13 +193,13 @@ let private handleServerUiMsgError serverUiMsgError state =
     | DeserializeUiMsgError errorText ->
         state |> addDebugError (sprintf "Server DeserializeUiMsgError -> %s" errorText) ("The web server was unable to process a message<br><br>Please try refreshing the page" |> Some)
 
-let private handleConnected (otherConnections, signedIn) user lastPage state =
+let private handleConnected (otherConnectionCount, signedInUserCount) user lastPage state =
     let toastCmd =
 #if DEBUG
         // TEMP-NMB: Show [ other-web-socket-connection | signed-in-user ] counts (as toast)...
-        let otherConnections = if otherConnections > 0 then sprintf "<strong>%i</strong>" otherConnections else sprintf "%i" otherConnections
-        let signedIn = if signedIn > 0 then sprintf "<strong>%i</strong>" signedIn else sprintf "%i" signedIn
-        sprintf "Other web socket connections: %s<br>Signed-in users: %s" otherConnections signedIn |> infoToastCmd
+        let otherConnections = if otherConnectionCount > 0 then sprintf "<strong>%i</strong>" otherConnectionCount else sprintf "%i" otherConnectionCount
+        let signedInUsers = if signedInUserCount > 0 then sprintf "<strong>%i</strong>" signedInUserCount else sprintf "%i" signedInUserCount
+        sprintf "Other web socket connections: %s<br>Signed-in users: %s" otherConnections signedInUsers |> infoToastCmd
         // ...or not...
         //Cmd.none
         // ...NMB-TEMP
@@ -264,8 +269,8 @@ let private handleChangePasswordResult (result:Result<Rvn, AuthCmdError<string>>
         | Some ChangePasswordPending, Error error ->
             let errorText =
                 match error with
-                | OtherCmdError (OtherError errorText) -> errorText
-                | CmdJwtError _ | CmdAuthznError _ | CmdPersistenceError _ -> unexpectedErrorWhen "changing password"
+                | OtherAuthCmdError (OtherError errorText) -> errorText
+                | AuthCmdJwtError _ | AuthCmdAuthznError _ | AuthCmdPersistenceError _ -> unexpectedErrorWhen "changing password"
             let errorText = ifDebug (sprintf "ChangePasswordCmdResult error -> %A" error) errorText
             let changePasswordState = { changePasswordState with ChangePasswordStatus = errorText |> ChangePasswordFailed |> Some }
             let authState = { authState with ChangePasswordState = changePasswordState |> Some }
@@ -445,7 +450,16 @@ let private handleAppInput appInput state =
 let transition input state =
     match input with
 #if TICK
-    | Tick -> { state with Ticks = state.Ticks + 1<tick> }, Cmd.none
+    | Tick ->
+        // Note: Only sending Ping messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
+        let lastPing, cmd =
+            match state.Ws with
+            | Some ws ->
+                let now = DateTime.Now
+                if (now - state.LastPing).TotalSeconds * 1.<second> >= PING_INTERVAL then now, Ping |> sendMsg ws
+                else state.LastPing, Cmd.none
+            | None -> state.LastPing, Cmd.none
+        { state with Ticks = state.Ticks + 1<tick> ; LastPing = lastPing }, cmd
 #endif
     | AddNotificationMessage notificationMessage -> state |> addNotificationMessage notificationMessage, Cmd.none
     | DismissNotificationMessage notificationId -> { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }, Cmd.none // note: silently ignore unknown notificationId

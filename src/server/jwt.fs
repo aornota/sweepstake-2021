@@ -25,13 +25,13 @@ let private jwtKey =
 let private encode (Json json) = JWT.Encode (json, jwtKey, JweAlgorithm.A256KW, JweEncryption.A256CBC_HS512)
 let private decode text = JWT.Decode (text, jwtKey, JweAlgorithm.A256KW, JweEncryption.A256CBC_HS512) |> Json
 
-let toJwt (sessionId:SessionId, userId:UserId, userName:UserName, permissions:Permissions) =
+let toJwt (userId:UserId, permissions:Permissions) =
     try
-        (sessionId, userId, userName, permissions) |> toJson |> encode |> Jwt |> Ok
+        (userId, permissions) |> toJson |> encode |> Jwt |> Ok
     with | exn -> exn.Message |> Error
 
 let fromJwt (Jwt jwt) =
     try
-        let sessionId, userId, userName, permissions = jwt |> decode |> ofJson<SessionId * UserId * UserName * Permissions>
-        (sessionId, userId, userName, permissions) |> Ok
+        let userId, permissions = jwt |> decode |> ofJson<UserId * Permissions>
+        (userId, permissions) |> Ok
     with | exn -> exn.Message |> Error

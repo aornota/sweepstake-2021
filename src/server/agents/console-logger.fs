@@ -1,5 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 
+// Note: ConsoleLogger agent broadcasts nothing - and subscribes to nothing.
+
 open System
 
 type Entity =

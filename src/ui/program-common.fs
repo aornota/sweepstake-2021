@@ -162,6 +162,7 @@ type AppState =
 
 type State = {
     Ticks : int<tick> // note: will only be updated when TICK (see webpack.config.js) is defined
+    LastPing : DateTime // note: will only be updated when TICK is defined
     NotificationMessages : NotificationMessage list
     UseDefaultTheme : bool
     SessionId : SessionId
@@ -170,7 +171,7 @@ type State = {
     Ws : Brw.WebSocket option // TODO-NMB-MEDIUM: Switch to using Fable.Websockets.Elmish?...
     AppState : AppState }
 
-let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (α)"
+let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (β)"
 
 let validateConfirmPassword (Password newPassword) (Password confirmPassword) =
     if newPassword <> confirmPassword then "Confirmation password must match new password" |> Some

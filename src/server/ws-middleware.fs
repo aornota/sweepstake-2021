@@ -24,7 +24,7 @@ let private log category = (WsMiddleware, category) |> consoleLogger.Log
 let private encoding = Encoding.UTF8
 
 type WsMiddleware (next:RequestDelegate) =
-    let rec receiving (connectionId, ws:WebSocket) receiveFailureCount = async {
+    let rec receiving (connectionId, ws:WebSocket) consecutiveReceiveFailureCount = async {
         let buffer : byte [] = Array.zeroCreate 4096
         try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
             let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
@@ -38,19 +38,19 @@ type WsMiddleware (next:RequestDelegate) =
                     ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
                     sprintf "message deserialized for %A -> %A" connectionId uiMsg |> Verbose |> log
                     (connectionId, uiMsg) |> connections.HandleUiMsg
-                    return! receiving (connectionId, ws) receiveFailureCount
+                    return! receiving (connectionId, ws) 0u
                 with exn ->
                     sprintf "deserializing message failed for %A -> %A" connectionId exn.Message |> Danger |> log
                     (connectionId, exn) |> connections.OnDeserializeUiMsgError
-                    return! receiving (connectionId, ws) receiveFailureCount
+                    return! receiving (connectionId, ws) 0u
         with exn ->
-            let receiveFailureCount = receiveFailureCount + 1u
-            sprintf "receiving message failed for %A -> receive failure count %i -> %A" connectionId receiveFailureCount exn.Message |> Danger |> log
+            let consecutiveReceiveFailureCount = consecutiveReceiveFailureCount + 1u
+            sprintf "receiving message failed for %A -> receive failure count %i -> %A" connectionId consecutiveReceiveFailureCount exn.Message |> Danger |> log
             if ws.State = WebSocketState.Open then (connectionId, exn) |> connections.OnReceiveUiMsgError // note: attempt to send message
             // Note: Try to avoid infinite loop, e.g. of exceptions from ws.ReceiveAsync (...) calls.
-            if ws.State = WebSocketState.Open && receiveFailureCount < 3u then
+            if ws.State = WebSocketState.Open && consecutiveReceiveFailureCount < 3u then
                 do! Async.Sleep 1000 // note: just in case it helps
-                return! receiving (connectionId, ws) receiveFailureCount
+                return! receiving (connectionId, ws) consecutiveReceiveFailureCount
             else return None }
     member __.Invoke (ctx:HttpContext) = 
         async {

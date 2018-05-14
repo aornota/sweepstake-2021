@@ -8,6 +8,9 @@ type ChangePasswordToken private (userId) =
     new (_:MetaToken, userId:UserId) = ChangePasswordToken userId
     member __.UserId = userId
 
+type UserAdministrationToken private () =
+    new (_:MetaToken) = UserAdministrationToken ()
+
 type CreateUserToken private (userTypes) =
     new (_:MetaToken, userTypes:UserType list) = CreateUserToken userTypes
     member __.UserTypes = userTypes
@@ -23,6 +26,7 @@ type ChangeUserTypeToken private (userTarget, userTypes) =
 
 type private ValidatedUserTokens = {
     ChangePasswordToken : ChangePasswordToken option
+    UserAdministrationToken : UserAdministrationToken option
     CreateUserToken : CreateUserToken option
     ResetPasswordToken : ResetPasswordToken option
     ChangeUserTypeToken : ChangeUserTypeToken option }
@@ -30,9 +34,10 @@ type private ValidatedUserTokens = {
 type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
         let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> (MetaToken, userId) |> ChangePasswordToken |> Some | None -> None
-        let createUserToken, resetPasswordToken, changeUserTypeToken =
+        let userAdministrationToken, createUserToken, resetPasswordToken, changeUserTypeToken =
             match permissions.UserAdministrationPermissions with
             | Some userAdministrationPermissions ->
+                let userAdministrationToken = MetaToken |> UserAdministrationToken |> Some
                 let createUserToken = (MetaToken, userAdministrationPermissions.CreateUserPermission) |> CreateUserToken |> Some
                 let resetPasswordToken =
                     match userAdministrationPermissions.ResetPasswordPermission with
@@ -42,10 +47,11 @@ type UserTokens private (vut:ValidatedUserTokens) =
                     match userAdministrationPermissions.ChangeUserTypePermission with
                     | Some (userTarget, userTypes) -> (MetaToken, userTarget, userTypes) |> ChangeUserTypeToken |> Some
                     | None -> None
-                createUserToken, resetPasswordToken, changeUserTypeToken
-            | None -> None, None, None           
+                userAdministrationToken, createUserToken, resetPasswordToken, changeUserTypeToken
+            | None -> None, None, None, None           
         UserTokens {
             ChangePasswordToken = changePasswordToken
+            UserAdministrationToken = userAdministrationToken
             CreateUserToken = createUserToken
             ResetPasswordToken = resetPasswordToken
             ChangeUserTypeToken = changeUserTypeToken }

@@ -28,15 +28,15 @@ type AutoSignInCmdError<'a> =
     | OtherAutoSignInCmdError of otherError : OtherError<'a>
 
 type AuthCmdError<'a> =
-    | CmdJwtError of jwtError : JwtError
-    | CmdAuthznError of authznError : AuthznError
-    | CmdPersistenceError of persistenceError : PersistenceError
-    | OtherCmdError of otherError : OtherError<'a>
+    | AuthCmdJwtError of jwtError : JwtError
+    | AuthCmdAuthznError of authznError : AuthznError
+    | AuthCmdPersistenceError of persistenceError : PersistenceError
+    | OtherAuthCmdError of otherError : OtherError<'a>
 
 type AuthQryError<'a> =
-    | QryJwtError of jwtError : JwtError
-    | QryAuthznError of authznError : AuthznError
-    | OtherQryError of otherError : OtherError<'a>
+    | AuthQryJwtError of jwtError : JwtError
+    | AuthQryAuthznError of authznError : AuthznError
+    | OtherAuthQryError of otherError : OtherError<'a>
 
 type AutoSignOutReason =
     // TODO-NMB-LOW?...| SessionExpired
@@ -45,7 +45,7 @@ type AutoSignOutReason =
 
 type ServerAppMsg =
     | ServerUiMsgErrorMsg of serverUiMsgError : ServerUiMsgError
-    | ConnectedMsg of otherConnections : int * signedIn : int
+    | ConnectedMsg of otherConnectionCount : int * signedInUserCount : int
     | SignInCmdResult of result : Result<AuthUser, SignInCmdError<string>>
     | AutoSignInCmdResult of result : Result<AuthUser, AutoSignInCmdError<string>>
     | ChangePasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
@@ -85,5 +85,5 @@ type ServerMsg =
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> Error
-let otherCmdError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherCmdError |> Error
-let otherQryError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherQryError |> Error
+let otherCmdError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherAuthCmdError |> Error
+let otherQryError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherAuthQryError |> Error

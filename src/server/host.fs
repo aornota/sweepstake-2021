@@ -67,7 +67,7 @@ readPersistedEvents ()
 () |> connections.Start
 
 (* TEMP-NMB...
-("custom", function | Host | Entity Entity.Users | Connections -> allCategories | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+("development", function | Host | Entity Entity.Users | Connections -> allCategories | Broadcaster | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
 
 "ready" |> Info |> log
 

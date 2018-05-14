@@ -1,5 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Persistence
 
+// Note: Persistence agent broadcasts UsersEventsRead | UserEventWritten - and subscribes to nothing.
+
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
 open Aornota.Common.UnexpectedError

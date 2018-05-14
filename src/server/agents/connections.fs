@@ -1,5 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Connections
 
+// Note: Connections agent broadcasts UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnect - and subscribes to SendMsg.
+
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
 open Aornota.Common.UnexpectedError
@@ -13,11 +15,13 @@ open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Agents.Entities.Users
+open Aornota.Sweepstake2018.Server.Authorization
 open Aornota.Sweepstake2018.Server.Connection
 open Aornota.Sweepstake2018.Server.Events.Event
 open Aornota.Sweepstake2018.Server.Jwt
 
 open System
+open System.Collections.Generic
 open System.Net.WebSockets
 open System.Text
 open System.Threading
@@ -31,23 +35,18 @@ type private ConnectionsInput =
     | OnReceiveUiMsgError of connectionId : ConnectionId * exn : exn
     | OnDeserializeUiMsgError of connectionId : ConnectionId * exn : exn
     | HandleUiMsg of connectionId : ConnectionId * uiMsg : UiMsg
+    | SendMsg of serverMsg : ServerMsg * connectionIds : ConnectionId list
 
-type private AuthUserSession = {
-    UserId : UserId
-    SessionId : SessionId
-    UserName : string
-    LastApi : DateTime }
+type private SignedInUser = { UserName : UserName ; Permissions : Permissions ; UserTokens : UserTokens ; LastApi : DateTime }
 
-type private Connection = {
-    ConnectionId : ConnectionId
-    Ws : WebSocket
-    AuthUserSession : AuthUserSession option }
+type private SignedInSession = UserId * SessionId
 
-type private SendFilter =
-    | OnlyConnectionId of connectionId : ConnectionId
-    | AllAuthExceptConnectionId of connectionId : ConnectionId
-    | AllAuthExceptUserId of userId : UserId
-    | SameUserSessionExceptConnectionId of userId : UserId * sessionId : SessionId * connectionId : ConnectionId
+type private Connection = WebSocket * SignedInSession option
+
+type private Recipients =
+    | ConnectionIds of connectionIds : ConnectionId list
+    | AllSignedInExceptConnectionId of connectionId : ConnectionId // TODO-REMOVE: Once no longer using OtherUserChatMessageMsgOLD...
+    | AllSignedInExceptUserId of userId : UserId // TODO-REMOVE: Once no longer using OtherUserSignedInMsgOLD | OtherUserSignedOutMsgOLD...
 
 let private log category = (Connections, category) |> consoleLogger.Log
 
@@ -58,103 +57,131 @@ let private logResult resultSource successText result =
         sprintf "%s Ok%s" resultSource successText |> Info |> log
     | Error error -> sprintf "%s Error -> %A" resultSource error |> Danger |> log
 
-type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose stuff?)...
-    // TODO-NMB-HIGH: As part of rework, move these functions to be [private] module-level ones...
-    let remove connectionIds connections = connections |> List.filter (fun connection -> not (connectionIds |> List.contains connection.ConnectionId))
-    let sendMsg (serverMsg:ServerMsg) sendFilter connections = async {
-        let (Json json) = serverMsg |> toJson
-        let buffer = Encoding.UTF8.GetBytes json
-        let segment = new ArraySegment<byte> (buffer)
-        let rec send (recipients:(ConnectionId * WebSocket) list) failures = async {
-            let trySendMessage (ws:WebSocket) = task {
-                if ws.State = WebSocketState.Open then
-                    try
-                        do! ws.SendAsync (segment, WebSocketMessageType.Text, true, CancellationToken.None)
-                        return true
-                    with _ -> return false
-                else return false }
-            match recipients with
-            | (connectionId, ws) :: t ->
-                let! success = trySendMessage ws |> Async.AwaitTask
-                return! send t (if success then failures else connectionId :: failures)
-            | [] -> return failures }
-        let recipients =
-            match sendFilter with
-            | OnlyConnectionId connectionId ->
-                connections |> List.filter (fun connection -> connection.ConnectionId = connectionId)
-            | AllAuthExceptConnectionId connectionId ->
-                connections
-                |> List.filter (fun connection ->
-                    match connection.AuthUserSession with
-                    | Some _ -> connection.ConnectionId <> connectionId
-                    | None -> false)
-            | AllAuthExceptUserId userId ->
-                connections
-                |> List.filter (fun connection ->
-                    match connection.AuthUserSession with
-                    | Some authUserSession -> authUserSession.UserId <> userId
-                    | None -> false)
-            | SameUserSessionExceptConnectionId (userId, sessionId, connectionId) ->
-                connections
-                |> List.filter (fun connection ->
-                    match connection.AuthUserSession with
-                    | Some authUserSession ->
-                        connection.ConnectionId <> connectionId && authUserSession.UserId = userId && authUserSession.SessionId = sessionId
-                    | None -> false)
-        let recipients = recipients |> List.map (fun connection -> connection.ConnectionId, connection.Ws)
-        let! failures = send recipients []
-        return connections |> remove failures }
-    let signIn (connectionId, userId, sessionId, userName) connections =
-        let authUserSession = { UserId = userId ; SessionId = sessionId ; UserName = userName ; LastApi = DateTime.Now }
+let private encoding = Encoding.UTF8
+
+let private hasConnections userId (connections:Dictionary<ConnectionId, Connection>) =
+    let forUserId =
         connections
-        |> List.map (fun connection -> if connection.ConnectionId = connectionId then { connection with AuthUserSession = authUserSession |> Some } else connection)
-    let signOut (connectionId, userId, sessionId) connections =
-        connections
-        |> List.map (fun connection -> 
-            match connection.AuthUserSession with
-            | Some authUserSession when connection.ConnectionId = connectionId && authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
-                { connection with AuthUserSession = None }
-            | Some _ | None -> connection)
-    let autoSignOut (userId, sessionId) connections =
-        connections
-        |> List.map (fun connection -> 
-            match connection.AuthUserSession with
-            | Some authUserSession when authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
-                { connection with AuthUserSession = None }
-            | Some _ | None -> connection)
-    let userIdAndNameForConnectionId connectionId connections =
-        connections
-        |> List.choose (fun connection -> 
-            match connection.AuthUserSession with
-            | Some authUserSession when connection.ConnectionId = connectionId -> Some (authUserSession.UserId, authUserSession.UserName)
-            | Some _ | None -> None)
-        |> List.tryHead // note: expect at most one Connection per connectionId
-    // TEMP-NMB?: Might not be needed once SignInMsg handled properly, e.g. by using real data...
-    let userIdForUserName userName connections =
-        connections
-        |> List.choose (fun connection -> 
-            match connection.AuthUserSession with
-            | Some authUserSession when authUserSession.UserName = userName -> Some authUserSession.UserId
-            | Some _ | None -> None)
-        |> List.tryHead // note: expect at most one UserId per userName
-    // ...NMB-TEMP?
-    let countForUserId userId connections =
-        connections
-        |> List.filter (fun connection ->
-            match connection.AuthUserSession with
-            | Some authUserSession when authUserSession.UserId = userId -> true
-            | Some _ | None -> false)
-        |> List.length
-    let updateLastApi(connectionId, userId, sessionId) connections =
-        connections
-        |> List.map (fun connection ->
-            if connection.ConnectionId = connectionId then
-                match connection.AuthUserSession with
-                | Some authUserSession when authUserSession.UserId = userId && authUserSession.SessionId = sessionId ->
-                    let authUserSession = { authUserSession with LastApi = DateTime.Now }
-                    { connection with AuthUserSession = authUserSession |> Some }
-                | Some _ | None -> connection
-            else connection)
+        |> List.ofSeq
+        |> List.filter (fun (KeyValue (_, (_, signedInSession))) -> match signedInSession with | Some (otherUserId, _) when otherUserId = userId -> true | Some _ | None -> false)
+    forUserId.Length > 0
+
+let private removeSignedInUser userId (signedInUsers:Dictionary<UserId, SignedInUser>) =
+    if userId |> signedInUsers.Remove then userId |> UserSignedOut |> broadcaster.Broadcast
+    else // note: should never happen
+        sprintf "removeSignedInUser -> %A not found in signedInUsers" userId |> Danger |> log
+
+let private removeConnection connectionId (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) =
+    match connectionId |> connections.TryGetValue with
+    | true, (_, signedInSession) ->
+        connectionId |> connections.Remove |> ignore
+        connectionId |> Disconnected |> broadcaster.Broadcast
+        match signedInSession with
+        | Some (userId, _) -> if connections |> hasConnections userId |> not then signedInUsers |> removeSignedInUser userId
+        | None -> ()
+    | false, _ -> // note: should never happen
+        sprintf "removeConnection -> %A not found in connections" connectionId |> Danger |> log
+
+let private sendMsg (serverMsg:ServerMsg) recipients (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+    let (Json json) = serverMsg |> toJson
+    let buffer = encoding.GetBytes json
+    let segment = new ArraySegment<byte> (buffer)
+    let rec send (recipients:(ConnectionId * WebSocket) list) failedConnectionIds = async {
+        let trySendMessage (ws:WebSocket) = task {
+            if ws.State = WebSocketState.Open then
+                try
+                    do! ws.SendAsync (segment, WebSocketMessageType.Text, true, CancellationToken.None)
+                    return true
+                with _ -> return false
+            else return false }
+        match recipients with
+        | (connectionId, ws) :: t ->
+            let! success = trySendMessage ws |> Async.AwaitTask
+            return! send t (if success then failedConnectionIds else connectionId :: failedConnectionIds)
+        | [] -> return failedConnectionIds }
+    let recipients =
+        match recipients with
+        | ConnectionIds connectionIds -> // note: silently ignore unknown connectionIds
+            connectionIds |> List.choose (fun connectionId -> match connectionId |> connections.TryGetValue with | true, (ws, _) -> (connectionId, ws) |> Some | false, _ -> None)
+        | AllSignedInExceptConnectionId connectionId -> // note: silently ignore unknown connectionId
+            connections
+            |> List.ofSeq
+            |> List.choose (fun (KeyValue (otherConnectionId, (ws, signedInSession))) ->
+                if otherConnectionId <> connectionId then match signedInSession with | Some _ -> (otherConnectionId, ws) |> Some | None -> None else None)
+        | AllSignedInExceptUserId userId -> // note: silently ignore unknown userId
+            connections
+            |> List.ofSeq
+            |> List.choose (fun (KeyValue (connectionId, (ws, signedInSession))) ->
+                match signedInSession with
+                | Some (userId', _) -> if userId' <> userId then (connectionId, ws) |> Some else None
+                | None -> None)
+    let! failedConnectionIds = [] |> send recipients
+    failedConnectionIds |> List.iter (fun connectionId -> (connections, signedInUsers) |> removeConnection connectionId)
+    return () }
+
+let private addSignedInUser authUser (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+    if authUser.UserId |> signedInUsers.ContainsKey |> not then // note: silently ignore if already in signedInUsers
+        let signedInUser = { UserName = authUser.UserName ; Permissions = authUser.Permissions ; UserTokens = authUser.Permissions |> UserTokens ; LastApi = DateTime.Now }
+        (authUser.UserId, signedInUser) |> signedInUsers.Add
+        authUser.UserId |> UserSignedIn |> broadcaster.Broadcast
+        // TODO-NMB-HIGH: Remove use of OtherUserSignedInMsgOLD once replaced by Chat [projection] agent - and can then move function *above* sendMsg (e.g. above removeSignedInUser)...
+        let (UserName userName) = authUser.UserName
+        let serverMsg = userName |> OtherUserSignedInMsgOLD |> ServerAppMsg
+        do! (connections, signedInUsers) |> sendMsg serverMsg (authUser.UserId |> AllSignedInExceptUserId) }
+
+let private ifNoSignedInSession source connectionId fWithWs (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+    match connectionId |> connections.TryGetValue with
+    | true, (ws, signedInSession) ->
+        match signedInSession with
+        | Some _ -> // note: should never happen
+            sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A already has a SignedInSession" source connections.Count signedInUsers.Count connectionId |> Danger |> log
+        | None -> do! ws |> fWithWs
+    | false, _ -> // note: should never happen
+        sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" source connections.Count signedInUsers.Count connectionId |> Danger |> log }
+
+let private ifSignedInSession source connectionId fWithConnection (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+    match connectionId |> connections.TryGetValue with
+    | true, (ws, signedInSession) ->
+        match signedInSession with
+        | Some signedInSession -> do! (ws, signedInSession) |> fWithConnection
+        | None -> // note: should never happen
+            sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A does not have a signed-in session" source connections.Count signedInUsers.Count connectionId |> Danger |> log
+    | false, _ -> // note: should never happen
+        sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" source connections.Count signedInUsers.Count connectionId |> Danger |> log }
+
+let private tokensForAuthApi source (otherError, jwtError) userId jwt (signedInUsers:Dictionary<UserId, SignedInUser>) =
+    // Note: If successful, updates SignedInUser.LastApi and broadcasts UserApi.
+    match jwt |> fromJwt with
+    | Ok (userIdFromJwt, permissionsFromJwt) ->
+        if userIdFromJwt <> userId then // note: should never happen
+            let errorText = sprintf "%s -> UserId mismatch -> SignedInSession %A vs. userIdFromJwt %A" source userId userIdFromJwt
+            ifDebug errorText UNEXPECTED_ERROR |> OtherError |> otherError |> Error
+        else                                            
+            match userIdFromJwt |> signedInUsers.TryGetValue with
+            | true, signedInUser ->
+                if signedInUser.Permissions <> permissionsFromJwt then // note: should never happen
+                    let errorText = sprintf "%s -> Permissions mismatch -> SignedInUser %A vs. permissionsFromJwt %A" source signedInUser.Permissions permissionsFromJwt
+                    ifDebug errorText UNEXPECTED_ERROR |> OtherError |> otherError |> Error
+                else
+                    let signedInUser = { signedInUser with LastApi = DateTime.Now }
+                    signedInUsers.[userIdFromJwt] <- signedInUser
+                    userIdFromJwt |> UserApi |> broadcaster.Broadcast
+                    signedInUser.UserTokens |> Ok
+            | false, _ -> // note: should never happen
+                let errorText = sprintf "%s -> No SignedInUser for %A" source userIdFromJwt
+                ifDebug errorText UNEXPECTED_ERROR |> OtherError |> otherError |> Error
+    | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> jwtError |> Error
+
+let private tokensForAuthCmdApi source userId jwt signedInUsers = tokensForAuthApi source (OtherAuthCmdError, AuthCmdJwtError) userId jwt signedInUsers
+let private tokensForAuthQryApi source userId jwt signedInUsers = tokensForAuthApi source (OtherAuthQryError, AuthQryJwtError) userId jwt signedInUsers
+
+// TODO-REMOVE: Once OtherUserSignedOutMsgOLD replaced by Chat [projection] agent...
+let private tempIfFullySignedOut (userId, UserName userName) (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+    if userId |> signedInUsers.ContainsKey |> not then
+        let serverMsg = userName |> OtherUserSignedOutMsgOLD |> ServerAppMsg
+        do! (connections, signedInUsers) |> sendMsg serverMsg (userId |> AllSignedInExceptUserId) }
+
+type Connections () =
     let agent = MailboxProcessor.Start (fun inbox ->
         let rec awaitingStart () = async {
             let! input = inbox.Receive ()
@@ -162,207 +189,206 @@ type Connections () = // TODO-NMB-HIGH: More detailed logging (including Verbose
             | Start reply ->
                 "Start when awaitingStart -> managingConnections (0 connections)" |> Info |> log
                 () |> reply.Reply
-                return! managingConnections []
+                return! managingConnections (new Dictionary<ConnectionId, Connection> (), new Dictionary<UserId, SignedInUser> ())
             | AddConnection _ -> "AddConnection when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnection _ -> "RemoveConnection when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnReceiveUiMsgError _ -> "OnReceiveUiMsgError when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnDeserializeUiMsgError _ -> "OnDeserializeUiMsgError when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
-            | HandleUiMsg _ -> "HandleUiMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and managingConnections (connections:Connection list) = async {
+            | HandleUiMsg _ -> "HandleUiMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | SendMsg _ -> "SendMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+        and managingConnections (connections, signedInUsers) = async {
             let! input = inbox.Receive ()
             do! ifDebugSleepAsync 100 500
             match input with
-            | Start _ -> "Start when managingConnections" |> IgnoredInput |> Agent |> log ; return! managingConnections []
+            | Start _ -> "Start when managingConnections" |> IgnoredInput |> Agent |> log ; return! managingConnections (connections, signedInUsers)
             | AddConnection (connectionId, ws) ->
-                // SNH-NMB: What if connectionId already in connections? (&c.)...
-                sprintf "AddConnection %A when managingConnections (%i connection/s)" connectionId connections.Length |> Verbose |> log
-                let otherConnections = connections |> List.length
-                let signedIn =
-                    connections
-                    |> List.choose (fun connection -> connection.AuthUserSession |> Option.map (fun authUserSession -> authUserSession.UserId))
-                    |> List.distinct
-                    |> List.length
-                let connections = { ConnectionId = connectionId ; Ws = ws ; AuthUserSession = None } :: connections              
-                let! connections = connections |> sendMsg ((otherConnections, signedIn) |> ConnectedMsg |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                return! managingConnections connections
+                sprintf "AddConnection %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Verbose |> log
+                let otherConnectionCount, signedInUserCount = connections.Count, signedInUsers.Count
+                if connections.ContainsKey connectionId then // note: should never happen
+                    sprintf "AddConnection when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (already in use)" connections.Count signedInUsers.Count connectionId |> Danger |> log
+                else
+                    (connectionId, (ws, None)) |> connections.Add
+                    let serverMsg = (otherConnectionCount, signedInUserCount) |> ConnectedMsg |> ServerAppMsg
+                    do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                return! managingConnections (connections, signedInUsers)
             | RemoveConnection connectionId ->
-                // SNH-NMB: What if connectionId not in connections? (&c.)...
-                sprintf "RemoveConnection %A when managingConnections (%i connection/s)" connectionId connections.Length |> Verbose |> log
-                let userIdAndName = connections |> userIdAndNameForConnectionId connectionId
-                let connections = connections |> remove [ connectionId ]
-                connectionId |> Disconnected |> broadcaster.Broadcast
-                let isFullySignedOut = match userIdAndName with | Some (userId, _) -> connections |> countForUserId userId = 0 | None -> false
-                let! connections =
-                    if isFullySignedOut then
-                        let userId, userName = match userIdAndName with | Some (userId, userName) -> (userId, userName) | None -> UserId.Create (), "yves strop" // SNH-NMB
-                        userId |> UserSignedOut |> broadcaster.Broadcast
-                        // TODO-NMB-HIGH: Remove use of OtherUserSignedInMsgOLD once handled by Chat projection...
-                        connections |> sendMsg (userName |> OtherUserSignedOutMsgOLD |> ServerAppMsg) (userId |> AllAuthExceptUserId)
-                    else thingAsync connections
-                return! managingConnections connections
+                sprintf "RemoveConnection %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Verbose |> log
+                match connectionId |> connections.TryGetValue with
+                | true, (_, signedInSession) ->
+                    // Note: No need to broadcast Disconnected - and UserSignedOut (if appropriate) - since handled by removeConnection.
+                    // TODO-REMOVE: Use of tempUserIdAndUserName | tempIfFullySignedOut once OtherUserSignedOutMsgOLD replaced by Chat [projection] agent...
+                    let tempUserIdAndUserName =
+                        match signedInSession with
+                        | Some (userId, _) -> match userId |> signedInUsers.TryGetValue with | true, signedInUser -> (userId, signedInUser.UserName) |> Some | false, _ -> None
+                        | None -> None
+                    (connections, signedInUsers) |> removeConnection connectionId
+                    match tempUserIdAndUserName with
+                    | Some (userId, userName) -> do! (connections, signedInUsers) |> tempIfFullySignedOut (userId, userName)
+                    | None -> ()
+                | false, _ -> // note: should never happen
+                    sprintf "RemoveConnection when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" connections.Count signedInUsers.Count connectionId |> Danger |> log
+                return! managingConnections (connections, signedInUsers)
             | OnReceiveUiMsgError (connectionId, exn) ->
-                sprintf "OnReceiveUiMsgError for %A when managingConnections (%i connection/s) -> %s" connectionId connections.Length exn.Message |> Danger |> log
-                let! connections = connections |> sendMsg (exn.Message |> ReceiveUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                return! managingConnections connections
+                sprintf "OnReceiveUiMsgError for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Danger |> log
+                let serverMsg = exn.Message |> ReceiveUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
+                do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                return! managingConnections (connections, signedInUsers)
             | OnDeserializeUiMsgError (connectionId, exn) ->                
-                sprintf "OnDeserializeUiMsgError for %A when managingConnections (%i connection/s) -> %s" connectionId connections.Length exn.Message |> Danger |> log
-                let! connections = connections |> sendMsg (exn.Message |> DeserializeUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                return! managingConnections connections
+                sprintf "OnDeserializeUiMsgError for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Danger |> log
+                let serverMsg = exn.Message |> DeserializeUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
+                do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                return! managingConnections (connections, signedInUsers)
             | HandleUiMsg (connectionId, uiMsg) ->
                 match uiMsg with
+                | Ping -> // note: logged - but otherwise ignored
+                    sprintf "Ping for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Verbose |> log
+                    return! managingConnections (connections, signedInUsers)
                 | UiUnauthMsg (UiUnauthAppMsg (SignInCmd (sessionId, userName, password))) ->
-                    // SNH-NMB: What if connectionId not in connections? What if already have AuthUserSession for sessionId? (&c.)...
-                    sprintf "SignInCmd for %A (%A) when managingConnections (%i connection/s)" userName sessionId connections.Length |> Verbose |> log
-                    let alreadySignedIn =
-                        let (UserName userName) = userName
-                        match connections |> userIdForUserName userName with | Some _ -> true | None -> false
-                    let! result =
-                        if debugFakeError () then sprintf "Fake SignInCmd error -> %A (%A)" userName sessionId |> OtherError |> OtherSignInCmdError |> Error |> thingAsync
-                        else if userName = UserName "ann ewity" then "Username is reserved" |> OtherError |> OtherSignInCmdError |> Error |> thingAsync
-                        else (sessionId, userName, password) |> users.HandleSignInCmdAsync
-                    let connections =
-                        match result with
-                        | Ok authUser ->
-                            let (UserName userName) = authUser.UserName
-                            connections |> signIn (connectionId, authUser.UserId, sessionId, userName)
-                        | Error _ -> connections
-                    let! connections = connections |> sendMsg (result |> SignInCmdResult |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                    let! connections =
-                        match result, alreadySignedIn with
-                        | Ok authUser, false ->
-                            let (UserName userName) = authUser.UserName
-                            authUser.UserId |> UserSignedIn |> broadcaster.Broadcast
-                            // TODO-NMB-HIGH: Remove use of OtherUserSignedInMsgOLD once handled by Chat projection...
-                            connections |> sendMsg (userName |> OtherUserSignedInMsgOLD |> ServerAppMsg) (authUser.UserId |> AllAuthExceptUserId)
-                        | Ok _, true | Error _, _ -> connections |> thingAsync
-                    result |> logResult "SignInCmd" (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                    return! managingConnections connections
+                    let source = "SignInCmd"
+                    sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userName connectionId connections.Count signedInUsers.Count |> Verbose |> log
+                    let fWithWs = (fun ws -> async {
+                        let! result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A (%A)" source userName sessionId |> OtherError |> OtherSignInCmdError |> Error |> thingAsync
+                            else (userName, password) |> users.HandleSignInCmdAsync
+                        let result =
+                            result
+                            |> Result.bind (fun authUser ->
+                                // Note: No need to broadcast UserSignedIn (if appropriate) since handled by addSignedInUser.
+                                (connections, signedInUsers) |> addSignedInUser authUser |> Async.RunSynchronously
+                                connections.[connectionId] <- (ws, (authUser.UserId, sessionId) |> Some)
+                                authUser |> Ok)
+                        let serverMsg = result |> SignInCmdResult |> ServerAppMsg
+                        do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                        result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
+                    do! (connections, signedInUsers) |> ifNoSignedInSession source connectionId fWithWs
+                    return! managingConnections (connections, signedInUsers)
                 | UiUnauthMsg (UiUnauthAppMsg (AutoSignInCmd (sessionId, jwt))) ->
-                    // SNH-NMB: What if connectionId not in connections? (&c.)...
-                    sprintf "AutoSignInCmd for %A (%A) when managingConnections (%i connection/s)" sessionId jwt connections.Length |> Verbose |> log
-                    let result =
-                        if debugFakeError () then sprintf "Fake AutoSignInCmd error -> %A" jwt |> OtherError |> OtherAutoSignInCmdError |> Error
-                        else
-                            match jwt |> fromJwt with
-                            | Ok (sessionId, userId, userName, permissions) -> (sessionId, userId, userName, permissions) |> Ok
-                            | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> AutoSignInCmdJwtError |> Error
-                    let! result =
-                        match result with
-                        | Ok (sessionId, userId, _, permissions) -> (sessionId, userId, permissions) |> users.HandleAutoSignInCmdAsync
-                        | Error error -> error |> Error |> thingAsync
-                    // TODO-NMB-HIGH: If Ok, verify userId | permissions | (&c.) against cache...
-                    let alreadySignedIn = match result with | Ok authUser -> connections |> countForUserId authUser.UserId > 0 | Error _ -> false
-                    let connections =
-                        match result with
-                        | Ok authUser ->
-                            let (UserName userName) = authUser.UserName
-                            connections |> signIn (connectionId, authUser.UserId, sessionId, userName)
-                        | Error _ -> connections
-                    let! connections = connections |> sendMsg (result |> AutoSignInCmdResult |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                    let! connections =
-                        match result, alreadySignedIn with
-                        | Ok authUser, false ->
-                            let (UserName userName) = authUser.UserName
-                            authUser.UserId |> UserSignedIn |> broadcaster.Broadcast
-                            // TODO-NMB-HIGH: Remove use of OtherUserSignedInMsgOLD once handled by Chat projection...
-                            connections |> sendMsg (userName |> OtherUserSignedInMsgOLD |> ServerAppMsg) (authUser.UserId |> AllAuthExceptUserId)
-                        | Ok _, true | Error _, _ -> connections |> thingAsync
-                    result |> logResult "AutoSignInCmd" (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                    return! managingConnections connections
+                    let source = "AutoSignInCmd"
+                    sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source sessionId jwt connections.Count signedInUsers.Count |> Verbose |> log
+                    let fWithWs = (fun ws -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAutoSignInCmdError |> Error
+                            else
+                                // Note: Similar logic to tokensForAuthApi.
+                                match jwt |> fromJwt with
+                                | Ok (userIdFromJwt, permissionsFromJwt) ->
+                                    match userIdFromJwt |> signedInUsers.TryGetValue with
+                                    | true, signedInUser ->
+                                        if signedInUser.Permissions <> permissionsFromJwt then
+                                            let errorText = sprintf "%s -> Permissions mismatch -> SignedInUser %A vs. permissionsFromJwt %A" source signedInUser.Permissions permissionsFromJwt
+                                            ifDebug errorText UNEXPECTED_ERROR |> OtherError |> OtherAutoSignInCmdError |> Error
+                                        else (userIdFromJwt, permissionsFromJwt) |> Ok
+                                    | false, _ -> (userIdFromJwt, permissionsFromJwt) |> Ok
+                                | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> AutoSignInCmdJwtError |> Error
+                        let! result =
+                            match result with
+                            | Ok (userIdFromJwt, permissionsFromJwt) -> (userIdFromJwt, permissionsFromJwt) |> users.HandleAutoSignInCmdAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let result =
+                            result
+                            |> Result.bind (fun authUser ->
+                                // Note: No need to broadcast UserSignedIn (if appropriate) since handled by addSignedInUser.
+                                (connections, signedInUsers) |> addSignedInUser authUser |> Async.RunSynchronously
+                                connections.[connectionId] <- (ws, (authUser.UserId, sessionId) |> Some)
+                                authUser |> Ok)
+                        let serverMsg = result |> AutoSignInCmdResult |> ServerAppMsg
+                        do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                        result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
+                    do! (connections, signedInUsers) |> ifNoSignedInSession source connectionId fWithWs
+                    return! managingConnections (connections, signedInUsers)
                 | UiAuthMsg (jwt, UiAuthAppMsg (ChangePasswordCmd (currentRvn, password))) ->     
-                    // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthUserSession for connectionId? (&c.)...
-                    sprintf "ChangePasswordCmd (%A) for %A when managingConnections (%i connection/s)" currentRvn jwt connections.Length |> Verbose |> log
-                    let result =
-                        if debugFakeError () then sprintf "Fake ChangePasswordCmd error -> %A" jwt |> OtherError |> OtherCmdError |> Error
-                        else
-                            match jwt |> fromJwt with
-                            | Ok (sessionId, userId, userName, permissions) -> (sessionId, userId, userName, permissions) |> Ok
-                            | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> CmdJwtError |> Error
-                    // TODO-NMB-HIGH: If Ok, verify userId | permissions | (&c.) against cache - and retrieve UserTokens...
-                    let! result =
-                        match result with
-                        | Ok (_, userId, _, _) ->
-                            // TEMP-NMB: Provide ChangePasswordToken once have access to it...
-                            (None, userId, currentRvn, password) |> users.HandleChangePasswordCmdAsync
-                            //(userTokens.ChangePasswordToken, userId, currentRvn, password) |> users.HandleChangePasswordCmdAsync
-                            // ...NMB-TEMP
-                        | Error error -> error |> Error |> thingAsync
-                    let! connections = connections |> sendMsg (result |> ChangePasswordCmdResult |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                    result |> logResult "ChangePasswordCmd" (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                    return! managingConnections connections
+                    let source = "ChangePasswordCmd"
+                    sprintf "%s (%A) for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source currentRvn jwt connections.Count signedInUsers.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUsers |> tokensForAuthCmdApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.ChangePasswordToken with
+                                | Some changePasswordToken -> (changePasswordToken, userId, currentRvn, password) |> users.HandleChangePasswordCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ChangePasswordCmdResult |> ServerAppMsg
+                        do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connections, signedInUsers) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (connections, signedInUsers)
                 | UiAuthMsg (jwt, UiAuthAppMsg SignOutCmd) ->     
-                    // SNH-NMB: What if connectionId not in connections? What if no [or mismatched?] AuthUserSession for connectionId? (&c.)...
-                    sprintf "SignOutCmd for %A when managingConnections (%i connection/s)" jwt connections.Length |> Verbose |> log
-                    let result =
-                        if debugFakeError () then sprintf "Fake SignOutCmd error -> %A" jwt |> OtherError |> OtherCmdError |> Error
-                        else
-                            match jwt |> fromJwt with
-                            | Ok (sessionId, userId, userName, permissions) -> (sessionId, userId, userName, permissions) |> Ok
-                            | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> CmdJwtError |> Error
-                    // TODO-NMB-HIGH: If Ok, verify userId | permissions | (&c.) against cache - and retrieve UserTokens...
-                    // Note: Okay to sign out connection-for-connectionId before sending SignOutResultMsgOLD (since will always match OnlyConnectedId, even if signed-out).
-                    let connections =
+                    let source = "SignOutCmd"
+                    sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connections.Count signedInUsers.Count |> Verbose |> log
+                    let fWithConnection = (fun (ws, (userId, sessionId)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUsers |> tokensForAuthCmdApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                            |> Result.bind (fun _ ->
+                                connections.[connectionId] <- (ws, None) // note: connectionId will be in connections (otherwise ifSignedInSession would bypass fWithConnection)
+                                [ connectionId ] |> ConnectionsSignedOut |> broadcaster.Broadcast
+                                () |> Ok)
+                        let serverMsg = result |> SignOutCmdResult |> ServerAppMsg
+                        do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                        result |> logResult source (fun _ -> sprintf "%A" userId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                         match result with
-                        | Ok (sessionId, userId, _, _) -> connections |> signOut (connectionId, userId, sessionId)
-                        | Error _ -> connections
-                    let! connections = connections |> sendMsg (result |> discardOk |> SignOutCmdResult |> ServerAppMsg) (connectionId |> OnlyConnectionId)
-                    let! connections =
-                        match result with
-                        | Ok (sessionId, userId, _, _) ->
-                            connections |> sendMsg (None |> AutoSignOutMsg |> ServerAppMsg) ((userId, sessionId, connectionId) |> SameUserSessionExceptConnectionId)
-                        | Error _ -> connections |> thingAsync
-                    // Note: Auto-sign out connections-for-same-user-session-except-ConnectionId after sending AutoSignOutMsgOLD (else would not match SameUserSessionExceptConnectionId once signed-out).
-                    let connections =
-                        match result with
-                        | Ok (sessionId, userId, _, _) -> connections |> autoSignOut (userId, sessionId)
-                        | Error _ -> connections
-                    let! connections =
-                        match result with
-                        | Ok (_, userId, userName, _) ->
-                            if connections |> countForUserId userId = 0 then
-                                let (UserName userName) = userName
-                                userId |> UserSignedOut |> broadcaster.Broadcast
-                                // TODO-NMB-HIGH: Remove use of OtherUserSignedOutMsgOLD once handled by Chat projection...
-                                connections |> sendMsg (userName |> OtherUserSignedOutMsgOLD |> ServerAppMsg) (userId |> AllAuthExceptUserId)
-                            else thingAsync connections
-                        | Error _ -> thingAsync connections
-                    result |> logResult "SignOutCmd" (fun (_, userId, userName, _) -> sprintf "%A %A" userName userId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                    return! managingConnections connections
+                        | Ok _ ->
+                            // TODO-REMOVE: Use of tempUserName | tempIfFullySignedOut once OtherUserSignedOutMsgOLD replaced by Chat [projection] agent...
+                            let tempUserName = match userId |> signedInUsers.TryGetValue with | true, signedInUser -> signedInUser.UserName |> Some | false, _ -> None
+                            let otherConnectionsForSignedInSession =
+                                connections
+                                |> List.ofSeq
+                                |> List.choose (fun (KeyValue (otherConnectionId, (ws, signedInSession))) ->
+                                if otherConnectionId <> connectionId then // note: this check should be superfluous as connectionId no longer has a SignedInSession
+                                    match signedInSession with | Some signedInSession when signedInSession = (userId, sessionId) -> (ws, otherConnectionId) |> Some | Some _ | None -> None
+                                else None)
+                            match otherConnectionsForSignedInSession with
+                            | _ :: _ ->
+                                otherConnectionsForSignedInSession |> List.iter (fun (ws, otherConnectionId) -> connections.[otherConnectionId] <- (ws, None))
+                                let otherConnectionIds = otherConnectionsForSignedInSession |> List.map snd
+                                otherConnectionIds |> ConnectionsSignedOut |> broadcaster.Broadcast
+                                let serverMsg = None |> AutoSignOutMsg |> ServerAppMsg
+                                do! (connections, signedInUsers) |> sendMsg serverMsg (otherConnectionIds |> ConnectionIds)
+                            | [] -> ()
+                            // Note: No need to broadcast UserSignedOut (if appropriate) since handled by removeSignedInUser.
+                            if connections |> hasConnections userId |> not then signedInUsers |> removeSignedInUser userId
+                            match tempUserName with
+                            | Some userName -> do! (connections, signedInUsers) |> tempIfFullySignedOut (userId, userName)
+                            | None -> () // note: should never happen
+                        | Error _ -> () })
+                    do! (connections, signedInUsers) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (connections, signedInUsers)
                 | UiAuthMsg (jwt, UiAuthChatMsg (SendChatMessageCmd chatMessage)) ->
-                    // SNH-NMB: What if connectionId not in connections? What if no AuthUserSession for connectionId? (&c.)...
-                    sprintf "SendChatMessageCmd for %A when managingConnections (%i connection/s) -> %A" jwt connections.Length chatMessage |> Verbose |> log
-                    let result =
-                        if debugFakeError () then sprintf "Fake SendChatMessageCmd error -> %A -> %A" jwt chatMessage |> OtherError |> OtherCmdError |> Error
-                        else
-                            match jwt |> fromJwt with
-                            | Ok (sessionId, userId, userName, permissions) -> (sessionId, userId, userName, permissions) |> Ok
-                            | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> CmdJwtError |> Error
-                    let result = match result with | Ok ok -> ok |> Ok | Error error -> (chatMessage.ChatMessageId, sprintf "%A" error) |> Error
-                    // TODO-NMB-HIGH: If Ok, verify userId | permissions | (&c.) against cache - and retrieve UserTokens...
-                    // TODO-NMB-HIGH: Handle via Chat [projection] agent?...
-                    let connections =
-                        match result with
-                        | Ok (sessionId, userId, _, _) ->
-                            userId |> UserApi |> broadcaster.Broadcast
-                            connections |> updateLastApi (connectionId, userId, sessionId)
-                        | Error _ -> connections
-                    let result = match result with | Ok _ -> chatMessage |> Ok | Error error -> error |> Error
-                    let! connections = connections |> sendMsg (result |> SendChatMessageResultMsgOLD |> ServerChatMsg) (connectionId |> OnlyConnectionId)
-                    let! connections =
+                    let source = "SendChatMessageCmd"
+                    sprintf "%s %A for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source chatMessage jwt connections.Count signedInUsers.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUsers |> tokensForAuthCmdApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                        // TODO-NMB-HIGH: Check has appropriate token for Chat [projection] agent...
+                        // TODO-REMOVE: No need to hack Ok | Error once using SendChatMessageCmdResult (rather than SendChatMessageResultMsgOLD)...
+                        let result = match result with | Ok _ -> chatMessage |> Ok | Error error -> (chatMessage.ChatMessageId, sprintf "%A" error) |> Error
+                        // TODO-REMOVE: Use of OtherUserChatMessageMsgOLD once handled by Chat [projection] agent...
                         match result with
                         | Ok chatMessage ->
-                            connections |> sendMsg (chatMessage |> OtherUserChatMessageMsgOLD |> ServerChatMsg) (connectionId |> AllAuthExceptConnectionId)
-                        | Error _ -> connections |> thingAsync
-                    result |> logResult "SendChatMessageCmd" (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                    return! managingConnections connections }
+                            let serverMsg = chatMessage |> OtherUserChatMessageMsgOLD |> ServerChatMsg
+                            do! (connections, signedInUsers) |> sendMsg serverMsg (connectionId |> AllSignedInExceptConnectionId)
+                        | Error _ -> ()
+                        let serverMsg = result |> SendChatMessageResultMsgOLD |> ServerChatMsg
+                        do! (connections, signedInUsers) |> sendMsg serverMsg ([ connectionId ] |> ConnectionIds)
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
+                    do! (connections, signedInUsers) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (connections, signedInUsers)
+            | SendMsg (serverMsg, connectionIds) ->
+                sprintf "SendMsg %A (%i ConnectionId/s) when managingConnections (%i connection/s) (%i signed-in user/s)" serverMsg connectionIds.Length connections.Count signedInUsers.Count |> Verbose |> log
+                do! (connections, signedInUsers) |> sendMsg serverMsg (connectionIds |> ConnectionIds)
+                return! managingConnections (connections, signedInUsers) }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Connections |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
-    member _self.Start () =
+    member __.Start () =
         // TODO-NMB-LOW: Subscribe to Tick (e.g. to auto-sign out "expired" sessions)?...
         let onEvent = (fun event ->
             match event with
-            | SendMsg (_serverMsg, _recipients) -> () // TODO-NMB-HIGH... (serverMsg, recipients) |> self.SendMsg
+            | Event.SendMsg (serverMsg, connectionIds) -> (serverMsg, connectionIds) |> SendMsg |> agent.Post
             | _ -> ())
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
         sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriptionId |> Info |> log
