@@ -176,7 +176,6 @@ type Users () =
                 return! pendingOnUsersEventsRead ()
             | OnUsersEventsRead _ -> sprintf "OnUsersEventsRead when managingUsers (%i user/s)" users.Count |> IgnoredInput |> Agent |> log ; return! managingUsers users
             | HandleSignInCmd (userName, password, reply) ->
-                // TODO-NMB-MEDIUM: If MustChangePasswordReason is Some, return restricted permissions / Jwt (i.e. rather than relying on Ui enforcing this)?...
                 let invalidCredentialsError errorText = errorText |> InvalidCredentials |> Error
                 sprintf "HandleSignInCmd for %A when managingUsers (%i user/s)" userName users.Count |> Verbose |> log
                 let result =
@@ -200,7 +199,6 @@ type Users () =
                 result |> reply.Reply
                 return! managingUsers users
             | HandleAutoSignInCmd (userId, permissionsFromJwt, reply) ->
-                // TODO-NMB-MEDIUM: If MustChangePasswordReason is Some, return restricted permissions / Jwt (i.e. rather than relying on Ui enforcing this)?...
                 sprintf "HandleAutoSignInCmd for %A when managingUsers (%i user/s)" userId users.Count |> Verbose |> log
                 let result =
                     users |> tryFindUser userId (OtherError >> OtherAutoSignInCmdError >> Error)
@@ -219,7 +217,6 @@ type Users () =
                 result |> reply.Reply
                 return! managingUsers users
             | HandleChangePasswordCmd (changePasswordToken, auditUserId, currentRvn, password, reply) ->
-                // TODO-NMB-MEDIUM: If MustChangePasswordReason is Some, return full permissions / Jwt (and ensure Ui updates local storage and Connections agent updates cache)?...
                 let debugSource = "Users.managingUsers.HandleChangePasswordCmd"
                 sprintf "HandleChangePasswordCmd for %A (%A) when managingUsers (%i user/s)" auditUserId currentRvn users.Count |> Verbose |> log
                 let result =

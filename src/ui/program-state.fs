@@ -196,13 +196,9 @@ let private handleServerUiMsgError serverUiMsgError state =
 let private handleConnected (otherConnectionCount, signedInUserCount) user lastPage state =
     let toastCmd =
 #if DEBUG
-        // TEMP-NMB: Show [ other-web-socket-connection | signed-in-user ] counts (as toast)...
         let otherConnections = if otherConnectionCount > 0 then sprintf "<strong>%i</strong>" otherConnectionCount else sprintf "%i" otherConnectionCount
         let signedInUsers = if signedInUserCount > 0 then sprintf "<strong>%i</strong>" signedInUserCount else sprintf "%i" signedInUserCount
         sprintf "Other web socket connections: %s<br>Signed-in users: %s" otherConnections signedInUsers |> infoToastCmd
-        // ...or not...
-        //Cmd.none
-        // ...NMB-TEMP
 #else
         Cmd.none
 #endif
