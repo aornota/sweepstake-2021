@@ -66,8 +66,8 @@ readPersistedEvents ()
 "starting Connections agent" |> Info |> log
 () |> connections.Start
 
-(* TEMP-NMB...
-("development", function | Host | Entity Entity.Users | Connections -> allCategories | Broadcaster | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+(* TEMP-NMB: Finesse logging for development/debugging purposes...
+("development/debugging", function | Host | Entity Entity.Users | Connections -> allCategories | Broadcaster | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
 
 "ready" |> Info |> log
 

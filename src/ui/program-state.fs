@@ -397,7 +397,7 @@ let private handleAuthInput authInput authState state =
     | PageInput (APageInput DraftsInput), None, false -> state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
     | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false -> { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none
     | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), None, false -> state, uiAuthMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
-    | PageInput (APageInput (ChatInput chatInput)), None, false ->
+    | PageInput (APageInput (ChatInput chatInput)), _, _ ->
         match authState.AuthPageStates.ChatState with
         | Some chatState ->
             let chatState, chatCmd = chatState |> Chat.State.transition chatInput

@@ -37,10 +37,10 @@ let private createInitialUsersEventsIfNecessary = async {
     let tuple thing otherThing = thing, otherThing
     let usersDir = directory EntityType.Users
 
-    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists... *)
+    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists...
     if Directory.Exists usersDir then
         sprintf "deleting existing User/s events -> %s" usersDir |> Info |> log
-        delete usersDir
+        delete usersDir *)
 
     if Directory.Exists usersDir then sprintf "preserving existing User/s events -> %s" usersDir |> Info |> log
     else
@@ -50,28 +50,26 @@ let private createInitialUsersEventsIfNecessary = async {
         // Note: Send dummy OnUsersEventsRead to Users agent to ensure that it transitions [from pendingOnUsersEventsRead] to managingUsers; otherwise HandleCreateUserCmdAsync (&c.) would be ignored (and block).
         "sending dummy OnUsersEventsRead to Users agent" |> Info |> log
         [] |> users.OnUsersEventsRead
-        // Note: Only create initial SuperUser.
-        let nephId, neph, dummyPassword, nephType = Guid.Empty |> UserId, UserName "neph", Password "password", SuperUser
-        let nephTokens = permissions nephId nephType |> UserTokens
-        let! result = nephTokens.CreateUserToken |> ifToken (tuple nephId) (fun token -> (token, nephId, nephId, neph, dummyPassword, nephType) |> users.HandleCreateUserCmdAsync)
+        // Note: Only create initial SuperUser | Administators.
+        let superUserType, dummyPassword = SuperUser, Password "password"
+        let nephId, neph = Guid.Empty |> UserId, UserName "neph"
+        let nephTokens = permissions nephId superUserType |> UserTokens
+        let! result = nephTokens.CreateUserToken |> ifToken (tuple nephId) (fun token -> (token, nephId, nephId, neph, dummyPassword, superUserType) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" neph)
-
-        (* TEMP-NMB: Also create a couple of Administrators... *)
+        let adminType = Administrator
         let rosieId, rosie = Guid "ffffffff-0001-0000-0000-000000000000" |> UserId, UserName "rosie"
         let hughId, hugh = Guid "ffffffff-0002-0000-0000-000000000000" |> UserId, UserName "hugh"
-        let! result = nephTokens.CreateUserToken |> ifToken (tuple rosieId) (fun token -> (token, nephId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync)
+        let! result = nephTokens.CreateUserToken |> ifToken (tuple rosieId) (fun token -> (token, nephId, rosieId, rosie, dummyPassword, adminType) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" rosie)
-        let! result = nephTokens.CreateUserToken |> ifToken (tuple hughId) (fun token -> (token, rosieId, hughId, hugh, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync)
+        let! result = nephTokens.CreateUserToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, hugh, dummyPassword, adminType) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" hugh)
 
-        (* TEMP-NMB: Test various scenarios (note: expects only initial SuperUser to have been created)...
+        (* TEMP-NMB: Test various scenarios (note: expects initial SuperUser | Administrators to have been created)...
         let initialRvn, newDummyPassword = Rvn 1, Password "drowssap"
-        let rosieId, rosie = Guid "ffffffff-0001-0000-0000-000000000000" |> UserId, UserName "rosie"
-        let hughId, hugh = Guid "ffffffff-0002-0000-0000-000000000000" |> UserId, UserName "hugh"
+        let rosieTokens = permissions rosieId adminType |> UserTokens
         let willId, will = Guid "ffffffff-ffff-0001-0000-000000000000" |> UserId, UserName "will"
         let personaNonGrataId, personaNonGrata = Guid "ffffffff-ffff-ffff-0001-000000000000" |> UserId, UserName "persona non grata"
         let unknownUserId, unknownUser = Guid.NewGuid () |> UserId, UserName "unknown"
-        let rosieTokens = permissions rosieId Administrator |> UserTokens
         let personaNonGrataTokens = permissions personaNonGrataId PersonaNonGrata |> UserTokens
         let unknownUserTokens = permissions unknownUserId Pleb |> UserTokens
         // Test HandleSignInCmdAsync:
@@ -111,10 +109,6 @@ let private createInitialUsersEventsIfNecessary = async {
         let! result = nephTokens.ChangePasswordToken |> ifToken id (fun token -> (token, nephId, Rvn 3, Password "pa$$word") |> users.HandleChangePasswordCmdAsync)
         result |> logShouldFail "HandleChangePasswordCmdAsync (invalid current Rvn)"
         // Test HandleCreateUserCmdAsync:
-        let! result = nephTokens.CreateUserToken |> ifToken (tuple rosieId) (fun token -> (token, nephId, rosieId, rosie, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" rosie)
-        let! result = rosieTokens.CreateUserToken |> ifToken (tuple hughId) (fun token -> (token, rosieId, hughId, hugh, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" hugh)
         let! result = rosieTokens.CreateUserToken |> ifToken (tuple willId) (fun token -> (token, rosieId, willId, will, dummyPassword, Pleb) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" will)
         let! result = rosieTokens.CreateUserToken |> ifToken (tuple unknownUserId) (fun token -> (token, rosieId, unknownUserId, unknownUser, dummyPassword, Administrator) |> users.HandleCreateUserCmdAsync)
@@ -153,8 +147,8 @@ let private createInitialUsersEventsIfNecessary = async {
         let! result = nephTokens.ResetPasswordToken |> ifToken (tuple willId) (fun token -> (token, nephId, willId, Rvn 0, Password "pa$$word") |> users.HandleResetPasswordCmdAsync)
         result |> logShouldFail "HandleResetPasswordCmdAsync (invalid current Rvn)"
         // Test HandleChangeUserTypeCmdAsync:
-        let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleChangeUserTypeCmdAsync (%A %A)" hugh Administrator)
+        let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, initialRvn, Pleb) |> users.HandleChangeUserTypeCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleChangeUserTypeCmdAsync (%A %A)" hugh Pleb)
         let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple nephId) (fun token -> (token, nephId, nephId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync)
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid ChangeUserTypeToken: valid UserTarget is NotSelf)"
         // Note: Cannot test "UserType for UserTarget not allowed" or "UserType not allowed" as only SuperUsers have ChangeUserTypePermission - and they have it for all UserTypes.
@@ -162,7 +156,7 @@ let private createInitialUsersEventsIfNecessary = async {
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (no ChangeUserTypeToken)"
         let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple unknownUserId) (fun token -> (token, nephId, unknownUserId, initialRvn, Administrator) |> users.HandleChangeUserTypeCmdAsync)
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (unknown userId)"
-        let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, Rvn 2, Administrator) |> users.HandleChangeUserTypeCmdAsync)
+        let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, Rvn 2, Pleb) |> users.HandleChangeUserTypeCmdAsync)
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid userType: same as current)"
         let! result = nephTokens.ChangeUserTypeToken |> ifToken (tuple hughId) (fun token -> (token, nephId, hughId, initialRvn, SuperUser) |> users.HandleChangeUserTypeCmdAsync)
         result |> logShouldFail "HandleChangeUserTypeCmdAsync (invalid current Rvn)" *)
