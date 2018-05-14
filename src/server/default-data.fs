@@ -37,10 +37,10 @@ let private createInitialUsersEventsIfNecessary = async {
     let tuple thing otherThing = thing, otherThing
     let usersDir = directory EntityType.Users
 
-    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists...
+    (* TEMP-NMB: Force re-creation of initial User/s events if directory already exists... *)
     if Directory.Exists usersDir then
         sprintf "deleting existing User/s events -> %s" usersDir |> Info |> log
-        delete usersDir *)
+        delete usersDir
 
     if Directory.Exists usersDir then sprintf "preserving existing User/s events -> %s" usersDir |> Info |> log
     else
