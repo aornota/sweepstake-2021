@@ -6,6 +6,7 @@ open System
 
 type Entity =
     | Users
+    | Squads
 
 type Projection =
     | Chat
@@ -52,7 +53,7 @@ let private sourceTextAndColour source =
     | Ticker -> "Ticker", ConsoleColor.DarkYellow
     | Persistence -> "Persistence", ConsoleColor.Cyan
     | Entity entity ->
-        let text = match entity with | Users -> "Users"
+        let text = match entity with | Users -> "Users" | Squads -> "Squads"
         sprintf "%s [entity]" text, ConsoleColor.Blue
     | Projection projection ->
         let text = match projection with | Chat -> "Chat"

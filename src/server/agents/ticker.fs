@@ -6,7 +6,7 @@ open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Events.Event
+open Aornota.Sweepstake2018.Server.Signal
 
 type private TickerInput =
     | Start of secondsPerTick : int<second/tick> * reply : AsyncReplyChannel<unit>

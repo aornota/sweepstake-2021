@@ -4,7 +4,7 @@ open Aornota.Common.Json
 
 open Aornota.Server.Common.JsonConverter
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 
 open System.IO
 open System.Security.Cryptography

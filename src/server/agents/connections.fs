@@ -1,6 +1,6 @@
 module Aornota.Sweepstake2018.Server.Agents.Connections
 
-// Note: Connections agent broadcasts UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnect - and subscribes to SendMsg.
+// Note: Connections agent broadcasts UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnected - and subscribes to SendMsg.
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
@@ -10,6 +10,7 @@ open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
@@ -17,8 +18,8 @@ open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Agents.Entities.Users
 open Aornota.Sweepstake2018.Server.Authorization
 open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Events.Event
 open Aornota.Sweepstake2018.Server.Jwt
+open Aornota.Sweepstake2018.Server.Signal
 
 open System
 open System.Collections.Generic
@@ -119,7 +120,7 @@ let private sendMsg (serverMsg:ServerMsg) recipients (connections:Dictionary<Con
     failedConnectionIds |> List.iter (fun connectionId -> (connections, signedInUsers) |> removeConnection connectionId)
     return () }
 
-let private addSignedInUser authUser (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
+let private addSignedInUser (authUser:AuthUser) (connections:Dictionary<ConnectionId, Connection>, signedInUsers:Dictionary<UserId, SignedInUser>) = async {
     if authUser.UserId |> signedInUsers.ContainsKey |> not then // note: silently ignore if already in signedInUsers
         let signedInUser = { UserName = authUser.UserName ; Permissions = authUser.Permissions ; UserTokens = authUser.Permissions |> UserTokens ; LastApi = DateTime.Now }
         (authUser.UserId, signedInUser) |> signedInUsers.Add
@@ -204,7 +205,7 @@ type Connections () =
             | AddConnection (connectionId, ws) ->
                 sprintf "AddConnection %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connections.Count signedInUsers.Count |> Verbose |> log
                 let otherConnectionCount, signedInUserCount = connections.Count, signedInUsers.Count
-                if connections.ContainsKey connectionId then // note: should never happen
+                if connectionId |> connections.ContainsKey then // note: should never happen
                     sprintf "AddConnection when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (already in use)" connections.Count signedInUsers.Count connectionId |> Danger |> log
                 else
                     (connectionId, (ws, None)) |> connections.Add
@@ -388,7 +389,7 @@ type Connections () =
         // TODO-NMB-LOW: Subscribe to Tick (e.g. to auto-sign out "expired" sessions)?...
         let onEvent = (fun event ->
             match event with
-            | Event.SendMsg (serverMsg, connectionIds) -> (serverMsg, connectionIds) |> SendMsg |> agent.Post
+            | Signal.SendMsg (serverMsg, connectionIds) -> (serverMsg, connectionIds) |> SendMsg |> agent.Post
             | _ -> ())
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
         sprintf "agent subscribed to SendMsg broadcasts -> %A" subscriptionId |> Info |> log

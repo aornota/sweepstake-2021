@@ -13,6 +13,8 @@
     <Compile Include="../common/projection.fs" />
     <Compile Include="../common/domain/core.fs" />
     <Compile Include="../common/domain/chat.fs" />
+    <Compile Include="../common/domain/squad.fs" />
+    <Compile Include="../common/domain/user.fs" />
     <Compile Include="../common/ws-api/ui-msg.fs" />
     <Compile Include="../common/ws-api/server-msg.fs" />
     <Compile Include="../ui-render-bulma/render-common.fs" />

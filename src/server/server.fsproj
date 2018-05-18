@@ -13,6 +13,8 @@
     <Compile Include="../common/json.fs" />
     <Compile Include="../common/projection.fs" />
     <Compile Include="../common/domain/core.fs" />
+    <Compile Include="../common/domain/user.fs" />
+    <Compile Include="../common/domain/squad.fs" />
     <Compile Include="../common/domain/chat.fs" />
     <Compile Include="../common/ws-api/ui-msg.fs" />
     <Compile Include="../common/ws-api/server-msg.fs" />
@@ -21,13 +23,15 @@
     <Compile Include="connection.fs" />
     <Compile Include="authorization.fs" />
     <Compile Include="jwt.fs" />
-    <Compile Include="events/user.fs" />
-    <Compile Include="events/event.fs" />
+    <Compile Include="events/user-events.fs" />
+    <Compile Include="events/squad-events.fs" />
+    <Compile Include="signal.fs" />
     <Compile Include="agents/console-logger.fs" />
     <Compile Include="agents/broadcaster.fs" />
     <Compile Include="agents/ticker.fs" />
     <Compile Include="agents/persistence.fs" />
     <Compile Include="agents/entities/users.fs" />
+    <Compile Include="agents/entities/squads.fs" />
     <Compile Include="agents/projections/chat.fs" />
     <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />

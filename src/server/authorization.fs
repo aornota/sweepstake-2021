@@ -1,6 +1,6 @@
 module Aornota.Sweepstake2018.Server.Authorization
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 
 type MetaToken = private | MetaToken
 
@@ -8,36 +8,42 @@ type ChangePasswordToken private (userId) =
     new (_:MetaToken, userId:UserId) = ChangePasswordToken userId
     member __.UserId = userId
 
-type UserAdministrationToken private () =
-    new (_:MetaToken) = UserAdministrationToken ()
-
 type CreateUserToken private (userTypes) =
     new (_:MetaToken, userTypes:UserType list) = CreateUserToken userTypes
     member __.UserTypes = userTypes
-
 type ResetPasswordToken private (userTarget) =
     new (_:MetaToken, userTarget:UserTarget) = ResetPasswordToken userTarget
     member __.UserTarget = userTarget
-
 type ChangeUserTypeToken private (userTarget, userTypes) =
     new (_:MetaToken, userTarget:UserTarget, userTypes:UserType list) = ChangeUserTypeToken (userTarget, userTypes)
     member __.UserTarget = userTarget
     member __.UserTypes = userTypes
 
+type CreateSquadToken private () =
+    new (_:MetaToken) = CreateSquadToken ()
+type AddOrEditPlayerToken private () =
+    new (_:MetaToken) = AddOrEditPlayerToken ()
+type WithdrawPlayerToken private () =
+    new (_:MetaToken) = WithdrawPlayerToken ()
+type EliminateSquadToken private () =
+    new (_:MetaToken) = EliminateSquadToken ()
+    
 type private ValidatedUserTokens = {
     ChangePasswordToken : ChangePasswordToken option
-    UserAdministrationToken : UserAdministrationToken option
     CreateUserToken : CreateUserToken option
     ResetPasswordToken : ResetPasswordToken option
-    ChangeUserTypeToken : ChangeUserTypeToken option }
+    ChangeUserTypeToken : ChangeUserTypeToken option
+    CreateSquadToken : CreateSquadToken option
+    AddOrEditPlayerToken : AddOrEditPlayerToken option
+    WithdrawPlayerToken : WithdrawPlayerToken option
+    EliminateSquadToken : EliminateSquadToken option }
 
 type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
         let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> (MetaToken, userId) |> ChangePasswordToken |> Some | None -> None
-        let userAdministrationToken, createUserToken, resetPasswordToken, changeUserTypeToken =
+        let createUserToken, resetPasswordToken, changeUserTypeToken =
             match permissions.UserAdministrationPermissions with
             | Some userAdministrationPermissions ->
-                let userAdministrationToken = MetaToken |> UserAdministrationToken |> Some
                 let createUserToken = (MetaToken, userAdministrationPermissions.CreateUserPermission) |> CreateUserToken |> Some
                 let resetPasswordToken =
                     match userAdministrationPermissions.ResetPasswordPermission with
@@ -47,15 +53,31 @@ type UserTokens private (vut:ValidatedUserTokens) =
                     match userAdministrationPermissions.ChangeUserTypePermission with
                     | Some (userTarget, userTypes) -> (MetaToken, userTarget, userTypes) |> ChangeUserTypeToken |> Some
                     | None -> None
-                userAdministrationToken, createUserToken, resetPasswordToken, changeUserTypeToken
-            | None -> None, None, None, None           
+                createUserToken, resetPasswordToken, changeUserTypeToken
+            | None -> None, None, None
+        let createSquadToken, addOrEditPlayerToken, withdrawPlayerToken, eliminateSquadToken =
+            match permissions.SquadAdministrationPermissions with
+            | Some squadAdministrationPermissions ->
+                let createSquadToken = if squadAdministrationPermissions.CreateSquadPermission then MetaToken |> CreateSquadToken |> Some else None
+                let addOrEditPlayerToken = if squadAdministrationPermissions.AddOrEditPlayerPermission then MetaToken |> AddOrEditPlayerToken |> Some else None
+                let withdrawPlayerToken = if squadAdministrationPermissions.WithdrawPlayerPermission then MetaToken |> WithdrawPlayerToken |> Some else None
+                let eliminateSquadToken = if squadAdministrationPermissions.EliminateSquadPermission then MetaToken |> EliminateSquadToken |> Some else None
+                createSquadToken, addOrEditPlayerToken, withdrawPlayerToken, eliminateSquadToken
+            | None -> None, None, None, None
         UserTokens {
             ChangePasswordToken = changePasswordToken
-            UserAdministrationToken = userAdministrationToken
             CreateUserToken = createUserToken
             ResetPasswordToken = resetPasswordToken
-            ChangeUserTypeToken = changeUserTypeToken }
+            ChangeUserTypeToken = changeUserTypeToken
+            CreateSquadToken = createSquadToken
+            AddOrEditPlayerToken = addOrEditPlayerToken
+            WithdrawPlayerToken = withdrawPlayerToken
+            EliminateSquadToken = eliminateSquadToken }
     member __.ChangePasswordToken = vut.ChangePasswordToken
     member __.CreateUserToken = vut.CreateUserToken
     member __.ResetPasswordToken = vut.ResetPasswordToken
     member __.ChangeUserTypeToken = vut.ChangeUserTypeToken
+    member __.CreateSquadToken = vut.CreateSquadToken
+    member __.AddOrEditPlayerToken = vut.AddOrEditPlayerToken
+    member __.WithdrawPlayerToken = vut.WithdrawPlayerToken
+    member __.EliminateSquadToken = vut.EliminateSquadToken

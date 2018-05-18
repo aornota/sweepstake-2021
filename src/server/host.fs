@@ -7,6 +7,7 @@ open Aornota.Sweepstake2018.Common.Literals
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.Connections
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2018.Server.Agents.Entities.Squads
 open Aornota.Sweepstake2018.Server.Agents.Entities.Users
 open Aornota.Sweepstake2018.Server.Agents.Persistence
 open Aornota.Sweepstake2018.Server.Agents.Ticker
@@ -50,7 +51,7 @@ builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 "starting ConsoleLogger agent" |> Info |> log // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
 ifDebug logEverythingExceptVerboseAndTicker logWarningsAndWorseOnly |> consoleLogger.Start
 "starting core agents" |> Info |> log
-logAllEventsExceptTick |> broadcaster.Start
+logAllSignalsExceptTick |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
 () |> persistence.Start
 
@@ -59,6 +60,9 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 // Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
 "starting entity agents" |> Info |> log
 () |> users.Start
+() |> squads.Start
+
+// TODO-NMB-HIGH..."starting projection agents" |> Info |> log
 
 "reading persisted events" |> Info |> log
 readPersistedEvents ()

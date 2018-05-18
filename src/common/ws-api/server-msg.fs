@@ -5,6 +5,8 @@ open Aornota.Common.IfDebug
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
+(*open Aornota.Sweepstake2018.Common.Domain.Squad*)
+open Aornota.Sweepstake2018.Common.Domain.User
 
 type ServerUiMsgError =
     | ReceiveUiMsgError of errorText : string
@@ -56,16 +58,29 @@ type ServerAppMsg =
 
 (*type UserAdministrationProjectionMsg =
     | UserAdministrationProjectionQryInitialized of userAdmins : Projection<UserAdminDto>
-    | UserAdministrationDeltaMsg of delta : Delta<UserAdminDto>
+    | UserAdministrationDeltaMsg of delta : Delta<UserAdminDto>*)
 
-type ServerUserAdministrationMsg =
+(*type ServerUserAdministrationMsg =
     | InitializeUserAdministrationProjectionQryResult of result : Result<unit, AuthQryError<string>>
     | UserAdministrationProjectionMsg of userAdministrationProjectionMsg : UserAdministrationProjectionMsg
     | CreateUserCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
     | ResetPasswordCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
-    | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
+    | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>*)
 
-type ChatProjectionMsg =
+(*type SquadsProjectionMsg =
+    | SquadsProjectionQryInitialized of squads : Projection<_>
+    | SquadsProjectionDeltaMsg of delta : Delta<_>*)
+
+(*type ServerSquadsMsg =
+    | InitializeSquadsProjectionQryResult of result : Result<unit, AuthQryError<string>>
+    | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
+    | ChangePlayerNameCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
+    | ChangePlayerTypeCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
+    | WithdrawPlayerCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
+    | AddPlayerCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
+    | EliminateSquadCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>*)
+
+(*type ChatProjectionMsg =
     | ChatProjectionQryInitialized of chatUsers : Projection<ChatUserDto> * chatMessages : Projection<ChatMessageDto> // TODO-NMB-HIGH: What if cannot initialize?...
     | ChatUsersDeltaMsg of delta : Delta<ChatUserDto>
     | ChatMessagesDeltaMsg of delta : Delta<ChatMessageDto>
@@ -82,6 +97,7 @@ type ServerChatMsg =
 type ServerMsg =
     | ServerAppMsg of serverAppMsg : ServerAppMsg
     (*| ServerUserAdministrationMsg of serverUserAdministrationMsg : ServerUserAdministrationMsg*)
+    (*| ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg*)
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> Error

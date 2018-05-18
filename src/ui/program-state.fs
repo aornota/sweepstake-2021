@@ -12,6 +12,7 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Shared
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.Literals
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
@@ -357,7 +358,7 @@ let private handleUnauthInput unauthInput unauthState state =
     | SignInInput SignIn, Some signInState -> // note: assume no need to validate signInState.UserNameText or signInState.PasswordText (i.e. because App.Render.renderSignInModal will ensure that SignIn can only be dispatched when valid)
         let signInState = { signInState with SignInStatus = SignInPending |> Some }
         let unauthState = { unauthState with SignInState = signInState |> Some }
-        let cmd = (state.SessionId, UserName signInState.UserNameText, Password signInState.PasswordText) |> SignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.Ws
+        let cmd = (state.SessionId, UserName (signInState.UserNameText.Trim ()), Password (signInState.PasswordText.Trim ())) |> SignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.Ws
         { state with AppState = Unauth unauthState }, cmd
     | SignInInput CancelSignIn, Some signInState ->
         match signInState.SignInStatus with
@@ -420,7 +421,7 @@ let private handleAuthInput authInput authState state =
     | ChangePasswordInput ChangePassword, Some changePasswordState, false -> // note: assume no need to validate changePasswordState.NewPasswordText or changePasswordState.ConfirmPasswordText (i.e. because App.Render.renderChangePasswordModal will ensure that ChangePassword can only be dispatched when valid)
         let changePasswordState = { changePasswordState with ChangePasswordStatus = ChangePasswordPending |> Some }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
-        let cmd = (authState.AuthUser.Rvn, Password changePasswordState.NewPasswordText) |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
+        let cmd = (authState.AuthUser.Rvn, Password (changePasswordState.NewPasswordText.Trim ())) |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
         { state with AppState = Auth authState }, cmd
     | ChangePasswordInput CancelChangePassword, Some changePasswordState, false ->
         match changePasswordState.MustChangePasswordReason, changePasswordState.ChangePasswordStatus with

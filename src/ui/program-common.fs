@@ -5,6 +5,7 @@ open Aornota.Common.UnitsOfMeasure
 open Aornota.UI.Common.Notifications
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
@@ -12,6 +13,8 @@ open Aornota.Sweepstake2018.UI.Pages
 open System
 
 module Brw = Fable.Import.Browser
+
+type ToDo = unit // TODO-REMOVE: Once no longer used...
 
 type UnauthPage =
     | NewsPage

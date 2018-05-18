@@ -8,14 +8,15 @@ open Aornota.Common.UnexpectedError
 open Aornota.Server.Common.Helpers
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Agents.Persistence
 open Aornota.Sweepstake2018.Server.Authorization
-open Aornota.Sweepstake2018.Server.Events.Event
-open Aornota.Sweepstake2018.Server.Events.User
+open Aornota.Sweepstake2018.Server.Events.UserEvents
 open Aornota.Sweepstake2018.Server.Jwt
+open Aornota.Sweepstake2018.Server.Signal
 
 open System
 open System.Collections.Generic
@@ -99,7 +100,7 @@ let private initializeUsers debugSource (usersEvents:(UserId * (Rvn * UserEvent)
         |> List.map (fun (userId, events) ->
             match events with
             | _ :: _ -> events |> List.fold (fun idAndUserResult (rvn, userEvent) -> applyUserEvent debugSource idAndUserResult (rvn, userEvent)) (Ok (userId, None))
-            | [] -> otherError debugSource (ifDebug (sprintf "No UserEvents for %A" userId) UNEXPECTED_ERROR)) // note: should never happen
+            | [] -> ifDebug (sprintf "No UserEvents for %A" userId) UNEXPECTED_ERROR |> otherError debugSource) // note: should never happen
     results
     |> List.choose (fun idAndUserResult -> match idAndUserResult with | Ok (userId, Some user) -> (userId, user) |> Some | Ok (_, None) | Error _ -> None)
     |> List.iter (fun (userId, user) -> users.Add (userId, user))
@@ -113,11 +114,11 @@ let private initializeUsers debugSource (usersEvents:(UserId * (Rvn * UserEvent)
     users, errors
 
 let private updateUser userId user (users:Dictionary<UserId, User>) =
-    if users.ContainsKey userId then users.[userId] <- user
+    if userId |> users.ContainsKey then users.[userId] <- user
     users
 
 let private tryFindUser userId onError (users:Dictionary<UserId, User>) =
-    if users.ContainsKey userId then (userId, users.Item userId) |> Ok else ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> onError
+    if userId |> users.ContainsKey then (userId, users.[userId]) |> Ok else ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> onError
 
 let private tryApplyUserEvent debugSource userId user nextRvn userEvent =
     match applyUserEvent debugSource (Ok (userId, user)) (nextRvn, userEvent) with
@@ -157,7 +158,11 @@ type Users () =
                 let users, errors = initializeUsers "Users.pendingOnUsersEventsRead.OnUsersEventsRead" usersEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
                 sprintf "OnUsersEventsRead when pendingOnUsersEventsRead -> managingUsers (%i user/s)" users.Count |> Info |> log
-                UsersRead (users |> List.ofSeq |> List.map (fun (KeyValue (userId, user)) -> userId, user.Rvn, user.UserName, user.UserType)) |> broadcaster.Broadcast       
+                let usersRead =
+                    users
+                    |> List.ofSeq
+                    |> List.map (fun (KeyValue (userId, user)) -> { UserId = userId ; Rvn = user.Rvn ; UserName = user.UserName ; UserType = user.UserType })
+                usersRead |> UsersRead |> broadcaster.Broadcast       
                 return! managingUsers users
             | HandleSignInCmd _ -> "HandleSignInCmd when pendingOnUsersEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersEventsRead ()
             | HandleAutoSignInCmd _ -> "HandleAutoSignInCmd when pendingOnUsersEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersEventsRead ()
@@ -216,9 +221,10 @@ type Users () =
                 result |> logResult "HandleAutoSignInCmd" (fun (authUser:AuthUser) -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
                 return! managingUsers users
-            | HandleChangePasswordCmd (changePasswordToken, auditUserId, currentRvn, password, reply) ->
+            | HandleChangePasswordCmd (changePasswordToken, auditUserId, currentRvn, Password password, reply) ->
                 let debugSource = "Users.managingUsers.HandleChangePasswordCmd"
                 sprintf "HandleChangePasswordCmd for %A (%A) when managingUsers (%i user/s)" auditUserId currentRvn users.Count |> Verbose |> log
+                let password = Password (password.Trim ())
                 let result =
                     if changePasswordToken.UserId = auditUserId then () |> Ok else NotAuthorized |> AuthCmdAuthznError |> Error
                     |> Result.bind (fun _ -> users |> tryFindUser auditUserId (otherCmdError debugSource))
@@ -234,14 +240,16 @@ type Users () =
                 result |> Result.map (fun (_, user) -> user.Rvn) |> reply.Reply
                 let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
                 return! managingUsers users
-            | HandleCreateUserCmd (createUserToken, auditUserId, userId, userName, password, userType, reply) ->
+            | HandleCreateUserCmd (createUserToken, auditUserId, userId, UserName userName, Password password, userType, reply) ->
                 let debugSource = "Users.managingUsers.HandleCreateUserCmd"
                 sprintf "HandleCreateUserCmd for %A (%A %A) when managingUsers (%i user/s)" userId userName userType users.Count |> Verbose |> log
+                let userName = UserName (userName.Trim ())
+                let password = Password (password.Trim ())
                 let result =
                     if createUserToken.UserTypes |> List.contains userType then () |> Ok else NotAuthorized |> AuthCmdAuthznError |> Error
                     |> Result.bind (fun _ ->
-                        if users.ContainsKey userId |> not then () |> Ok
-                        else (ifDebug (sprintf "%A already exists" userId) UNEXPECTED_ERROR) |> otherCmdError debugSource)
+                        if userId |> users.ContainsKey |> not then () |> Ok
+                        else ifDebug (sprintf "%A already exists" userId) UNEXPECTED_ERROR |> otherCmdError debugSource)
                     |> Result.bind (fun _ ->
                         let userNames = users |> List.ofSeq |> List.map (fun (KeyValue (_, user)) -> user.UserName)
                         match validateUserName userNames userName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError debugSource)
@@ -250,14 +258,14 @@ type Users () =
                         let salt = salt ()
                         (userId, userName, salt, hash password salt, userType) |> UserCreated |> tryApplyUserEvent debugSource userId None (Rvn 1))
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
-                let successText = (fun user -> sprintf "Audit%A %A" auditUserId user |> Some)
-                result |> logResult "HandleCreateUserCmd" (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> logResult "HandleCreateUserCmd" (fun (userId, user) -> sprintf "Audit%A %A %A" auditUserId userId user |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> tupleError userId |> reply.Reply
-                match result with | Ok (userId, user) -> users.Add (userId, user) | Error _ -> ()
+                match result with | Ok (userId, user) -> (userId, user) |> users.Add | Error _ -> ()
                 return! managingUsers users
-            | HandleResetPasswordCmd (resetPasswordToken, auditUserId, userId, currentRvn, password, reply) ->
+            | HandleResetPasswordCmd (resetPasswordToken, auditUserId, userId, currentRvn, Password password, reply) ->
                 let debugSource = "Users.managingUsers.HandleResetPasswordCmd"
                 sprintf "HandleResetPasswordCmd for %A (%A) when managingUsers (%i user/s)" userId currentRvn users.Count |> Verbose |> log
+                let password = Password (password.Trim ())
                 let result =
                     users |> tryFindUser userId (otherCmdError debugSource)
                     |> Result.bind (fun (userId, user) ->
@@ -291,7 +299,7 @@ type Users () =
                         if changeUserTypeToken.UserTypes |> List.contains userType |> not then NotAuthorized |> AuthCmdAuthznError |> Error else (userId, user) |> Ok)
                     |> Result.bind (fun (userId, user) ->
                         if userType <> user.UserType then (userId, user) |> Ok
-                        else (ifDebug (sprintf "New UserType must not be the same as current UserType (%A)" user.UserType) UNEXPECTED_ERROR) |> otherCmdError debugSource)
+                        else ifDebug (sprintf "New UserType must not be the same as current UserType (%A)" user.UserType) UNEXPECTED_ERROR |> otherCmdError debugSource)
                     |> Result.bind (fun (userId, user) ->
                         (userId, userType) |> UserTypeChanged |> tryApplyUserEvent debugSource userId (Some user) (incrementRvn currentRvn))
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync

@@ -12,6 +12,7 @@ open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Program.Common
 open Aornota.Sweepstake2018.UI.Program.Markdown.Literals
@@ -164,6 +165,8 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
             yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
             yield br
         | None -> ()
+        yield [ str "Please enter your user name and password" ] |> para theme paraCentredSmaller
+        yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
              textBox theme signInState.UserNameKey signInState.UserNameText (iconUserSmall |> Some) false signInState.UserNameErrorText [] (signInState.FocusPassword |> not) isSigningIn
@@ -227,6 +230,8 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
             yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
             yield br
         | None -> ()
+        yield [ str "Please enter and confirm your new password" ] |> para theme paraCentredSmaller
+        yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
              textBox theme changePasswordState.NewPasswordKey changePasswordState.NewPasswordText (iconPasswordSmall |> Some) true changePasswordState.NewPasswordErrorText []
@@ -235,7 +240,7 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
              textBox theme changePasswordState.ConfirmPasswordKey changePasswordState.ConfirmPasswordText (iconPasswordSmall |> Some) true changePasswordState.ConfirmPasswordErrorText []
                 false isChangingPassword (ConfirmPasswordTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change password" ] |> button theme { buttonSuccessSmall with Interaction = changePasswordInteraction } ]        ]
-    cardModal theme [ [ str "New password" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ str "Change password" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
