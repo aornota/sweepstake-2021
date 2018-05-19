@@ -46,6 +46,14 @@ let initialize authUser isCurrentPage : State * Cmd<Input> =
 
 let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
     match serverChatMsg with
+    | InitializeChatProjectionQryResult (Ok ok) -> // TODO-NEXT...
+        state, sprintf "InitializeChatProjectionQryResult Ok %A" ok |> infoToastCmd
+    | InitializeChatProjectionQryResult (Error error) -> // TODO-NEXT...
+        state, sprintf "InitializeChatProjectionQryResult Error %A" error |> infoToastCmd
+    | SendChatMessageCmdResult (Ok ok) -> // TODO-NEXT...
+        state, sprintf "SendChatMessageCmdResult Ok %A" ok |> infoToastCmd
+    | SendChatMessageCmdResult (Error error) -> // TODO-NEXT...
+        state, sprintf "SendChatMessageCmdResult Error %A" error |> infoToastCmd
     | SendChatMessageResultMsgOLD (Ok chatMessage) -> // TODO-NMB-LOW: AddDebugMessage if no corresponding Sent message?...
         let chatMessageUis =
             state.ChatMessageUis
@@ -82,5 +90,5 @@ let transition input state =
         let (UserName userName) = state.AuthUser.UserName
         let chatMessage = { ChatMessageId = state.NewChatMessage.NewChatMessageId ; UserName = userName ; MessageText = state.NewChatMessage.MessageText }
         let chatMessageUis = { ChatMessage = chatMessage ; ChatMessageType = Sent ; Timestamp = DateTime.Now } :: state.ChatMessageUis
-        let cmd = chatMessage |> SendChatMessageCmd |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        let cmd = chatMessage |> SendChatMessageCmdOLD |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
         { state with ChatMessageUis = chatMessageUis ; NewChatMessage = defaultNewChatMessage () }, cmd

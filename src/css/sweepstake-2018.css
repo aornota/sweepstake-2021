@@ -106,6 +106,7 @@ hr.dark { background-color : var(--dark) }
 /* #endregion */
 
 /* #region .navbar-{xyz} */
+.navbar { min-height : 64px }
 .navbar-dropdown { border-top-width : 0px }
 .navbar-dropdown.default { background-color : var(--lighter) }
 .navbar-dropdown.dark { background-color : var(--darker) }

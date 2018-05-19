@@ -17,9 +17,9 @@ let ifDebug (debugThing:'a) (_notDebugThing:'a) =
     _notDebugThing
 #endif
 
-let ifDebugSource debugSource text =
+let ifDebugSource source text =
 #if DEBUG
-    sprintf "%s: %s" debugSource text
+    sprintf "%s: %s" source text
 #else
     text
 #endif

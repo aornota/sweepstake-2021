@@ -105,6 +105,15 @@ type Input =
     | HandleServerMsg of serverMsg : ServerMsg
     | AppInput of appInput : AppInput
 
+type ConnectedState = {
+    Ws : Brw.WebSocket // TODO-NMB-MEDIUM: Switch to using Fable.Websockets.Elmish?...
+    ServerStarted : DateTimeOffset }
+
+type ConnectionState =
+    | NotConnected
+    | InitializingConnection of ws : Brw.WebSocket
+    | Connected of connectedState : ConnectedState
+
 type SignInStatus =
     | SignInPending
     | SignInFailed of errorText : string
@@ -171,11 +180,11 @@ type State = {
     SessionId : SessionId
     NavbarBurgerIsActive : bool
     StaticModal : StaticModal option
-    Ws : Brw.WebSocket option // TODO-NMB-MEDIUM: Switch to using Fable.Websockets.Elmish?...
+    ConnectionState : ConnectionState
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (β)"
 
-let validateConfirmPassword (Password newPassword) (Password confirmPassword) =
+let validateConfirmPassword (Password newPassword) (Password confirmPassword) = // TODO-NMB-MEDIUM: Move in order to share with, e.g., UserAdministrationPage
     if newPassword <> confirmPassword then "Confirmation password must match new password" |> Some
     else validatePassword (Password confirmPassword)

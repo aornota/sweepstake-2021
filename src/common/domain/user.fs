@@ -25,10 +25,15 @@ type SquadAdministrationPermissions = {
     WithdrawPlayerPermission : bool
     EliminateSquadPermission : bool }
 
+type ChatPermissions = {
+    InitializeChatProjectionPermission : bool
+    SendChatMessagePermission : bool }
+
 type Permissions = {
     ChangePasswordPermission : UserId option
     UserAdministrationPermissions : UserAdministrationPermissions option
-    SquadAdministrationPermissions : SquadAdministrationPermissions option }
+    SquadAdministrationPermissions : SquadAdministrationPermissions option
+    ChatPermissions : ChatPermissions option }
 
 type MustChangePasswordReason =
     | FirstSignIn
@@ -66,7 +71,18 @@ let permissions userId userType =
         match createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission with
         | false, false, false, false -> None
         | _ -> { CreateSquadPermission = createSquadPermission ; AddOrEditPlayerPermission = addOrEditPlayerPermission ; WithdrawPlayerPermission = withdrawPlayerPermission ; EliminateSquadPermission = eliminateSquadPermission } |> Some
-    { ChangePasswordPermission = changePasswordPermission ; UserAdministrationPermissions = userAdministrationPermissions ; SquadAdministrationPermissions = squadAdministrationPermissions }
+    let initializeChatProjectionPermission, sendChatMessagePermission =
+        match userType with | SuperUser | Administrator | Pleb -> true, true | PersonaNonGrata -> false, false
+    let chatPermissions =
+        match initializeChatProjectionPermission, sendChatMessagePermission with
+        | false, false -> None
+        | _ -> { InitializeChatProjectionPermission = initializeChatProjectionPermission ; SendChatMessagePermission = sendChatMessagePermission } |> Some
+    {
+        ChangePasswordPermission = changePasswordPermission
+        UserAdministrationPermissions = userAdministrationPermissions
+        SquadAdministrationPermissions = squadAdministrationPermissions
+        ChatPermissions = chatPermissions
+    }
 
 let validateUserName (userNames:UserName list) (UserName userName) =
     if String.IsNullOrWhiteSpace userName then "User name must not be blank" |> Some

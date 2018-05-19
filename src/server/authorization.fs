@@ -28,6 +28,11 @@ type WithdrawPlayerToken private () =
 type EliminateSquadToken private () =
     new (_:MetaToken) = EliminateSquadToken ()
     
+type InitializeChatProjectionToken private () =
+    new (_:MetaToken) = InitializeChatProjectionToken ()   
+type SendChatMessageToken private () =
+    new (_:MetaToken) = SendChatMessageToken ()
+    
 type private ValidatedUserTokens = {
     ChangePasswordToken : ChangePasswordToken option
     CreateUserToken : CreateUserToken option
@@ -36,7 +41,9 @@ type private ValidatedUserTokens = {
     CreateSquadToken : CreateSquadToken option
     AddOrEditPlayerToken : AddOrEditPlayerToken option
     WithdrawPlayerToken : WithdrawPlayerToken option
-    EliminateSquadToken : EliminateSquadToken option }
+    EliminateSquadToken : EliminateSquadToken option
+    InitializeChatProjectionToken : InitializeChatProjectionToken option
+    SendChatMessageToken : SendChatMessageToken option }
 
 type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
@@ -64,6 +71,13 @@ type UserTokens private (vut:ValidatedUserTokens) =
                 let eliminateSquadToken = if squadAdministrationPermissions.EliminateSquadPermission then MetaToken |> EliminateSquadToken |> Some else None
                 createSquadToken, addOrEditPlayerToken, withdrawPlayerToken, eliminateSquadToken
             | None -> None, None, None, None
+        let initializeChatProjectionToken, sendChatMessageToken =
+            match permissions.ChatPermissions with
+            | Some chatPermissions ->
+                let initializeChatProjectionToken = if chatPermissions.InitializeChatProjectionPermission then MetaToken |> InitializeChatProjectionToken |> Some else None
+                let sendChatMessageToken = if chatPermissions.SendChatMessagePermission then MetaToken |> SendChatMessageToken |> Some else None
+                initializeChatProjectionToken, sendChatMessageToken
+            | None -> None, None
         UserTokens {
             ChangePasswordToken = changePasswordToken
             CreateUserToken = createUserToken
@@ -72,7 +86,9 @@ type UserTokens private (vut:ValidatedUserTokens) =
             CreateSquadToken = createSquadToken
             AddOrEditPlayerToken = addOrEditPlayerToken
             WithdrawPlayerToken = withdrawPlayerToken
-            EliminateSquadToken = eliminateSquadToken }
+            EliminateSquadToken = eliminateSquadToken
+            InitializeChatProjectionToken = initializeChatProjectionToken
+            SendChatMessageToken = sendChatMessageToken }
     member __.ChangePasswordToken = vut.ChangePasswordToken
     member __.CreateUserToken = vut.CreateUserToken
     member __.ResetPasswordToken = vut.ResetPasswordToken
@@ -81,3 +97,5 @@ type UserTokens private (vut:ValidatedUserTokens) =
     member __.AddOrEditPlayerToken = vut.AddOrEditPlayerToken
     member __.WithdrawPlayerToken = vut.WithdrawPlayerToken
     member __.EliminateSquadToken = vut.EliminateSquadToken
+    member __.InitializeChatProjectionToken = vut.InitializeChatProjectionToken
+    member __.SendChatMessageToken = vut.SendChatMessageToken

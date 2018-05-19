@@ -27,6 +27,8 @@ let [<Literal>] private SECONDS_PER_TICK = 1<second/tick>
 
 let private log category = (Host, category) |> consoleLogger.Log
 
+let private serverStarted = DateTimeOffset.Now
+
 let private uiPath = // note: relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published)
     let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
     if Directory.Exists uiPath then uiPath else "ui" |> Path.GetFullPath
@@ -61,16 +63,16 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 () |> Entities.Squads.squads.Start
 () |> Entities.Users.users.Start
 
-(* TODO-NMB-HIGH..."starting Projections agents" |> Info |> log
+"starting Projections agents" |> Info |> log
 () |> Projections.Chat.chat.Start
-() |> Projections.Squads.squads.Start
-() |> Projections.UserAdministration.userAdministration.Start *)
+// TODO-NMB-HIGH...() |> Projections.Squads.squads.Start
+// TODO-NMB-HIGH...() |> Projections.UserAdministration.userAdministration.Start
 
 "reading persisted events" |> Info |> log
 readPersistedEvents ()
 
 "starting Connections agent" |> Info |> log
-() |> connections.Start
+serverStarted |> connections.Start
 
 (* TEMP-NMB: Finesse logging for development/debugging purposes...
 ("development/debugging", function | Host | Entity Entity.Users | Connections -> allCategories | Broadcaster | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)

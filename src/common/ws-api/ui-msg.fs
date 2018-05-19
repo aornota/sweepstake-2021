@@ -17,16 +17,16 @@ type UiUnauthMsg =
     (*| UiUnauthSquadsMsg of uiUnauthSquadsMsg : UiUnauthSquadsMsg*)
 
 type UiAuthAppMsg =
-    | ChangePasswordCmd of currentRvn : Rvn * password : Password
     | SignOutCmd
+    | ChangePasswordCmd of currentRvn : Rvn * password : Password
 
-(*type UiAuthUserAdminMsg =
-    | InitializeUserAdminProjectionQry
+(*type UiAuthUserAdministrationMsg =
+    | InitializeUserAdministrationProjectionQry
     | CreateUserCmd of userId : UserId * userName : UserName * password : Password * userType : UserType
     | ResetPasswordCmd of userId : UserId * currentRvn : Rvn * password : Password
     | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType*)
 
-(*type UiAuthSquadsAdminMsg =
+(*type UiAuthSquadsAdministrationMsg =
     | AddPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
     | ChangePlayerNameCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName
     | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
@@ -34,13 +34,14 @@ type UiAuthAppMsg =
     | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn*)
 
 type UiAuthChatMsg =
-    // TODO-NMB-HIGH...| InitializeChatProjectionQry
-    | SendChatMessageCmd of chatMessage : ChatMessageOLD
+    | InitializeChatProjectionQry
+    | SendChatMessageCmd of chatMessageId : ChatMessageId * messageText : Markdown
+    | SendChatMessageCmdOLD of chatMessage : ChatMessageOLD // TODO-REMOVE: Once no longer used...
 
 type UiAuthMsg =
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg
-    (*| UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg*)
-    (*| UiAuthSquadsAdminMsg of uiAuthSquadsAdminMsg : UiAuthSquadsAdminMsg*)
+    (*| UiAuthUserAdministrationMsg of uiAuthUserAdministrationMsg : UiAuthUserAdministrationMsg*)
+    (*| UiAuthSquadsAdministrationMsg of uiAuthSquadsAdministrationMsg : UiAuthSquadsAdministrationMsg*)
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 
 type UiMsg =

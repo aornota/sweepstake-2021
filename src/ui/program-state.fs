@@ -7,6 +7,7 @@ open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LocalStorage
 open Aornota.UI.Common.Notifications
+open Aornota.UI.Common.TimestampHelper
 open Aornota.UI.Common.Toasts
 open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Shared
@@ -90,22 +91,24 @@ let private sendMsg (ws:Brw.WebSocket) (uiMsg:UiMsg) =
 
 let private shouldNeverHappenText text = sprintf "SHOULD NEVER HAPPEN -> %s" text
 
-let private sendUnauthMsgCmd (ws:Brw.WebSocket option) uiUnauthMsg =
-    match ws with
-    | Some ws -> uiUnauthMsg |> UiUnauthMsg |> sendMsg ws
-    | None -> debugDismissableMessage (shouldNeverHappenText "sendUnauthMsgCmd called when WebSocket is None") |> AddNotificationMessage |> Cmd.ofMsg
+let private sendUnauthMsgCmd connectedState uiUnauthMsg =
+    match connectedState with
+    | Connected connectedState -> uiUnauthMsg |> UiUnauthMsg |> sendMsg connectedState.Ws
+    | NotConnected | InitializingConnection _ ->
+        shouldNeverHappenText "sendUnauthMsgCmd called when ConnectedState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
-let private sendAuthMsgCmd (ws:Brw.WebSocket option) jwt uiAuthMsg =
-    match ws with
-    | Some ws -> (jwt, uiAuthMsg) |> UiAuthMsg |> sendMsg ws
-    | None -> debugDismissableMessage (shouldNeverHappenText "sendAuthMsgCmd called when WebSocket is None") |> AddNotificationMessage |> Cmd.ofMsg
+let private sendAuthMsgCmd connectedState jwt uiAuthMsg =
+    match connectedState with
+    | Connected connectedState -> (jwt, uiAuthMsg) |> UiAuthMsg |> sendMsg connectedState.Ws
+    | NotConnected | InitializingConnection _ ->
+        shouldNeverHappenText "sendAuthMsgCmd called when ConnectedState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private addNotificationMessage notificationMessage state = { state with NotificationMessages = notificationMessage :: state.NotificationMessages }
 
-let private addDebugMessage debugText state = state |> addNotificationMessage (debugDismissableMessage debugText)
-let private addInfoMessage infoText state = state |> addNotificationMessage (infoDismissableMessage infoText)
-let private addWarningMessage warningText state = state |> addNotificationMessage (warningDismissableMessage warningText)
-let private addDangerMessage dangerText state = state |> addNotificationMessage (dangerDismissableMessage dangerText)
+let private addDebugMessage debugText state = state |> addNotificationMessage (debugText |> debugDismissableMessage)
+let private addInfoMessage infoText state = state |> addNotificationMessage (infoText |> infoDismissableMessage)
+let private addWarningMessage warningText state = state |> addNotificationMessage (warningText |> warningDismissableMessage)
+let private addDangerMessage dangerText state = state |> addNotificationMessage (dangerText |> dangerDismissableMessage)
 
 let private shouldNeverHappen debugText state : State * Cmd<Input> = state |> addDebugMessage (shouldNeverHappenText debugText), Cmd.none
 
@@ -113,11 +116,6 @@ let private addDebugError debugText toastText state : State * Cmd<Input> =
     state |> addDebugMessage (sprintf "ERROR -> %s" debugText), match toastText with | Some toastText -> toastText |> errorToastCmd | None -> Cmd.none
 
 let private addError errorText state = state |> addDangerMessage errorText
-
-let private appStateText appState =
-    match appState with
-    | ReadingPreferences -> "ReadingPreferences" | Connecting _ -> "Connecting" | ServiceUnavailable -> "ServiceUnavailable" | AutomaticallySigningIn _ -> "AutomaticallySigningIn"
-    | Unauth _ -> "Unauth" | Auth _ -> "Auth"
 
 let defaultSignInState userName signInStatus = {
     UserNameKey = Guid.NewGuid ()
@@ -171,7 +169,7 @@ let initialize () =
         SessionId = SessionId.Create ()
         NavbarBurgerIsActive = false
         StaticModal = None
-        Ws = None
+        ConnectionState = NotConnected
         AppState = ReadingPreferences }
     setBodyClass state.UseDefaultTheme
     state, readPreferencesCmd
@@ -179,7 +177,7 @@ let initialize () =
 let private handleWsError wsError state : State * Cmd<Input> =
     match wsError, state.AppState with
     | WsOnError wsApiUrl, Connecting _ ->
-        let state = { state with AppState = ServiceUnavailable }
+        let state = { state with ConnectionState = NotConnected ; AppState = ServiceUnavailable }
         state |> addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) ("Unable to create a connection to the web server<br><br>Please try again later" |> Some)
     | WsOnError wsApiUrl, _ -> state |> addDebugError (sprintf "WsOnError when not Connecting -> %s" wsApiUrl) (UNEXPECTED_ERROR |> Some)
     | SendMsgWsNotOpenError uiMsg, _ ->
@@ -194,28 +192,27 @@ let private handleServerUiMsgError serverUiMsgError state =
     | DeserializeUiMsgError errorText ->
         state |> addDebugError (sprintf "Server DeserializeUiMsgError -> %s" errorText) ("The web server was unable to process a message<br><br>Please try refreshing the page" |> Some)
 
-let private handleConnected (otherConnectionCount, signedInUserCount) user lastPage state =
+let private handleConnected ws (serverStarted:DateTimeOffset) otherConnectionCount signedInUserCount user lastPage state =
     let toastCmd =
 #if DEBUG
+        let serverStarted = ago serverStarted.LocalDateTime
         let otherConnections = if otherConnectionCount > 0 then sprintf "<strong>%i</strong>" otherConnectionCount else sprintf "%i" otherConnectionCount
         let signedInUsers = if signedInUserCount > 0 then sprintf "<strong>%i</strong>" signedInUserCount else sprintf "%i" signedInUserCount
-        sprintf "Other web socket connections: %s<br>Signed-in users: %s" otherConnections signedInUsers |> infoToastCmd
+        sprintf "Server started: %s<br>Other web socket connections: %s<br>Signed-in users: %s" serverStarted otherConnections signedInUsers |> infoToastCmd
 #else
         Cmd.none
 #endif
+    let state = { state with ConnectionState = Connected { Ws = ws ; ServerStarted = serverStarted } }
     let state, cmd =
         match user with
         | Some (userName, jwt) ->
-            { state with AppState = ((userName, jwt), lastPage) |> AutomaticallySigningIn }, (state.SessionId, jwt) |> AutoSignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.Ws
+            let state = { state with AppState = ((userName, jwt), lastPage) |> AutomaticallySigningIn }
+            let cmd = (state.SessionId, jwt) |> AutoSignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
+            state, cmd
         | None ->
             let lastPage = match lastPage with | Some (UnauthPage unauthPage) -> unauthPage |> Some | Some (AuthPage _) | None -> None
             let showPageCmd = match lastPage with | Some lastPage -> lastPage |> ShowUnauthPage |> UnauthInput |> AppInput |> Cmd.ofMsg | None -> Cmd.none
-            // TEMP-NMB: ShowSignInModal once connected...
-            let showSignInCmd =
-                ShowSignInModal |> UnauthInput |> AppInput |> Cmd.ofMsg
-            // ...or not...
-                //Cmd.none
-            // ...NMB-TEMP
+            let showSignInCmd = ShowSignInModal |> UnauthInput |> AppInput |> Cmd.ofMsg
             let state, cmd = state |> defaultUnauthState None None
             state, Cmd.batch [ cmd ; showPageCmd ; showSignInCmd ]
     state, Cmd.batch [ cmd ; toastCmd ]
@@ -302,23 +299,24 @@ let private handleAutoSignOut autoSignOutReason authState state =
     state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; "You have been automatically signed out" |> toastCmd ]
 
 let private handleServerAppMsg serverAppMsg state =
-    match serverAppMsg, state.AppState with
-    | ServerUiMsgErrorMsg serverUiMsgError, _ -> state |> handleServerUiMsgError serverUiMsgError
-    | ConnectedMsg (otherConnections, signedIn), Connecting (user, lastPage) -> state |> handleConnected (otherConnections, signedIn) user lastPage
-    | SignInCmdResult result, Unauth unauthState -> state |> handleSignInResult result unauthState
-    | AutoSignInCmdResult result, AutomaticallySigningIn ((userName, _), lastPage) -> state |> handleAutoSignInResult result userName lastPage
-    | ChangePasswordCmdResult result, Auth authState -> state |> handleChangePasswordResult result authState
-    | SignOutCmdResult result, Auth authState -> state |> handleSignOutResult result authState
-    | AutoSignOutMsg reason, Auth authState -> state |> handleAutoSignOut reason authState
-    | OtherUserSignedInMsgOLD userName, Auth _ -> state, sprintf "<strong>%s</strong> has signed in" userName |> infoToastCmd
-    | OtherUserSignedOutMsgOLD userName, Auth _ -> state, sprintf "<strong>%s</strong> has signed out" userName |> infoToastCmd
-    | _, appState -> state |> shouldNeverHappen (sprintf "Unexpected ServerAppMsg when %s -> %A" (appStateText appState) serverAppMsg)
+    match serverAppMsg, state.AppState, state.ConnectionState with
+    | ServerUiMsgErrorMsg serverUiMsgError, _, _ -> state |> handleServerUiMsgError serverUiMsgError
+    | ConnectedMsg (serverStarted, otherConnections, signedIn), Connecting (user, lastPage), InitializingConnection ws ->
+        state |> handleConnected ws serverStarted otherConnections signedIn user lastPage
+    | SignInCmdResult result, Unauth unauthState, Connected _ -> state |> handleSignInResult result unauthState
+    | AutoSignInCmdResult result, AutomaticallySigningIn ((userName, _), lastPage), Connected _ -> state |> handleAutoSignInResult result userName lastPage
+    | ChangePasswordCmdResult result, Auth authState, Connected _ -> state |> handleChangePasswordResult result authState
+    | SignOutCmdResult result, Auth authState, Connected _ -> state |> handleSignOutResult result authState
+    | AutoSignOutMsg reason, Auth authState, Connected _ -> state |> handleAutoSignOut reason authState
+    | OtherUserSignedInMsgOLD userName, Auth _, Connected _ -> state, sprintf "<strong>%s</strong> has signed in" userName |> infoToastCmd // TODO-REMOVE...
+    | OtherUserSignedOutMsgOLD userName, Auth _, Connected _ -> state, sprintf "<strong>%s</strong> has signed out" userName |> infoToastCmd // TODO-REMOVE...
+    | _, _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerAppMsg when %A (%A) -> %A" state.AppState state.ConnectionState serverAppMsg)
 
 let private handleServerMsg serverMsg state =
     match serverMsg, state.AppState with
     | ServerAppMsg serverAppMsg, _ -> state |> handleServerAppMsg serverAppMsg
     | ServerChatMsg serverChatMsg, Auth _ -> state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | _, appState -> state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %s -> %A" (appStateText appState) serverMsg)
+    | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %A -> %A" state.AppState serverMsg)
 
 let private handleReadingPreferencesInput (result:Result<Preferences option, exn>) (state:State) =
     match result with
@@ -331,7 +329,7 @@ let private handleReadingPreferencesInput (result:Result<Preferences option, exn
         let state, _ = state |> addDebugError (sprintf "ReadPreferencesResult -> %s" exn.Message) None // note: no need for toast
         state, None |> Ok |> ReadingPreferencesInput |> AppInput |> Cmd.ofMsg
 
-let private handleConnectingInput ws state : State * Cmd<Input> = { state with Ws = ws |> Some }, Cmd.none
+let private handleConnectingInput ws state : State * Cmd<Input> = { state with ConnectionState = InitializingConnection ws }, Cmd.none
 
 let private handleUnauthInput unauthInput unauthState state =
     match unauthInput, unauthState.SignInState with
@@ -358,7 +356,8 @@ let private handleUnauthInput unauthInput unauthState state =
     | SignInInput SignIn, Some signInState -> // note: assume no need to validate signInState.UserNameText or signInState.PasswordText (i.e. because App.Render.renderSignInModal will ensure that SignIn can only be dispatched when valid)
         let signInState = { signInState with SignInStatus = SignInPending |> Some }
         let unauthState = { unauthState with SignInState = signInState |> Some }
-        let cmd = (state.SessionId, UserName (signInState.UserNameText.Trim ()), Password (signInState.PasswordText.Trim ())) |> SignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.Ws
+        let signInCmdParams = state.SessionId, UserName (signInState.UserNameText.Trim ()), Password (signInState.PasswordText.Trim ())
+        let cmd = signInCmdParams |> SignInCmd |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
         { state with AppState = Unauth unauthState }, cmd
     | SignInInput CancelSignIn, Some signInState ->
         match signInState.SignInStatus with
@@ -393,7 +392,7 @@ let private handleAuthInput authInput authState state =
     | PageInput (UPageInput SquadsInput), None, false -> state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
     | PageInput (APageInput DraftsInput), None, false -> state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
     | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false -> { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none
-    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), None, false -> state, uiAuthMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
+    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), None, false -> state, uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
     | PageInput (APageInput (ChatInput chatInput)), _, _ ->
         match authState.AuthPageStates.ChatState with
         | Some chatState ->
@@ -421,7 +420,8 @@ let private handleAuthInput authInput authState state =
     | ChangePasswordInput ChangePassword, Some changePasswordState, false -> // note: assume no need to validate changePasswordState.NewPasswordText or changePasswordState.ConfirmPasswordText (i.e. because App.Render.renderChangePasswordModal will ensure that ChangePassword can only be dispatched when valid)
         let changePasswordState = { changePasswordState with ChangePasswordStatus = ChangePasswordPending |> Some }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
-        let cmd = (authState.AuthUser.Rvn, Password (changePasswordState.NewPasswordText.Trim ())) |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
+        let changePasswordCmdParams = authState.AuthUser.Rvn, Password (changePasswordState.NewPasswordText.Trim ())
+        let cmd = changePasswordCmdParams |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
         { state with AppState = Auth authState }, cmd
     | ChangePasswordInput CancelChangePassword, Some changePasswordState, false ->
         match changePasswordState.MustChangePasswordReason, changePasswordState.ChangePasswordStatus with
@@ -431,7 +431,7 @@ let private handleAuthInput authInput authState state =
             let authState = { authState with ChangePasswordState = None }
             { state with AppState = Auth authState }, Cmd.none
     | SignOut, None, false ->
-        let cmd = SignOutCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.Ws authState.AuthUser.Jwt
+        let cmd = SignOutCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
         { state with AppState = Auth { authState with SigningOut = true } }, cmd
     | _, _, false -> state |> shouldNeverHappen (sprintf "Unexpected AuthInput when not SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
     | _, _, true -> state |> shouldNeverHappen (sprintf "Unexpected AuthInput when SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
@@ -442,7 +442,7 @@ let private handleAppInput appInput state =
     | ConnectingInput ws, Connecting _ -> state |> handleConnectingInput ws
     | UnauthInput unauthInput, Unauth unauthState -> state |> handleUnauthInput unauthInput unauthState
     | AuthInput authInput, Auth authState -> state |> handleAuthInput authInput authState
-    | _, appState -> state |> shouldNeverHappen (sprintf "Unexpected AppInput when %s -> %A" (appStateText appState) appInput)
+    | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected AppInput when %A -> %A" state.AppState appInput)
 
 let transition input state =
     match input with

@@ -5,6 +5,9 @@ open Aornota.Common.UnitsOfMeasure
 open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.Render.Markdown
+#if TICK
+open Aornota.UI.Common.TimestampHelper
+#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -24,13 +27,18 @@ module Rct = Fable.Helpers.React
 type private HeaderStatus = | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn | SignedIn of authUser : AuthUser
 
 let private headerStatus (appState:AppState) =
-    match appState with
-    | ReadingPreferences -> ReadingPreferencesHS | Connecting _ -> ConnectingHS | ServiceUnavailable -> ServiceUnavailableHS | AutomaticallySigningIn _ -> SigningIn
-    | Unauth unauthState ->
-        match unauthState.SignInState with
-        | Some signInState -> match signInState.SignInStatus with | Some SignInPending -> SigningIn | Some (SignInFailed _) | None -> NotSignedIn
-        | None -> NotSignedIn
-    | Auth authState -> match authState.SigningOut with | true -> SigningOut | false -> SignedIn authState.AuthUser
+    let headerStatus =
+        match appState with
+        | ReadingPreferences -> ReadingPreferencesHS
+        | Connecting _ -> ConnectingHS
+        | ServiceUnavailable -> ServiceUnavailableHS
+        | AutomaticallySigningIn _ -> SigningIn
+        | Unauth unauthState ->
+            match unauthState.SignInState with
+            | Some signInState -> match signInState.SignInStatus with | Some SignInPending -> SigningIn | Some (SignInFailed _) | None -> NotSignedIn
+            | None -> NotSignedIn
+        | Auth authState -> match authState.SigningOut with | true -> SigningOut | false -> SignedIn authState.AuthUser
+    headerStatus
 
 let private headerPages (appState:AppState) =
     match appState with
@@ -40,7 +48,7 @@ let private headerPages (appState:AppState) =
             "Squads", unauthState.CurrentUnauthPage = SquadsPage, UnauthPage SquadsPage, SquadsPage |> ShowUnauthPage |> UnauthInput
         ]
     | Auth authState ->
-        // TODO-NMB-LOW: Finesse handling of "unseen" count/s (i.e. something better than count-in-parentheses)...
+        // TODO-NMB-LOW: Finesse handling of "unseen" count/s (i.e. something better than count-in-parentheses)?...
         let unseenChatCount = match authState.AuthPageStates.ChatState with | Some chatState -> chatState.UnseenCount |> Some | None -> None
         let chatText = match unseenChatCount with | Some unseenCount when unseenCount > 0 -> sprintf "Chat (%i)" unseenCount | Some _ | None -> "Chat"
         [
@@ -52,26 +60,38 @@ let private headerPages (appState:AppState) =
         ]
     | ReadingPreferences | Connecting _ | ServiceUnavailable | AutomaticallySigningIn _ -> []
 
-let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, headerPages, _:int<tick>) dispatch =
+let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:DateTimeOffset option, headerStatus, headerPages, _:int<tick>) dispatch =
     let isUserAdministrationPage page = match page with | AuthPage UserAdministrationPage -> true | _ -> false
     let theme = getTheme useDefaultTheme
+    let serverStarted =
+        match serverStarted with
+        | Some serverStarted ->
+            let timestampText =
+#if TICK
+                ago serverStarted.LocalDateTime
+#else
+                sprintf "at %s" (serverStarted.LocalDateTime.ToString ("HH:mm:ss"))
+#endif
+            navbarItem [ [ str (sprintf "Server started %s" timestampText ) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDark } ] |> Some
+        | None -> None
     let statusInfo =
         let paraStatus = { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker }
         let spinner = icon iconSpinnerPulseSmall
+        let separator = [ str "|" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = SemiBold }
         match headerStatus with
         | ReadingPreferencesHS -> [ [ str "Reading preferences... " ; spinner ] |> para theme paraStatus ]
         | ConnectingHS -> [ [ str "Connecting... " ; spinner ] |> para theme paraStatus ]
         | ServiceUnavailableHS -> [ [ str "Service unavailable" ] |> para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger ; Weight = Bold } ]
-        | SigningIn -> [ [ str "Signing in... " ; spinner ] |> para theme paraStatus ]
-        | SigningOut -> [ [ str "Signing out... " ; spinner ] |> para theme paraStatus ]
+        | SigningIn -> [ separator ; [ str "Signing in... " ; spinner ] |> para theme paraStatus ]
+        | SigningOut -> [ separator ; [ str "Signing out... " ; spinner ] |> para theme paraStatus ]
         | NotSignedIn -> 
-            [
-                [ str "Not signed-in" ] |> para theme paraStatus
+            [               
+                separator ; [ str "Not signed-in" ] |> para theme paraStatus
                 [ [ str "Sign in" ] |> link theme (ClickableLink (fun _ -> ShowSignInModal |> UnauthInput |> AppInput |> dispatch)) ] |> para theme paraDefaultSmallest
             ]
         | SignedIn authUser ->
             let (UserName userName) = authUser.UserName
-            [ [ str "Signed-in as " ; bold userName ] |> para theme paraStatus ]
+            [ separator ; [ str "Signed-in as " ; bold userName ] |> para theme paraStatus ]
     let authUserDropDown =
         match headerStatus with
         | SignedIn authUser -> 
@@ -118,7 +138,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, headerStatus, h
             navbarBrand [
                 yield navbarItem [ image "public/resources/sweepstake-2018-24x24.png" (FixedSize Square24 |> Some) ]
                 yield navbarItem [ [ str SWEEPSTAKE_2018 ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = Bold } ]
-                yield navbarItem [ [ str "|" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Black ; Weight = SemiBold } ]
+                yield Rct.ofOption serverStarted
                 yield! statusInfo |> List.map (fun element -> navbarItem [ element ])
                 yield navbarBurger (fun _ -> ToggleNavbarBurger |> dispatch) navbarBurgerIsActive ]
             navbarMenu theme navbarData navbarBurgerIsActive [ 
@@ -318,7 +338,8 @@ let private renderFooter useDefaultTheme =
 
 let render state dispatch =
     div divDefault [
-        yield lazyViewOrHMR2 renderHeader (state.UseDefaultTheme, state.NavbarBurgerIsActive, headerStatus state.AppState, headerPages state.AppState, state.Ticks) dispatch
+        let serverStarted = match state.ConnectionState with | Connected connectionState -> connectionState.ServerStarted |> Some | NotConnected | InitializingConnection _ -> None
+        yield lazyViewOrHMR2 renderHeader (state.UseDefaultTheme, state.NavbarBurgerIsActive, serverStarted, headerStatus state.AppState, headerPages state.AppState, state.Ticks) dispatch
         match state.StaticModal with
         | Some ScoringSystem ->
             yield lazyViewOrHMR2 renderStaticModal (state.UseDefaultTheme, "Scoring system", (Markdown SCORING_SYSTEM_MARKDOWN)) dispatch

@@ -8,6 +8,8 @@ open Aornota.Sweepstake2018.Common.Domain.Core
 (*open Aornota.Sweepstake2018.Common.Domain.Squad*)
 open Aornota.Sweepstake2018.Common.Domain.User
 
+open System
+
 type ServerUiMsgError =
     | ReceiveUiMsgError of errorText : string
     | DeserializeUiMsgError of errorText : string
@@ -47,7 +49,7 @@ type AutoSignOutReason =
 
 type ServerAppMsg =
     | ServerUiMsgErrorMsg of serverUiMsgError : ServerUiMsgError
-    | ConnectedMsg of otherConnectionCount : int * signedInUserCount : int
+    | ConnectedMsg of startedOffset : DateTimeOffset * otherConnectionCount : int * signedInUserCount : int
     | SignInCmdResult of result : Result<AuthUser, SignInCmdError<string>>
     | AutoSignInCmdResult of result : Result<AuthUser, AutoSignInCmdError<string>>
     | ChangePasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
@@ -68,11 +70,10 @@ type ServerAppMsg =
     | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>*)
 
 (*type SquadsProjectionMsg =
-    | SquadsProjectionQryInitialized of squads : Projection<_>
     | SquadsProjectionDeltaMsg of delta : Delta<_>*)
 
 (*type ServerSquadsMsg =
-    | InitializeSquadsProjectionQryResult of result : Result<unit, AuthQryError<string>>
+    | InitializeSquadsProjectionQryResult of result : Result<TODO, AuthQryError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
     | ChangePlayerNameCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
     | ChangePlayerTypeCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
@@ -81,18 +82,17 @@ type ServerAppMsg =
     | EliminateSquadCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>*)
 
 (*type ChatProjectionMsg =
-    | ChatProjectionQryInitialized of chatUsers : Projection<ChatUserDto> * chatMessages : Projection<ChatMessageDto> // TODO-NMB-HIGH: What if cannot initialize?...
     | ChatUsersDeltaMsg of delta : Delta<ChatUserDto>
     | ChatMessagesDeltaMsg of delta : Delta<ChatMessageDto>
     | OtherUserSignedInMsg of userName : UserName
     | OtherUserSignedOutMsg of userName : UserName*)
 
 type ServerChatMsg =
-    (*| InitializeChatProjectionQryResult of result : Result<unit, AuthQryError<string>>
-    | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
-    | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>*)
-    | SendChatMessageResultMsgOLD of result : Result<ChatMessageOLD, ChatMessageId * string> // TODO-NMB-HIGH: Retire this...
-    | OtherUserChatMessageMsgOLD of chatMessage : ChatMessageOLD // TODO-NMB-HIGH: Retire this...
+    | InitializeChatProjectionQryResult of result : Result<unit, AuthQryError<string>> // TODO-NEXT: Something other than unit...
+    (*| ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg*)
+    | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
+    | SendChatMessageResultMsgOLD of result : Result<ChatMessageOLD, ChatMessageId * string> // TODO-REMOVE: Once no longer used...
+    | OtherUserChatMessageMsgOLD of chatMessage : ChatMessageOLD // TODO-REMOVE: Once no longer used...
 
 type ServerMsg =
     | ServerAppMsg of serverAppMsg : ServerAppMsg
@@ -100,6 +100,6 @@ type ServerMsg =
     (*| ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg*)
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
-let otherError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> Error
-let otherCmdError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherAuthCmdError |> Error
-let otherQryError debugSource errorText = ifDebugSource debugSource errorText |> OtherError |> OtherAuthQryError |> Error
+let otherError source errorText = ifDebugSource source errorText |> OtherError |> Error
+let otherCmdError source errorText = ifDebugSource source errorText |> OtherError |> OtherAuthCmdError |> Error
+let otherQryError source errorText = ifDebugSource source errorText |> OtherError |> OtherAuthQryError |> Error
