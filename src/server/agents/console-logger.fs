@@ -10,6 +10,8 @@ type Entity =
 
 type Projection =
     | Chat
+    | Squads
+    | UserAdministration
 
 type Source =
     | ConsoleLogger
@@ -53,10 +55,10 @@ let private sourceTextAndColour source =
     | Ticker -> "Ticker", ConsoleColor.DarkYellow
     | Persistence -> "Persistence", ConsoleColor.Cyan
     | Entity entity ->
-        let text = match entity with | Users -> "Users" | Squads -> "Squads"
+        let text = match entity with | Users -> "Users" | Entity.Squads -> "Squads"
         sprintf "%s [entity]" text, ConsoleColor.Blue
     | Projection projection ->
-        let text = match projection with | Chat -> "Chat"
+        let text = match projection with | Chat -> "Chat" | Projection.Squads -> "Squads" | UserAdministration -> "UserAdministration"
         sprintf "%s [projection]" text, ConsoleColor.DarkBlue
     | Connections -> "Connections", ConsoleColor.Magenta
     | WsMiddleware -> "WsMiddleware", ConsoleColor.DarkMagenta

@@ -306,15 +306,15 @@ let private renderFooter useDefaultTheme =
     footer theme true [
         container (Fluid |> Some) [
             [
-                [ str "Written" ] |> link theme (NewWindow "https://github.com/aornota/sweepstake-2018") ; str " in "
-                [ str "F#" ] |> link theme (NewWindow "http://fsharp.org/") ; str " using "
-                [ str "Fable" ] |> link theme (NewWindow "http://fable.io/") ; str ", "
-                [ str "Elmish" ] |> link theme (NewWindow "https://fable-elmish.github.io/") ; str ", "
-                [ str "Fulma" ] |> link theme (NewWindow "https://mangelmaxime.github.io/Fulma/") ; str " / "
-                [ str "Bulma" ] |> link theme (NewWindow "https://bulma.io/") ; str " and "
-                [ str "Giraffe" ] |> link theme (NewWindow "https://github.com/giraffe-fsharp/Giraffe/") ; str ". Developed in "
-                [ str "Visual Studio Code" ] |> link theme (NewWindow "https://code.visualstudio.com/") ; str ". Best viewed with "
-                [ str "Chrome" ] |> link theme (NewWindow "https://www.google.com/chrome/index.html") ; str ". Vaguely mobile-friendly." ] |> para theme paraCentredSmallest ] ]
+                [ str "Written" ] |> link theme (SameWindow "https://github.com/aornota/sweepstake-2018") ; str " in "
+                [ str "F#" ] |> link theme (SameWindow "http://fsharp.org/") ; str " using "
+                [ str "Fable" ] |> link theme (SameWindow "http://fable.io/") ; str ", "
+                [ str "Elmish" ] |> link theme (SameWindow "https://fable-elmish.github.io/") ; str ", "
+                [ str "Fulma" ] |> link theme (SameWindow "https://mangelmaxime.github.io/Fulma/") ; str " / "
+                [ str "Bulma" ] |> link theme (SameWindow "https://bulma.io/") ; str " and "
+                [ str "Giraffe" ] |> link theme (SameWindow "https://github.com/giraffe-fsharp/Giraffe/") ; str ". Developed in "
+                [ str "Visual Studio Code" ] |> link theme (SameWindow "https://code.visualstudio.com/") ; str ". Best viewed with "
+                [ str "Chrome" ] |> link theme (SameWindow "https://www.google.com/chrome/index.html") ; str ". Vaguely mobile-friendly." ] |> para theme paraCentredSmallest ] ]
 
 let render state dispatch =
     div divDefault [

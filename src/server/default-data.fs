@@ -38,7 +38,8 @@ let private ifToken fError fCmdAsync token = async {
 
 let private tuple thing otherThing = thing, otherThing
 
-let private nephId, superUserType = Guid.Empty |> UserId, SuperUser
+let private superUserType = SuperUser
+let private nephId = Guid.Empty |> UserId
 let private nephTokens = permissions nephId superUserType |> UserTokens
 
 let private createInitialUsersEventsIfNecessary = async {

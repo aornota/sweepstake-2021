@@ -5,7 +5,8 @@
     --dark : #484848 ; --darker : #363636 ; --even-darker : #242424 ; --darkest : #121212 ;
     --light : #b7b7b7 ; --lighter : #c9c9c9 ; --even-lighter : #dbdbdb ; --lightest : #ededed ;
     --black : black ; --white : white ;
-    --link-default : #600060 ; --link-default-hover : #a000a0 ; --link-dark : #ffbfbf ; --link-dark-hover : #ff8f8f ;
+    --link-default : #006060 ; --link-default-hover : #00a0a0 ; --link-dark : #bfbfff ; --link-dark-hover : #8f8fff ;
+    --link-clickable-default : #600060 ; --link-clickable-default-hover : #a000a0 ; --link-clickable-dark : #ffbfbf ; --link-clickable-dark-hover : #ff8f8f ;
     --neutral : #808080 ; --neutral-darker : #777777 ; --neutral-lighter : #898989 }
 /* #endregion */
 
@@ -29,8 +30,12 @@ body.dark { background-color : var(--black) }
 /* #region a */
 a.default { color : var(--link-default) }
 a.default:hover { color : var(--link-default-hover) }
+a.default.clickable { color : var(--link-clickable-default) }
+a.default.clickable:hover { color : var(--link-clickable-default-hover) }
 a.dark { color : var(--link-dark) }
 a.dark:hover { color : var(--link-dark-hover) }
+a.dark.clickable { color : var(--link-clickable-dark) }
+a.dark.clickable:hover { color : var(--link-clickable-dark-hover) }
 /* #endregion */
 
 /* #region div */
@@ -105,8 +110,8 @@ hr.dark { background-color : var(--dark) }
 .navbar-dropdown.default { background-color : var(--lighter) }
 .navbar-dropdown.dark { background-color : var(--darker) }
 .navbar-item { padding-left : 0.5rem ; padding-right : 0.5rem }
-.navbar-item.default.is-active a { color : var(--black) }
-.navbar-item.dark.is-active a { color : var(--white) }
+.navbar-item.default.is-active a.clickable { color : var(--link-clickable-default-hover) }
+.navbar-item.dark.is-active a.clickable { color : var(--link-clickable-dark-hover) }
 .navbar-menu.light { background-color : var(--light) }
 .navbar-menu.dark { background-color : var(--dark) }
 /* #endregion */
@@ -136,10 +141,10 @@ hr.dark { background-color : var(--dark) }
 /* #endregion */
 
 /* #region .tabs */
-.tabs.default a { color : var(--link-default) ; border-bottom-color : var(--even-lighter) }
-.tabs.default a:hover { color : var(--link-default-hover) ; border-bottom-color : var(--link-default-hover)0 }
-.tabs.default li.is-active a { color : var(--link-default-hover) ; border-bottom-color : var(--darker) }
-.tabs.dark a { color : var(--link-dark) ; border-bottom-color : var(--even-darker) }
-.tabs.dark a:hover { color : var(--link-dark-hover) ; border-bottom-color : var(--link-dark-hover) }
-.tabs.dark li.is-active a { color : var(--link-dark-hover); border-bottom-color : var(--lighter) }
+.tabs.default a.clickable { color : var(--link-clickable-default) ; border-bottom-color : var(--even-lighter) }
+.tabs.default a.clickable:hover { color : var(--link-clickable-default-hover) ; border-bottom-color : var(--link-clickable-default-hover) }
+.tabs.default li.is-active a.clickable { color : var(--link-clickable-default-hover) ; border-bottom-color : var(--darker) }
+.tabs.dark a.clickable { color : var(--link-clickable-dark) ; border-bottom-color : var(--even-darker) }
+.tabs.dark a.clickable:hover { color : var(--link-clickable-dark-hover) ; border-bottom-color : var(--link-clickable-dark-hover) }
+.tabs.dark li.is-active a.clickable { color : var(--link-clickable-dark-hover); border-bottom-color : var(--lighter) }
 /* #endregion */

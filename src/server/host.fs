@@ -4,11 +4,10 @@ open Aornota.Common.IfDebug
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Sweepstake2018.Common.Literals
+open Aornota.Sweepstake2018.Server.Agents
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.Connections
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Agents.Entities.Squads
-open Aornota.Sweepstake2018.Server.Agents.Entities.Users
 open Aornota.Sweepstake2018.Server.Agents.Persistence
 open Aornota.Sweepstake2018.Server.Agents.Ticker
 open Aornota.Sweepstake2018.Server.DefaultData
@@ -58,11 +57,14 @@ SECONDS_PER_TICK |> ticker.Start
 createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 
 // Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
-"starting entity agents" |> Info |> log
-() |> users.Start
-() |> squads.Start
+"starting Entities agents" |> Info |> log
+() |> Entities.Squads.squads.Start
+() |> Entities.Users.users.Start
 
-// TODO-NMB-HIGH..."starting projection agents" |> Info |> log
+(* TODO-NMB-HIGH..."starting Projections agents" |> Info |> log
+() |> Projections.Chat.chat.Start
+() |> Projections.Squads.squads.Start
+() |> Projections.UserAdministration.userAdministration.Start *)
 
 "reading persisted events" |> Info |> log
 readPersistedEvents ()

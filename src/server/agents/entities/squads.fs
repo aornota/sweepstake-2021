@@ -227,7 +227,7 @@ type Squads () =
                         else ifDebug (sprintf "%A already exists" playerId) UNEXPECTED_ERROR |> otherCmdError debugSource)
                     |> Result.bind (fun (squadId, squad, playerId) ->
                         if squad.Players.Count < MAX_PLAYERS_PER_SQUAD then (squadId, squad, playerId) |> Ok
-                        else ifDebug (sprintf "%A cannot have more than %i Players" squadId MAX_PLAYERS_PER_SQUAD) UNEXPECTED_ERROR |> otherCmdError debugSource)
+                        else sprintf "Squad cannot have more than %i players" MAX_PLAYERS_PER_SQUAD |> otherCmdError debugSource)
                     |> Result.bind (fun (squadId, squad, playerId) ->
                         let playerNames = squad.Players |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player.PlayerName)
                         match validatePlayerName playerNames playerName with
@@ -257,7 +257,7 @@ type Squads () =
                         | Some errorText -> errorText |> otherCmdError debugSource)
                     |> Result.bind (fun (squadId, squad, playerId, player) ->
                         if playerName <> player.PlayerName then (squadId, squad, playerId, player) |> Ok
-                        else ifDebug (sprintf "New PlayerName must not be the same as current PlayerName (%A)" player.PlayerName) UNEXPECTED_ERROR |> otherCmdError debugSource)
+                        else "New player name must not be the same as the current player name" |> otherCmdError debugSource)
                     |> Result.bind (fun (squadId, squad, playerId, _) ->
                         (squadId, playerId, playerName) |> PlayerNameChanged |> tryApplySquadEvent debugSource squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
@@ -265,26 +265,58 @@ type Squads () =
                 result |> discardOk |> tupleError squadId |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
-            | HandleChangePlayerTypeCmd (_, _auditUserId, squadId, _currentRvn, playerId, playerType, _reply) ->
-                let _debugSource = "Squads.managingSquads.HandleChangePlayerTypeCmd"
+            | HandleChangePlayerTypeCmd (_, auditUserId, squadId, currentRvn, playerId, playerType, reply) ->
+                let debugSource = "Squads.managingSquads.HandleChangePlayerTypeCmd"
                 sprintf "HandleChangePlayerTypeCmd for %A (%A %A) when managingSquads (%i squads/s)" squadId playerId playerType squads.Count |> Verbose |> log
-
-                // TODO-NMB-MEDIUM (cf. Users agent): Check squadId exists | Check playerId exists | Check playerType differs | Apply | Log result | Reply | Update "state"...
-
+                let result =
+                    squads |> tryFindSquad squadId (otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad) ->
+                        match squad.Players |> tryFindPlayer playerId (otherCmdError debugSource) with
+                        | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
+                        | Error error -> error |> Error)
+                    |> Result.bind (fun (squadId, squad, playerId, player) ->
+                        if playerType <> player.PlayerType then (squadId, squad, playerId, player) |> Ok
+                        else "New player type must not be the same as the current player type" |> otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad, playerId, _) ->
+                        (squadId, playerId, playerType) |> PlayerTypeChanged |> tryApplySquadEvent debugSource squadId (Some squad) (incrementRvn currentRvn))
+                let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
+                result |> logResult "HandleChangePlayerTypeCmd" (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> discardOk |> tupleError squadId |> reply.Reply
+                match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
-            | HandleWithdrawPlayerCmd (_, _auditUserId, squadId, _currentRvn, playerId, _reply) ->
-                let _debugSource = "Squads.managingSquads.HandleWithdrawPlayerCmd"
+            | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) -> // TODO-NMB-MEDIUM: dateWithdrawn?...
+                let debugSource = "Squads.managingSquads.HandleWithdrawPlayerCmd"
                 sprintf "HandleWithdrawPlayerCmd for %A (%A) when managingSquads (%i squads/s)" squadId playerId squads.Count |> Verbose |> log
-
-                // TODO-NMB-MEDIUM (cf. Users agent): Check squadId exists | Check playerId exists | Check not already withdrawn | Apply | Log result | Reply | Update "state"...
-
+                let result =
+                    squads |> tryFindSquad squadId (otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad) ->
+                        match squad.Players |> tryFindPlayer playerId (otherCmdError debugSource) with
+                        | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
+                        | Error error -> error |> Error)
+                    |> Result.bind (fun (squadId, squad, playerId, player) ->
+                        if player.Withdrawn |> not then (squadId, squad, playerId, player) |> Ok
+                        else "Player has already been withdrawn" |> otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad, playerId, _) ->
+                        (squadId, playerId) |> PlayerWithdrawn |> tryApplySquadEvent debugSource squadId (Some squad) (incrementRvn currentRvn))
+                let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
+                result |> logResult "HandleWithdrawPlayerCmd" (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> discardOk |> tupleError squadId |> reply.Reply
+                match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
-            | HandleEliminateSquadCmd (_, _auditUserId, squadId, _currentRvn, _reply) ->
-                let _debugSource = "Squads.managingSquads.HandleEliminateSquadCmd"
+            | HandleEliminateSquadCmd (_, auditUserId, squadId, currentRvn, reply) ->
+                let debugSource = "Squads.managingSquads.HandleEliminateSquadCmd"
                 sprintf "HandleEliminateSquadCmd for %A when managingSquads (%i squads/s)" squadId squads.Count |> Verbose |> log
-
-                // TODO-NMB-MEDIUM (cf. Users agent): Check squadId exists | Check not already eliminated | Apply | Log result | Reply | Update "state"...
-
+                let result =
+                    squads |> tryFindSquad squadId (otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad) ->
+                        if squad.Eliminated |> not then (squadId, squad) |> Ok
+                        else "Squad has already been eliminated" |> otherCmdError debugSource)
+                    |> Result.bind (fun (squadId, squad) ->
+                        squadId |> SquadEliminated |> tryApplySquadEvent debugSource squadId (Some squad) (incrementRvn currentRvn))
+                let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
+                result |> logResult "HandleEliminateSquadCmd" (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> discardOk |> tupleError squadId |> reply.Reply
+                match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())

@@ -137,8 +137,12 @@ let hr theme useAlternativeClass =
 
 let link theme linkType children =
     let (ThemeClass className) = theme.ThemeClass
+    let customClasses = [
+        yield className
+        match linkType with | ClickableLink _ -> yield "clickable" | _ -> () ]
+    let customClass = match customClasses with | _ :: _ -> Some (String.concat SPACE customClasses) | [] -> None
     Rct.a [
-        yield ClassName className :> IHTMLProp
+        match customClass with | Some customClass -> yield ClassName customClass :> IHTMLProp | None -> ()
         match linkType with
         | NewWindow url ->
             yield Href url :> IHTMLProp
