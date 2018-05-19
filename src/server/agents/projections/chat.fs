@@ -35,7 +35,7 @@ type private ChatInput =
     
 type private ChatUser = { UserName : UserName ; LastApi : DateTimeOffset option } // note: list will exclude PersonaNonGrata users
 
-type private ChatMessage = { UserId : UserId ; MessageText : Markdown ; MessageTimestamp : DateTimeOffset }
+type private ChatMessage = { UserId : UserId ; MessageText : Markdown ; MessageTimestamp : DateTimeOffset ; Expired : bool }
 
 let [<Literal>] private HOUSEKEEPING_INTERVAL = 60<second>
 

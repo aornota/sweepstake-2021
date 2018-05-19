@@ -450,12 +450,12 @@ let transition input state =
     | Tick ->
         // Note: Only sending Ping messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
         let lastPing, cmd =
-            match state.Ws with
-            | Some ws ->
+            match state.ConnectionState with
+            | Connected connectedState ->
                 let now = DateTime.Now
-                if (now - state.LastPing).TotalSeconds * 1.<second> >= PING_INTERVAL then now, Ping |> sendMsg ws
+                if (now - state.LastPing).TotalSeconds * 1.<second> >= PING_INTERVAL then now, Ping |> sendMsg connectedState.Ws
                 else state.LastPing, Cmd.none
-            | None -> state.LastPing, Cmd.none
+            | NotConnected | InitializingConnection _ -> state.LastPing, Cmd.none
         { state with Ticks = state.Ticks + 1<tick> ; LastPing = lastPing }, cmd
 #endif
     | AddNotificationMessage notificationMessage -> state |> addNotificationMessage notificationMessage, Cmd.none
