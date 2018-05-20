@@ -90,7 +90,8 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
     match serverChatMsg, state.ProjectionState with
     | InitializeChatProjectionQryResult (Ok chatProjectionDto), Initializing ->
         let activeState = { ChatProjection = chatProjectionDto |> chatProjection ; UnconfirmedChatMessageDic = ChatMessageDic () ; NewChatMessage = defaultNewChatMessage () }
-        { state with ProjectionState = Active activeState }, Cmd.none
+        let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatProjectionDto.ChatMessageDtos.Length
+        { state with ProjectionState = Active activeState ; UnseenCount = unseenCount }, Cmd.none
     | InitializeChatProjectionQryResult (Error error), Initializing ->
         { state with ProjectionState = InitializationFailed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
     | ChatProjectionMsg (ChatUsersDeltaMsg (deltaRvn, chatUserDtoDelta)), Active activeState ->

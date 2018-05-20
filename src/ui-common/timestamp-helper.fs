@@ -21,7 +21,8 @@ let ago (timestamp:DateTime) =
     let elapsed = now - timestamp
     let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)   
     let elapsedDays = round (sameTimeToday - timestamp).TotalDays // note: use 'round' function since TotalDays could be something like 0.9999... (i.e. even when use of "same time" means that we'd expect it to be 1.0)
-    match timestamp > now, (now.Year - timestamp.Year, now.Month - timestamp.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes, elapsed.TotalSeconds) with
+    let isFuture = timestamp > now && (timestamp - now).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running fast"
+    match isFuture, (now.Year - timestamp.Year, now.Month - timestamp.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes, elapsed.TotalSeconds) with
     | true, _ -> sprintf "%s %i%s %s %i" (dayName timestamp.DayOfWeek) timestamp.Day (suffix timestamp.Day) (monthName timestamp.Month) timestamp.Year // note: timestamp expected to be in the past - but do something sensible if not
     | false, (_, _, days, _, _, _) when floor days = 1. -> sprintf "yesterday (%s)" (dayName timestamp.DayOfWeek)
     | false, (_, _, _, _, _, seconds) when floor seconds = 0. -> "just now"
@@ -44,8 +45,9 @@ let ago (timestamp:DateTime) =
 
 let expiresIn (timestamp:DateTime) = // TODO-NMB-LOW: Make more generic?...
     let now = DateTime.Now
-    let elapsed = timestamp - DateTime.Now
-    match timestamp < now, (elapsed.TotalMinutes, elapsed.TotalSeconds) with
+    let elapsed = timestamp - now
+    let isPast = timestamp < now && (now - timestamp).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running slow"
+    match isPast, (elapsed.TotalMinutes, elapsed.TotalSeconds) with
     | true, _ -> "has expired" // note: timestamp expected to be in the future - but do something sensible if not       
     | false, (_, seconds) when floor seconds = 0. -> "is about to expire"
     | false, (_, seconds) when floor seconds = 1. -> "expires in 1 second"

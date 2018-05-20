@@ -18,7 +18,7 @@ open Aornota.Sweepstake2018.Server.Authorization
 open System
 open System.IO
 
-let private deleteExistingUsersEvents = ifDebug false true // note: should *not* generally set to true for Release
+let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release
 let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release
 
 let private log category = (Host, category) |> consoleLogger.Log
