@@ -329,12 +329,12 @@ let private renderFooter useDefaultTheme =
                 [ str "Written" ] |> link theme (SameWindow "https://github.com/aornota/sweepstake-2018") ; str " in "
                 [ str "F#" ] |> link theme (SameWindow "http://fsharp.org/") ; str " using "
                 [ str "Fable" ] |> link theme (SameWindow "http://fable.io/") ; str ", "
-                [ str "Elmish" ] |> link theme (SameWindow "https://fable-elmish.github.io/") ; str ", "
+                [ str "Elmish" ] |> link theme (SameWindow "https://elmish.github.io/") ; str ", "
                 [ str "Fulma" ] |> link theme (SameWindow "https://mangelmaxime.github.io/Fulma/") ; str " / "
                 [ str "Bulma" ] |> link theme (SameWindow "https://bulma.io/") ; str " and "
                 [ str "Giraffe" ] |> link theme (SameWindow "https://github.com/giraffe-fsharp/Giraffe/") ; str ". Developed in "
                 [ str "Visual Studio Code" ] |> link theme (SameWindow "https://code.visualstudio.com/") ; str ". Best viewed with "
-                [ str "Chrome" ] |> link theme (SameWindow "https://www.google.com/chrome/index.html") ; str ". Vaguely mobile-friendly." ] |> para theme paraCentredSmallest ] ]
+                [ str "Chrome" ] |> link theme (SameWindow "https://www.google.com/chrome/index.html") ; str ". Not especially mobile-friendly." ] |> para theme paraCentredSmallest ] ]
 
 let render state dispatch =
     div divDefault [
