@@ -19,7 +19,7 @@ open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open System
 
-let [<Literal>] private RECENTLY_ACTIVE = 0.25<minute> // TODO-NEXT: Change to, e.g., 5.<minute> once tested...
+let [<Literal>] private RECENTLY_ACTIVE = 5.<minute>
 
 let private cutoff (after:int<second>) = float (after * -1) |> DateTimeOffset.UtcNow.AddSeconds
 
