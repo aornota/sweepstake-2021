@@ -25,7 +25,7 @@ let ago (timestamp:DateTime) =
     match isFuture, (now.Year - timestamp.Year, now.Month - timestamp.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes, elapsed.TotalSeconds) with
     | true, _ -> sprintf "%s %i%s %s %i" (dayName timestamp.DayOfWeek) timestamp.Day (suffix timestamp.Day) (monthName timestamp.Month) timestamp.Year // note: timestamp expected to be in the past - but do something sensible if not
     | false, (_, _, days, _, _, _) when floor days = 1. -> sprintf "yesterday (%s)" (dayName timestamp.DayOfWeek)
-    | false, (_, _, _, _, _, seconds) when floor seconds = 0. -> "just now"
+    | false, (_, _, _, _, _, seconds) when floor seconds <= 0. -> "just now"
     | false, (_, _, _, _, _, seconds) when floor seconds = 1. -> "1 second ago"
     | false, (_, _, _, _, _, seconds) when floor seconds < float SECONDS_PER_MINUTE -> sprintf "%i seconds ago" (int seconds)
     | false, (_, _, _, _, minutes, _) when floor minutes = 1. -> "1 minute ago"
@@ -49,7 +49,7 @@ let expiresIn (timestamp:DateTime) = // TODO-NMB-LOW: Make more generic?...
     let isPast = timestamp < now && (now - timestamp).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running slow"
     match isPast, (elapsed.TotalMinutes, elapsed.TotalSeconds) with
     | true, _ -> "has expired" // note: timestamp expected to be in the future - but do something sensible if not       
-    | false, (_, seconds) when floor seconds = 0. -> "is about to expire"
+    | false, (_, seconds) when floor seconds <= 0. -> "is about to expire"
     | false, (_, seconds) when floor seconds = 1. -> "expires in 1 second"
     | false, (_, seconds) when floor seconds < float SECONDS_PER_MINUTE -> sprintf "expires in %i seconds" (int seconds)
     | false, (minutes, _) when floor minutes = 1. -> "expires in 1 minute"
