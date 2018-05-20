@@ -391,9 +391,9 @@ let private handleAuthInput authInput authState state =
     | PageInput (UPageInput NewsInput), None, false -> state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
     | PageInput (UPageInput SquadsInput), None, false -> state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
     | PageInput (APageInput DraftsInput), None, false -> state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
-    | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), None, false -> state |> addNotificationMessage notificationMessage, Cmd.none
+    | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false -> state |> addNotificationMessage notificationMessage, Cmd.none
     | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false -> { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none
-    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), None, false -> state, uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
+    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), _, false -> state, uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
     | PageInput (APageInput (ChatInput chatInput)), _, _ ->
         match authState.AuthPageStates.ChatState with
         | Some chatState ->
