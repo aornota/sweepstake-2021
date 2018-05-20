@@ -47,6 +47,6 @@ type UiAuthMsg =
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 
 type UiMsg =
-    | Ping
+    | Wiff
     | UiUnauthMsg of uiUnauthMsg : UiUnauthMsg
     | UiAuthMsg of jwt : Jwt * uiAuthMsg : UiAuthMsg

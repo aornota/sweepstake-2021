@@ -39,7 +39,7 @@ type private ConnectionsInput =
     | OnDeserializeUiMsgError of connectionId : ConnectionId * exn : exn
     | HandleUiMsg of connectionId : ConnectionId * uiMsg : UiMsg
 
-type private SignedInUser = { UserName : UserName ; Permissions : Permissions ; UserTokens : UserTokens ; LastApi : DateTime }
+type private SignedInUser = { UserName : UserName ; Permissions : Permissions ; UserTokens : UserTokens ; LastApi : DateTimeOffset }
 
 type private SignedInUserDic = Dictionary<UserId, SignedInUser>
 
@@ -69,7 +69,7 @@ let private hasConnections userId (connectionDic:ConnectionDic) =
 
 let private addSignedInUser (authUser:AuthUser) (signedInUserDic:SignedInUserDic) = async {
     if authUser.UserId |> signedInUserDic.ContainsKey |> not then // note: silently ignore if already in signedInUsers
-        let signedInUser = { UserName = authUser.UserName ; Permissions = authUser.Permissions ; UserTokens = authUser.Permissions |> UserTokens ; LastApi = DateTime.Now }
+        let signedInUser = { UserName = authUser.UserName ; Permissions = authUser.Permissions ; UserTokens = authUser.Permissions |> UserTokens ; LastApi = DateTimeOffset.UtcNow }
         (authUser.UserId, signedInUser) |> signedInUserDic.Add
         authUser.UserId |> UserSignedIn |> broadcaster.Broadcast }
 
@@ -180,7 +180,7 @@ let private tokensForAuthApi source (otherError, jwtError) updateLastApi userId 
                     ifDebug errorText UNEXPECTED_ERROR |> OtherError |> otherError |> Error
                 else
                     if updateLastApi then
-                        let signedInUser = { signedInUser with LastApi = DateTime.Now }
+                        let signedInUser = { signedInUser with LastApi = DateTimeOffset.UtcNow }
                         signedInUserDic.[userIdFromJwt] <- signedInUser
                         userIdFromJwt |> UserApi |> broadcaster.Broadcast
                     signedInUser.UserTokens |> Ok
@@ -247,8 +247,8 @@ type Connections () =
                 return! managingConnections (serverStarted, connectionDic, signedInUserDic)
             | HandleUiMsg (connectionId, uiMsg) ->
                 match uiMsg with
-                | Ping -> // note: logged - but otherwise ignored
-                    sprintf "Ping for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                | Wiff -> // note: logged - but otherwise ignored
+                    sprintf "Wiff for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #region: UiUnauthAppMsg SignInCmd
                 | UiUnauthMsg (UiUnauthAppMsg (SignInCmd (sessionId, userName, password))) ->
@@ -410,7 +410,7 @@ type Connections () =
         awaitingStart ())
     do Source.Connections |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
     member __.Start (serverStarted) =
-        // TODO-NMB-LOW: Subscribe to Tick (e.g. to auto-sign out "expired" sessions)?...
+        // TODO-NMB-LOW: Subscribe to Tick, e.g. to auto-sign out "expired" sessions? and/or to "purge" connections (i.e. via sending Waff to all connections)?...
         let onEvent = (fun event ->
             match event with
             | Signal.SendMsg (serverMsg, connectionIds) -> (serverMsg, connectionIds) |> OnSendMsg |> agent.Post

@@ -42,7 +42,7 @@ let private semanticAndSortOrder unconfirmed authUserId (userId, chatUser) =
     | false, SignedIn -> Primary, 3
     | false, NotSignedIn -> Dark, 4
 
-let private renderChatMessage theme authUserId dispatch (chatMessageId, chatMessage, unconfirmed, userId, chatUser) =
+let private renderChatMessage theme authUserId _dispatch (_chatMessageId, chatMessage, unconfirmed, userId, chatUser) =
     let renderChildren (UserName userName) messageText (timestamp:DateTimeOffset) unconfirmed = [
         let rightItem =
             if unconfirmed then icon iconSpinnerPulse
@@ -62,7 +62,7 @@ let private renderChatMessage theme authUserId dispatch (chatMessageId, chatMess
         yield messageText |> notificationContentFromMarkdown theme ]
     let (semantic, _) = (userId, chatUser) |> semanticAndSortOrder unconfirmed authUserId
     let children = renderChildren chatUser.UserName chatMessage.MessageText chatMessage.Timestamp unconfirmed
-    let onDismissNotification = if unconfirmed |> not then (fun _ -> chatMessageId |> DismissChatMessage |> dispatch) |> Some else None
+    let onDismissNotification = None // TEMP-NMB: Should chat messages be dismissable (since will re-appear if page refreshed)?...if unconfirmed |> not then (fun _ -> chatMessageId |> DismissChatMessage |> dispatch) |> Some else None
     [
         divVerticalSpace 10
         notification theme { notificationDefault with NotificationSemantic = semantic |> Some ; OnDismissNotification = onDismissNotification } children
@@ -104,7 +104,7 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
                     chatUser, semantic, sortOrder)
                 |> List.sortBy (fun (chatUser, _, sortOrder) -> sortOrder, chatUser.UserName)
                 |> List.map (fun (chatUser, semantic, _) -> chatUser |> renderChatUser theme semantic)
-            // Note: Silently ignore ChatMessages for unknown ChatUser (should never happen).
+            // Note: Silently ignore chat messages for unknown chat user (should never happen).
             let unconfirmedChatMessages = activeState.UnconfirmedChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
                 match chatUserDic |> tryFindChatUser chatMessage.UserId with | Some chatUser -> (chatMessageId, chatMessage, true, chatMessage.UserId, chatUser) |> Some | None -> None)
             let confirmedChatMessages = activeState.ChatProjection.ChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->

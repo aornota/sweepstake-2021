@@ -34,7 +34,7 @@ module Brw = Fable.Import.Browser
 let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preferences"
 
 #if TICK
-let [<Literal>] private PING_INTERVAL = 30.<second>
+let [<Literal>] private WIFF_INTERVAL = 30.<second>
 #endif
 
 let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
@@ -163,7 +163,7 @@ let private defaultAuthState authUser currentPage (unauthState:UnauthState optio
 let initialize () =
     let state = {
         Ticks = 0<tick>
-        LastPing = DateTime.Now
+        LastWiff = DateTimeOffset.UtcNow
         NotificationMessages = []
         UseDefaultTheme = true
         SessionId = SessionId.Create ()
@@ -312,6 +312,7 @@ let private handleServerAppMsg serverAppMsg state =
 
 let private handleServerMsg serverMsg state =
     match serverMsg, state.AppState with
+    | Waff, _ -> state, Cmd.none // note: silently ignored
     | ServerAppMsg serverAppMsg, _ -> state |> handleServerAppMsg serverAppMsg
     | ServerChatMsg serverChatMsg, Auth _ -> state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | ServerChatMsg _, Unauth _ -> state, Cmd.none // note: silently ignore ServerChatMsg if Unauth
@@ -448,15 +449,15 @@ let transition input state =
     match input with
 #if TICK
     | Tick ->
-        // Note: Only sending Ping messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
-        let lastPing, cmd =
+        // Note: Only sending Wiff messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
+        let lastWiff, cmd =
             match state.ConnectionState with
             | Connected connectedState ->
-                let now = DateTime.Now
-                if (now - state.LastPing).TotalSeconds * 1.<second> >= PING_INTERVAL then now, Ping |> sendMsg connectedState.Ws
-                else state.LastPing, Cmd.none
-            | NotConnected | InitializingConnection _ -> state.LastPing, Cmd.none
-        { state with Ticks = state.Ticks + 1<tick> ; LastPing = lastPing }, cmd
+                let now = DateTimeOffset.UtcNow
+                if (now.DateTime - state.LastWiff.DateTime).TotalSeconds * 1.<second> >= WIFF_INTERVAL then now, Wiff |> sendMsg connectedState.Ws
+                else state.LastWiff, Cmd.none
+            | NotConnected | InitializingConnection _ -> state.LastWiff, Cmd.none
+        { state with Ticks = state.Ticks + 1<tick> ; LastWiff = lastWiff }, cmd
 #endif
     | AddNotificationMessage notificationMessage -> state |> addNotificationMessage notificationMessage, Cmd.none
     | DismissNotificationMessage notificationId -> { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }, Cmd.none // note: silently ignore unknown notificationId

@@ -91,6 +91,7 @@ type ServerChatMsg =
     | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
 
 type ServerMsg =
+    | Waff
     | ServerAppMsg of serverAppMsg : ServerAppMsg
     (*| ServerUserAdministrationMsg of serverUserAdministrationMsg : ServerUserAdministrationMsg*)
     (*| ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg*)

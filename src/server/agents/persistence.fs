@@ -97,7 +97,7 @@ let private writeEvent source entityType (entityId:Guid) rvn eventJson auditUser
     let source = sprintf "%s#writeEvent" source
     let entityTypeDir = directory entityType
     let fileName = sprintf "%s/%s.%s" entityTypeDir (entityId.ToString ()) EVENTS_EXTENSION
-    let (Json json) = { Rvn = rvn ; TimestampUtc = DateTime.Now.ToUniversalTime () ; EventJson = eventJson ; AuditUserId = auditUserId } |> toJson
+    let (Json json) = { Rvn = rvn ; TimestampUtc = DateTime.UtcNow ; EventJson = eventJson ; AuditUserId = auditUserId } |> toJson
     try
         if Directory.Exists entityTypeDir |> not then Directory.CreateDirectory entityTypeDir |> ignore
         if File.Exists fileName then

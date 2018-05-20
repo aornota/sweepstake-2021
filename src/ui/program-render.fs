@@ -149,7 +149,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
                     yield! otherLinks ]
                 navbarEnd [
 #if TICK
-                    navbarItem [ [ str (DateTime.Now.ToString ("HH:mm:ss")) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker } ]
+                    navbarItem [ [ str (DateTimeOffset.UtcNow.LocalDateTime.ToString ("HH:mm:ss")) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker } ]
 #endif
                     navbarItem [ [] |> button theme toggleThemeButton ] ] ] ] ]
 

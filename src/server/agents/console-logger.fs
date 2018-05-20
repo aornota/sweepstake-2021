@@ -103,7 +103,7 @@ let private log sourceFilter source category =
             | Agent (SkippedInput text) -> None, text |> formatSkippedInput |> formatText, ConsoleColor.Gray
             | Agent (Exception exn) -> (" CRITICAL ", dangerColours) |> Some, sprintf "agent terminated -> %s" exn.Message |> formatText, ConsoleColor.Red
         // Note: No need for lock since only called from ConsoleLogger agent (though can still get mixed up with ASP.Net Core logging output, i.e. since Console not thread-safe).
-        let timestampText = sprintf "%s " ((DateTime.Now.ToUniversalTime ()).ToString ("HH:mm:ss.fff"))
+        let timestampText = sprintf "%s " (DateTimeOffset.UtcNow.ToString ("HH:mm:ss.fff"))
         let previousForegroundColour = Console.ForegroundColor
         Console.Write timestampText
         match prefix with

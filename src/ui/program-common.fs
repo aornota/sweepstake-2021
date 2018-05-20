@@ -173,8 +173,8 @@ type AppState =
     | Auth of authState : AuthState
 
 type State = {
-    Ticks : int<tick> // note: will only be updated when TICK (see webpack.config.js) is defined
-    LastPing : DateTime // note: will only be updated when TICK is defined
+    Ticks : int<tick> // note: will only be updated when TICK is defined (see webpack.config.js)
+    LastWiff : DateTimeOffset // note: will only be updated when TICK is defined
     NotificationMessages : NotificationMessage list
     UseDefaultTheme : bool
     SessionId : SessionId
