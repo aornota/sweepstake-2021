@@ -60,10 +60,11 @@ type Broadcaster () =
                 subscriptionId |> reply.Reply
                 return! broadcasting (subscriptions, (filterName, signalFilter))
             | Unsubscribe subscriptionId ->
+                let source = "Unsubscribe"
                 if subscriptionId |> subscriptions.ContainsKey then
                     subscriptionId |> subscriptions.Remove |> ignore
-                    sprintf "Unsubscribe when broadcasting -> removed %A -> %i subscription/s" subscriptionId subscriptions.Count |> Info |> log
-                else sprintf "Unsubscribe when broadcasting -> unknown %A" subscriptionId |> IgnoredInput |> Agent |> log
+                    sprintf "%s when broadcasting -> removed %A -> %i subscription/s" source subscriptionId subscriptions.Count |> Info |> log
+                else sprintf "%s when broadcasting (%i subscription/s) -> unknown %A" source subscriptions.Count subscriptionId |> IgnoredInput |> Agent |> log
                 return! broadcasting (subscriptions, (filterName, signalFilter))
             | CurrentLogSignalFilter reply ->
                 (filterName, signalFilter) |> reply.Reply

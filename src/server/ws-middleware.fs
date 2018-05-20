@@ -27,7 +27,7 @@ type WsMiddleware (next:RequestDelegate) =
     let rec receiving (connectionId, ws:WebSocket) consecutiveReceiveFailureCount = async {
         let buffer : byte [] = Array.zeroCreate 4096
         try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
-            let! receiveResult = ws.ReceiveAsync (new ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
+            let! receiveResult = ws.ReceiveAsync (ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
             sprintf "receiving message for %A" connectionId |> Verbose |> log
             ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
             if receiveResult.CloseStatus.HasValue then return receiveResult |> Some

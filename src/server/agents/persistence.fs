@@ -4,12 +4,12 @@ module Aornota.Sweepstake2018.Server.Agents.Persistence
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
+open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
 open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
-open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg

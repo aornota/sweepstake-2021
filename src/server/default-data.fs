@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.DefaultData
 
 open Aornota.Common.IfDebug
+open Aornota.Common.Revision
 
 open Aornota.Server.Common.Helpers
 
@@ -18,7 +19,7 @@ open System
 open System.IO
 
 let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release
-let private deleteExistingSquadsEvents = ifDebug true false // note: should *not* generally set to true for Release
+let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release
 
 let private log category = (Host, category) |> consoleLogger.Log
 

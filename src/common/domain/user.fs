@@ -1,6 +1,6 @@
 module Aornota.Sweepstake2018.Common.Domain.User
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Common.Revision
 
 open System
 

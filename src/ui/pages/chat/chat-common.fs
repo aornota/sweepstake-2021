@@ -1,47 +1,53 @@
 module Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
+open Aornota.Common.Markdown
+open Aornota.Common.Revision
+
+open Aornota.UI.Common.Notifications
+
 open Aornota.Sweepstake2018.Common.Domain.Chat
-open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
 open System
+open System.Collections.Generic
 
 type Input =
+    | AddNotificationMessage of notificationMessage : NotificationMessage
     | ShowMarkdownSyntaxModal
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
     | ReceiveServerChatMsg of serverChatMsg : ServerChatMsg
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
-    | MessageTextChanged of messageText : Markdown
+    | NewMessageTextChanged of newMessageText : string
     | SendChatMessage
-
-type ChatMessageType =
-    | Sent
-    | SendFailed of errorText : string
-    | Received
-
-type ChatMessageUi = {
-    ChatMessage : ChatMessageOLD
-    ChatMessageType : ChatMessageType
-    Timestamp : DateTime }
 
 type NewChatMessage = {
     NewChatMessageId : ChatMessageId
-    MessageText : Markdown
-    ErrorText : string option }
+    NewMessageText : string
+    NewMessageErrorText : string option }
+
+type ChatUser = { UserName : UserName ; LastApi : DateTimeOffset option }
+type ChatUserDic = Dictionary<UserId, ChatUser>
+
+type ChatMessage = { UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset ; Expired : bool }
+type ChatMessageDic = Dictionary<ChatMessageId, ChatMessage>
+
+type ChatProjection = { Rvn : Rvn ; ChatUserDic : ChatUserDic ; ChatMessageDic : ChatMessageDic }
+
+type ActiveState = {
+    ChatProjection : ChatProjection
+    UnconfirmedChatMessageDic : ChatMessageDic
+    NewChatMessage : NewChatMessage }
+
+type ProjectionState =
+    | Initializing
+    | InitializationFailed
+    | Active of activeState : ActiveState
 
 type State = {
     AuthUser : AuthUser
+    ProjectionState : ProjectionState
     IsCurrentPage : bool
-    ChatMessageUis : ChatMessageUi list
-    UnseenCount : int
-    NewChatMessage : NewChatMessage }
-
-let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
-
-let validateChatMessageText (Markdown messageText) =
-    if String.IsNullOrWhiteSpace messageText then "Chat message must not be blank" |> Some
-    else if messageText.Length > MAX_CHAT_MESSAGE_LENGTH then "Chat message is too long" |> Some
-    else None
+    UnseenCount : int }

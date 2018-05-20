@@ -1,10 +1,10 @@
 module Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 
+open Aornota.Common.Delta
 open Aornota.Common.IfDebug
-(*open Aornota.Common.Projection*)
+open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
-open Aornota.Sweepstake2018.Common.Domain.Core
 (*open Aornota.Sweepstake2018.Common.Domain.Squad*)
 open Aornota.Sweepstake2018.Common.Domain.User
 
@@ -55,25 +55,23 @@ type ServerAppMsg =
     | ChangePasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
-    | OtherUserSignedInMsgOLD of userName : string // TODO-NMB-HIGH: Retire this...
-    | OtherUserSignedOutMsgOLD of userName : string // TODO-NMB-HIGH: Retire this...
 
 (*type UserAdministrationProjectionMsg =
-    | UserAdministrationProjectionQryInitialized of userAdmins : Projection<UserAdminDto>
-    | UserAdministrationDeltaMsg of delta : Delta<UserAdminDto>*)
+    | UserAdministrationDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, UserAdministrationDto>*)
 
 (*type ServerUserAdministrationMsg =
-    | InitializeUserAdministrationProjectionQryResult of result : Result<unit, AuthQryError<string>>
+    | InitializeUserAdministrationProjectionQryResult of result : Result<UserAdministrationProjectionDto, AuthQryError<string>>
     | UserAdministrationProjectionMsg of userAdministrationProjectionMsg : UserAdministrationProjectionMsg
     | CreateUserCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
     | ResetPasswordCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
     | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>*)
 
 (*type SquadsProjectionMsg =
-    | SquadsProjectionDeltaMsg of delta : Delta<_>*)
+    | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadDto>
+    | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * Delta<PlayerId, PlayerDto>*)
 
 (*type ServerSquadsMsg =
-    | InitializeSquadsProjectionQryResult of result : Result<TODO, AuthQryError<string>>
+    | InitializeSquadsProjectionQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
     | ChangePlayerNameCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
     | ChangePlayerTypeCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
@@ -81,18 +79,16 @@ type ServerAppMsg =
     | AddPlayerCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
     | EliminateSquadCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>*)
 
-(*type ChatProjectionMsg =
-    | ChatUsersDeltaMsg of delta : Delta<ChatUserDto>
-    | ChatMessagesDeltaMsg of delta : Delta<ChatMessageDto>
-    | OtherUserSignedInMsg of userName : UserName
-    | OtherUserSignedOutMsg of userName : UserName*)
+type ChatProjectionMsg =
+    | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>
+    | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto>
+    | UserSignedInMsg of userName : UserName
+    | UserSignedOutMsg of userName : UserName
 
 type ServerChatMsg =
-    | InitializeChatProjectionQryResult of result : Result<unit, AuthQryError<string>> // TODO-NEXT: Something other than unit...
-    (*| ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg*)
+    | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto, AuthQryError<string>>
+    | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
     | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
-    | SendChatMessageResultMsgOLD of result : Result<ChatMessageOLD, ChatMessageId * string> // TODO-REMOVE: Once no longer used...
-    | OtherUserChatMessageMsgOLD of chatMessage : ChatMessageOLD // TODO-REMOVE: Once no longer used...
 
 type ServerMsg =
     | ServerAppMsg of serverAppMsg : ServerAppMsg

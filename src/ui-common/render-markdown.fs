@@ -1,6 +1,6 @@
 module Aornota.UI.Common.Render.Markdown
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Common.Markdown
 
 open Aornota.UI.Common.Marked
 open Aornota.UI.Render.Bulma

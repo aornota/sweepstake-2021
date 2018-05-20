@@ -1,41 +1,24 @@
 module Aornota.Sweepstake2018.Common.Domain.Chat
 
-(*open Aornota.Common.Projection
-open Aornota.Common.UnitsOfMeasure*)
+open Aornota.Common.Markdown
+open Aornota.Common.Revision
 
-open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
 
-(*type ChatUserDto =
-    {
-        UserId : UserId
-        UserName : UserName
-        SignedInStatusDto : SignedInStatusDto
-    }
-    interface IItemId<ChatUserDto> with
-        member self.ItemId =
-            let (UserId id) = self.UserId
-            id*)
+type ChatUserDto = { UserId : UserId ; UserName : UserName ; LastApi : DateTimeOffset option }
 
 type ChatMessageId = | ChatMessageId of guid : Guid with
     static member Create () = Guid.NewGuid () |> ChatMessageId
 
-type ChatMessageOLD = { // TODO-NMB-HIGH: Retire this...
-    ChatMessageId : ChatMessageId
-    UserName : string
-    MessageText : Markdown }
+type ChatMessageDto = { ChatMessageId : ChatMessageId ; UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
 
-// TODO-NMB-HIGH: "Persist" ChatMessages (i.e. in memory) for a short period (e.g. clear via Tick _), so can send "recent" in ChatProjection?...
+type ChatProjectionDto = { Rvn : Rvn ; ChatUserDtos : ChatUserDto list ; ChatMessageDtos : ChatMessageDto list }
 
-(*type ChatMessageDto =
-    {
-        ChatMessageId : ChatMessageId
-        UserId : UserId
-        MessageText : Markdown
-        SinceSent : float<second>
-    }
-    interface IItemId<ChatMessageDto> with
-        member self.ItemId =
-            let (ChatMessageId id) = self.ChatMessageId
-            id*)
+let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
+
+let validateChatMessageText (Markdown messageText) =
+    if String.IsNullOrWhiteSpace messageText then "Chat message must not be blank" |> Some
+    else if (messageText.Trim ()).Length > MAX_CHAT_MESSAGE_LENGTH then "Chat message is too long" |> Some
+    else None

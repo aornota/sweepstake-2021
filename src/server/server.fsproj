@@ -11,7 +11,9 @@
     <Compile Include="../common/unexpected-error.fs" />
     <Compile Include="../common/if-debug.fs" />
     <Compile Include="../common/json.fs" />
-    <Compile Include="../common/projection.fs" />
+    <Compile Include="../common/markdown.fs" />
+    <Compile Include="../common/revision.fs" />
+    <Compile Include="../common/delta.fs" />
     <Compile Include="../common/domain/core.fs" />
     <Compile Include="../common/domain/user.fs" />
     <Compile Include="../common/domain/squad.fs" />
@@ -20,6 +22,7 @@
     <Compile Include="../common/ws-api/server-msg.fs" />
     <Compile Include="../server-common/helpers.fs" />
     <Compile Include="../server-common/json-converter.fs" />
+    <Compile Include="../server-common/delta-helper.fs" />
     <Compile Include="connection.fs" />
     <Compile Include="authorization.fs" />
     <Compile Include="jwt.fs" />

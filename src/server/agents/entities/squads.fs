@@ -3,6 +3,7 @@ module Aornota.Sweepstake2018.Server.Agents.Entities.Squads
 // Note: Squads agent broadcasts SquadsRead - and subscribes to SquadsEventsRead.
 
 open Aornota.Common.IfDebug
+open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
 open Aornota.Server.Common.Helpers
@@ -172,7 +173,7 @@ type Squads () =
                 let source = "OnSquadsEventsRead"
                 let squads, errors = initializeSquads source squadsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s when pendingOnSquadsEventsRead -> managingSquads (%i squads/s)" source squads.Count |> Info |> log
+                sprintf "%s (%i event/s) when pendingOnSquadsEventsRead -> managingSquads (%i squads/s)" source squadsEvents.Length squads.Count |> Info |> log
                 let squadsRead =
                     squads
                     |> List.ofSeq

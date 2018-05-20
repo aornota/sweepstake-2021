@@ -2,11 +2,13 @@ module Aornota.Sweepstake2018.UI.Program.State
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
+open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LocalStorage
 open Aornota.UI.Common.Notifications
+open Aornota.UI.Common.ShouldNeverHappen
 open Aornota.UI.Common.TimestampHelper
 open Aornota.UI.Common.Toasts
 open Aornota.UI.Theme.Common
@@ -88,8 +90,6 @@ let private sendMsg (ws:Brw.WebSocket) (uiMsg:UiMsg) =
             uiMsg |> toJson |> ws.send
             Cmd.none
         with exn -> (uiMsg, exn.Message) |> SendMsgOtherError |> WsError |> Cmd.ofMsg
-
-let private shouldNeverHappenText text = sprintf "SHOULD NEVER HAPPEN -> %s" text
 
 let private sendUnauthMsgCmd connectedState uiUnauthMsg =
     match connectedState with
@@ -308,14 +308,13 @@ let private handleServerAppMsg serverAppMsg state =
     | ChangePasswordCmdResult result, Auth authState, Connected _ -> state |> handleChangePasswordResult result authState
     | SignOutCmdResult result, Auth authState, Connected _ -> state |> handleSignOutResult result authState
     | AutoSignOutMsg reason, Auth authState, Connected _ -> state |> handleAutoSignOut reason authState
-    | OtherUserSignedInMsgOLD userName, Auth _, Connected _ -> state, sprintf "<strong>%s</strong> has signed in" userName |> infoToastCmd // TODO-REMOVE...
-    | OtherUserSignedOutMsgOLD userName, Auth _, Connected _ -> state, sprintf "<strong>%s</strong> has signed out" userName |> infoToastCmd // TODO-REMOVE...
     | _, _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerAppMsg when %A (%A) -> %A" state.AppState state.ConnectionState serverAppMsg)
 
 let private handleServerMsg serverMsg state =
     match serverMsg, state.AppState with
     | ServerAppMsg serverAppMsg, _ -> state |> handleServerAppMsg serverAppMsg
     | ServerChatMsg serverChatMsg, Auth _ -> state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerChatMsg _, Unauth _ -> state, Cmd.none // note: silently ignore ServerChatMsg if Unauth
     | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %A -> %A" state.AppState serverMsg)
 
 let private handleReadingPreferencesInput (result:Result<Preferences option, exn>) (state:State) =
@@ -353,7 +352,7 @@ let private handleUnauthInput unauthInput unauthState state =
         let signInState = { signInState with PasswordText = passwordText ; PasswordErrorText = validatePassword (Password passwordText) }
         let unauthState = { unauthState with SignInState = signInState |> Some }
         { state with AppState = Unauth unauthState }, Cmd.none
-    | SignInInput SignIn, Some signInState -> // note: assume no need to validate signInState.UserNameText or signInState.PasswordText (i.e. because App.Render.renderSignInModal will ensure that SignIn can only be dispatched when valid)
+    | SignInInput SignIn, Some signInState -> // note: assume no need to validate UserNameText or PasswordText (i.e. because App.Render.renderSignInModal will ensure that SignIn can only be dispatched when valid)
         let signInState = { signInState with SignInStatus = SignInPending |> Some }
         let unauthState = { unauthState with SignInState = signInState |> Some }
         let signInCmdParams = state.SessionId, UserName (signInState.UserNameText.Trim ()), Password (signInState.PasswordText.Trim ())
@@ -391,6 +390,7 @@ let private handleAuthInput authInput authState state =
     | PageInput (UPageInput NewsInput), None, false -> state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
     | PageInput (UPageInput SquadsInput), None, false -> state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
     | PageInput (APageInput DraftsInput), None, false -> state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
+    | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), None, false -> state |> addNotificationMessage notificationMessage, Cmd.none
     | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false -> { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none
     | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), None, false -> state, uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
     | PageInput (APageInput (ChatInput chatInput)), _, _ ->
@@ -417,7 +417,7 @@ let private handleAuthInput authInput authState state =
         let changePasswordState = { changePasswordState with ConfirmPasswordText = confirmPasswordText ; ConfirmPasswordErrorText = confirmPasswordErrorText }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
         { state with AppState = Auth authState }, Cmd.none
-    | ChangePasswordInput ChangePassword, Some changePasswordState, false -> // note: assume no need to validate changePasswordState.NewPasswordText or changePasswordState.ConfirmPasswordText (i.e. because App.Render.renderChangePasswordModal will ensure that ChangePassword can only be dispatched when valid)
+    | ChangePasswordInput ChangePassword, Some changePasswordState, false -> // note: assume no need to validate NewPasswordText or ConfirmPasswordText (i.e. because App.Render.renderChangePasswordModal will ensure that ChangePassword can only be dispatched when valid)
         let changePasswordState = { changePasswordState with ChangePasswordStatus = ChangePasswordPending |> Some }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
         let changePasswordCmdParams = authState.AuthUser.Rvn, Password (changePasswordState.NewPasswordText.Trim ())

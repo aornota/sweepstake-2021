@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.UI.Program.Render
 
+open Aornota.Common.Markdown
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LazyViewOrHMR
@@ -14,7 +15,6 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
-open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Program.Common
@@ -194,7 +194,7 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             textBox theme signInState.PasswordKey signInState.PasswordText (iconPasswordSmall |> Some) true signInState.PasswordErrorText [] signInState.FocusPassword isSigningIn
                 (PasswordTextChanged >> dispatch) onEnter ]
-        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Sign in" ] |> button theme { buttonSuccessSmall with Interaction = signInInteraction } ] ]
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Sign in" ] |> button theme { buttonLinkSmall with Interaction = signInInteraction } ] ]
     cardModal theme [ [ str "Sign in" ] |> para theme paraCentredSmall ] onDismiss body
 
 // TEMP-NMB...
@@ -259,7 +259,7 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
              textBox theme changePasswordState.ConfirmPasswordKey changePasswordState.ConfirmPasswordText (iconPasswordSmall |> Some) true changePasswordState.ConfirmPasswordErrorText []
                 false isChangingPassword (ConfirmPasswordTextChanged >> dispatch) onEnter ]
-        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change password" ] |> button theme { buttonSuccessSmall with Interaction = changePasswordInteraction } ]        ]
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change password" ] |> button theme { buttonLinkSmall with Interaction = changePasswordInteraction } ]        ]
     cardModal theme [ [ str "Change password" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderSigningOutModal useDefaultTheme =

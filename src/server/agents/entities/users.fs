@@ -3,11 +3,11 @@ module Aornota.Sweepstake2018.Server.Agents.Entities.Users
 // Note: Users agent broadcasts UsersRead - and subscribes to UsersEventsRead.
 
 open Aornota.Common.IfDebug
+open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
 open Aornota.Server.Common.Helpers
 
-open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
@@ -160,7 +160,7 @@ type Users () =
                 let source = "OnUsersEventsRead"
                 let users, errors = initializeUsers source usersEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s when pendingOnUsersEventsRead -> managingUsers (%i user/s)" source users.Count |> Info |> log
+                sprintf "%s (%i event/s) when pendingOnUsersEventsRead -> managingUsers (%i user/s)" source usersEvents.Length users.Count |> Info |> log
                 let usersRead =
                     users
                     |> List.ofSeq

@@ -27,7 +27,7 @@ let [<Literal>] private SECONDS_PER_TICK = 1<second/tick>
 
 let private log category = (Host, category) |> consoleLogger.Log
 
-let private serverStarted = DateTimeOffset.Now
+let private serverStarted = DateTimeOffset.UtcNow
 
 let private uiPath = // note: relative to current [server] directory, "ui" folder might be sibling (e.g. when running with webpack-dev-server) or child (e.g. once published)
     let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath

@@ -1,5 +1,8 @@
 module Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
+open Aornota.Common.Markdown
+open Aornota.Common.Revision
+
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
 (*open Aornota.Sweepstake2018.Common.Domain.Squad*)
@@ -36,7 +39,6 @@ type UiAuthAppMsg =
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
     | SendChatMessageCmd of chatMessageId : ChatMessageId * messageText : Markdown
-    | SendChatMessageCmdOLD of chatMessage : ChatMessageOLD // TODO-REMOVE: Once no longer used...
 
 type UiAuthMsg =
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg

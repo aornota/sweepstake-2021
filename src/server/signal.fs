@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.Server.Signal
 
+open Aornota.Common.Revision
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Sweepstake2018.Common.Domain.Core
