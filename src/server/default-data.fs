@@ -18,7 +18,7 @@ open Aornota.Sweepstake2018.Server.Authorization
 open System
 open System.IO
 
-let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release
+let private deleteExistingUsersEvents = ifDebug false true // note: should *not* generally set to true for Release
 let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release
 
 let private log category = (Host, category) |> consoleLogger.Log
@@ -38,9 +38,9 @@ let private delete dir =
 
 let private ifToken fCmdAsync token = async { return! match token with | Some token -> token |> fCmdAsync | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync }
 
-let private superUserType = SuperUser
+let private superUser = SuperUser
 let private nephId = Guid.Empty |> UserId
-let private nephTokens = permissions nephId superUserType |> UserTokens
+let private nephTokens = permissions nephId superUser |> UserTokens
 
 let private createInitialUsersEventsIfNecessary = async {
     let usersDir = directory EntityType.Users
@@ -60,24 +60,31 @@ let private createInitialUsersEventsIfNecessary = async {
         "sending dummy OnUsersEventsRead to Users agent" |> Info |> log
         [] |> users.OnUsersEventsRead
 
-        // #region: Create initial SuperUser | Administators
+        // #region: Create initial SuperUser | Administators - and a couple of Plebs
         let neph = UserName "neph"
         let dummyPassword = Password "password"
-        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, nephId, neph, dummyPassword, superUserType) |> users.HandleCreateUserCmdAsync)
+        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, nephId, neph, dummyPassword, superUser) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" neph)
-        let adminType = Administrator
+        let administrator = Administrator
         let rosieId, rosie = Guid "ffffffff-0001-0000-0000-000000000000" |> UserId, UserName "rosie"
-        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, rosieId, rosie, dummyPassword, adminType) |> users.HandleCreateUserCmdAsync)
+        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, rosieId, rosie, dummyPassword, administrator) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" rosie)
         let hughId, hugh = Guid "ffffffff-0002-0000-0000-000000000000" |> UserId, UserName "hugh"
-        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, hughId, hugh, dummyPassword, adminType) |> users.HandleCreateUserCmdAsync)
+        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, hughId, hugh, dummyPassword, administrator) |> users.HandleCreateUserCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" hugh)
+        let pleb = Pleb
+        let robId, rob = Guid "ffffffff-ffff-0001-0000-000000000000" |> UserId, UserName "rob"
+        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, robId, rob, dummyPassword, pleb) |> users.HandleCreateUserCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" rob)
+        let joshId, josh = Guid "ffffffff-ffff-0002-0000-000000000000" |> UserId, UserName "josh"
+        let! result = nephTokens.CreateUserToken |> ifToken (fun token -> (token, nephId, joshId, josh, dummyPassword, pleb) |> users.HandleCreateUserCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" josh)
         // #endregion
 
-        // #region: TEMP-NMB: Test various scenarios (note: expects initial SuperUser | Administrators to have been created)...
+        // #region: TEMP-NMB: Test various scenarios (note: expects initial SuperUser | Administrators | Plebs to have been created)...
         (*let initialRvn, newDummyPassword = Rvn 1, Password "drowssap"
         let rosieTokens = permissions rosieId adminType |> UserTokens
-        let willId, will = Guid "ffffffff-ffff-0001-0000-000000000000" |> UserId, UserName "will"
+        let willId, will = Guid "ffffffff-ffff-0003-0000-000000000000" |> UserId, UserName "will"
         let personaNonGrataId, personaNonGrata = Guid "ffffffff-ffff-ffff-0001-000000000000" |> UserId, UserName "persona non grata"
         let unknownUserId, unknownUser = Guid.NewGuid () |> UserId, UserName "unknown"
         let personaNonGrataTokens = permissions personaNonGrataId PersonaNonGrata |> UserTokens

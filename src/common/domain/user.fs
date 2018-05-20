@@ -86,7 +86,7 @@ let permissions userId userType =
 
 let validateUserName (userNames:UserName list) (UserName userName) =
     if String.IsNullOrWhiteSpace userName then "User name must not be blank" |> Some
-    else if (userName.Trim ()).Length < 4 then "User name must be at least 4 characters" |> Some
+    else if (userName.Trim ()).Length < 3 then "User name must be at least 3 characters" |> Some
     else if userNames |> List.map (fun (UserName userName) -> (userName.ToLower ()).Trim ()) |> List.contains ((userName.ToLower ()).Trim ()) then "User name already in use" |> Some
     else None
 let validatePassword (Password password) =

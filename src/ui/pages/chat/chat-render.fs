@@ -102,7 +102,7 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
                 |> List.map (fun (KeyValue (userId, chatUser)) ->
                     let (semantic, sortOrder) = (userId, chatUser) |> semanticAndSortOrder false authUserId
                     chatUser, semantic, sortOrder)
-                |> List.sortBy (fun (_, _, sortOrder) -> sortOrder)
+                |> List.sortBy (fun (chatUser, _, sortOrder) -> sortOrder, chatUser.UserName)
                 |> List.map (fun (chatUser, semantic, _) -> chatUser |> renderChatUser theme semantic)
             // Note: Silently ignore ChatMessages for unknown ChatUser (should never happen).
             let unconfirmedChatMessages = activeState.UnconfirmedChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
