@@ -112,7 +112,7 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
             yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
                 yield textArea theme newChatMessageId newMessageText newChatMessage.NewMessageErrorText helpInfo true false (NewMessageTextChanged >> dispatch)
                 if String.IsNullOrWhiteSpace newMessageText |> not then
-                    yield notification theme notificationLink [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
+                    yield notification theme notificationInfo [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
             yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Send chat message" ] |> button theme { buttonLinkSmall with Interaction = sendButtonInteraction } ]
             yield hr theme false
             yield div divDefault [ divTags chatUserTags ]
