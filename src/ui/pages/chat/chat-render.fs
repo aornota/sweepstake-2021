@@ -42,7 +42,7 @@ let private semanticAndSortOrder unconfirmed authUserId (userId, chatUser) =
     | false, SignedIn -> Primary, 3
     | false, NotSignedIn -> Dark, 4
 
-let private renderChatMessage theme authUserId _dispatch (_chatMessageId, chatMessage, unconfirmed, userId, chatUser) =
+let private renderChatMessage theme authUserId dispatch (chatMessageId, chatMessage, unconfirmed, userId, chatUser) =
     let renderChildren (UserName userName) messageText (timestamp:DateTimeOffset) unconfirmed = [
         let rightItem =
             if unconfirmed then icon iconSpinnerPulse
@@ -62,7 +62,7 @@ let private renderChatMessage theme authUserId _dispatch (_chatMessageId, chatMe
         yield messageText |> notificationContentFromMarkdown theme ]
     let (semantic, _) = (userId, chatUser) |> semanticAndSortOrder unconfirmed authUserId
     let children = renderChildren chatUser.UserName chatMessage.MessageText chatMessage.Timestamp unconfirmed
-    let onDismissNotification = None // TEMP-NMB: Should chat messages be dismissable (since will re-appear if page refreshed)?...if unconfirmed |> not then (fun _ -> chatMessageId |> DismissChatMessage |> dispatch) |> Some else None
+    let onDismissNotification = if chatMessage.Expired then (fun _ -> chatMessageId |> DismissChatMessage |> dispatch) |> Some else None
     [
         divVerticalSpace 10
         notification theme { notificationDefault with NotificationSemantic = semantic |> Some ; OnDismissNotification = onDismissNotification } children
