@@ -37,6 +37,8 @@ let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preference
 let [<Literal>] private WIFF_INTERVAL = 30.<second>
 #endif
 
+let [<Literal>] private LAST_ACTIVITY_THROTTLE = 10.<second>
+
 let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
 
 let private readPreferencesCmd =
@@ -91,17 +93,20 @@ let private sendMsg (ws:Brw.WebSocket) (uiMsg:UiMsg) =
             Cmd.none
         with exn -> (uiMsg, exn.Message) |> SendMsgOtherError |> WsError |> Cmd.ofMsg
 
-let private sendUnauthMsgCmd connectedState uiUnauthMsg =
-    match connectedState with
-    | Connected connectedState -> uiUnauthMsg |> UiUnauthMsg |> sendMsg connectedState.Ws
+let private sendUnauthMsgCmd connectionState uiUnauthMsg =
+    match connectionState with
+    | Connected connectedState ->
+        uiUnauthMsg |> UiUnauthMsg |> sendMsg connectedState.Ws
     | NotConnected | InitializingConnection _ ->
-        shouldNeverHappenText "sendUnauthMsgCmd called when ConnectedState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+        shouldNeverHappenText "sendUnauthMsgCmd called when ConnectionState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
-let private sendAuthMsgCmd connectedState jwt uiAuthMsg =
-    match connectedState with
-    | Connected connectedState -> (jwt, uiAuthMsg) |> UiAuthMsg |> sendMsg connectedState.Ws
+let private sendAuthMsgCmd connectionState authState uiAuthMsg =
+    match connectionState with
+    | Connected connectedState ->
+        let authState = { authState with LastUserActivity = DateTimeOffset.UtcNow }
+        authState, (authState.AuthUser.Jwt, uiAuthMsg) |> UiAuthMsg |> sendMsg connectedState.Ws
     | NotConnected | InitializingConnection _ ->
-        shouldNeverHappenText "sendAuthMsgCmd called when ConnectedState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+        authState, shouldNeverHappenText "sendAuthMsgCmd called when ConnectionState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private addNotificationMessage notificationMessage state = { state with NotificationMessages = notificationMessage :: state.NotificationMessages }
 
@@ -150,6 +155,7 @@ let private defaultAuthState authUser currentPage (unauthState:UnauthState optio
     let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
     let authState = {
         AuthUser = authUser
+        LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
         UnauthPageStates = match unauthState with | Some unauthState -> unauthState.UnauthPageStates | None -> { NewsState = () ; SquadsState = () }
         AuthPageStates = { DraftsState = () ; ChatState = chatState |> Some ; UserAdministrationState = () }
@@ -158,7 +164,8 @@ let private defaultAuthState authUser currentPage (unauthState:UnauthState optio
             | Some mustChangePasswordReason -> defaultChangePasswordState (mustChangePasswordReason |> Some) None |> Some
             | None -> None
         SigningOut = false }
-    { state with AppState = Auth authState }, chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+    let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+    { state with AppState = Auth authState }, chatCmd
 
 let initialize () =
     let state = {
@@ -179,11 +186,14 @@ let private handleWsError wsError state : State * Cmd<Input> =
     | WsOnError wsApiUrl, Connecting _ ->
         let state = { state with ConnectionState = NotConnected ; AppState = ServiceUnavailable }
         state |> addDebugError (sprintf "WsOnError when Connecting -> %s" wsApiUrl) ("Unable to create a connection to the web server<br><br>Please try again later" |> Some)
-    | WsOnError wsApiUrl, _ -> state |> addDebugError (sprintf "WsOnError when not Connecting -> %s" wsApiUrl) (UNEXPECTED_ERROR |> Some)
+    | WsOnError wsApiUrl, _ ->
+        state |> addDebugError (sprintf "WsOnError when not Connecting -> %s" wsApiUrl) (UNEXPECTED_ERROR |> Some)
     | SendMsgWsNotOpenError uiMsg, _ ->
         state |> addDebugError (sprintf "SendMsgWsNotOpenError -> %A" uiMsg) ("The connection to the web server has been closed<br><br>Please try refreshing the page" |> Some)
-    | SendMsgOtherError (uiMsg, errorText), _ -> state |> addDebugError (sprintf "SendMsgOtherError -> %s -> %A" errorText uiMsg) (unexpectedErrorWhen "sending a message" |> Some)
-    | DeserializeServerMsgError errorText, _ -> state |> addDebugError (sprintf "DeserializeServerMsgError -> %s" errorText) (unexpectedErrorWhen "processing a received message" |> Some)
+    | SendMsgOtherError (uiMsg, errorText), _ ->
+        state |> addDebugError (sprintf "SendMsgOtherError -> %s -> %A" errorText uiMsg) (unexpectedErrorWhen "sending a message" |> Some)
+    | DeserializeServerMsgError errorText, _ ->
+        state |> addDebugError (sprintf "DeserializeServerMsgError -> %s" errorText) (unexpectedErrorWhen "processing a received message" |> Some)
 
 let private handleServerUiMsgError serverUiMsgError state =
     match serverUiMsgError with
@@ -234,7 +244,8 @@ let private handleSignInResult (result:Result<AuthUser,SignInCmdError<string>>) 
         let errorText = ifDebug (sprintf "SignInCmdResult error -> %A" error) errorText
         let signInState = { signInState with SignInStatus = errorText |> SignInFailed |> Some }
         { state with AppState = Unauth { unauthState with SignInState = signInState |> Some } }, toastCmd
-    | None, _ -> state |> shouldNeverHappen (sprintf "Unexpected SignInCmdResult when SignInState is None -> %A" result)
+    | None, _ ->
+        state |> shouldNeverHappen (sprintf "Unexpected SignInCmdResult when SignInState is None -> %A" result)
 
 let private handleAutoSignInResult (result:Result<AuthUser,AutoSignInCmdError<string>>) userName lastPage state =
     match result with
@@ -269,8 +280,10 @@ let private handleChangePasswordResult (result:Result<Rvn, AuthCmdError<string>>
             let changePasswordState = { changePasswordState with ChangePasswordStatus = errorText |> ChangePasswordFailed |> Some }
             let authState = { authState with ChangePasswordState = changePasswordState |> Some }
             { state with AppState = Auth authState }, "Unable to change password" |> errorToastCmd
-        | Some _, _ | None, _ -> state |> shouldNeverHappen (sprintf "Unexpected ChangePasswordCmdResult when ChangePasswordState is Some but not ChangePasswordPending -> %A" result)
-    | None -> state |> shouldNeverHappen (sprintf "Unexpected ChangePasswordCmdResult when ChangePasswordState is None -> %A" result)
+        | Some _, _ | None, _ ->
+            state |> shouldNeverHappen (sprintf "Unexpected ChangePasswordCmdResult when ChangePasswordState is Some but not ChangePasswordPending -> %A" result)
+    | None ->
+        state |> shouldNeverHappen (sprintf "Unexpected ChangePasswordCmdResult when ChangePasswordState is None -> %A" result)
 
 let private handleSignOutResult (result:Result<unit, AuthCmdError<string>>) authState state =
     let toastCmd = "You have signed out" |> successToastCmd
@@ -284,7 +297,8 @@ let private handleSignOutResult (result:Result<unit, AuthCmdError<string>>) auth
         let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
         let state, cmd = state |> defaultUnauthState currentPage None
         state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; toastCmd ]
-    | false, _ -> state |> shouldNeverHappen (sprintf "Unexpected SignOutCmdResult when not SigningOut -> %A" result)
+    | false, _ ->
+        state |> shouldNeverHappen (sprintf "Unexpected SignOutCmdResult when not SigningOut -> %A" result)
 
 let private handleAutoSignOut autoSignOutReason authState state =
     let because reasonText = sprintf "You have been automatically signed out because %s" reasonText
@@ -300,23 +314,35 @@ let private handleAutoSignOut autoSignOutReason authState state =
 
 let private handleServerAppMsg serverAppMsg state =
     match serverAppMsg, state.AppState, state.ConnectionState with
-    | ServerUiMsgErrorMsg serverUiMsgError, _, _ -> state |> handleServerUiMsgError serverUiMsgError
+    | ServerUiMsgErrorMsg serverUiMsgError, _, _ ->
+        state |> handleServerUiMsgError serverUiMsgError
     | ConnectedMsg (serverStarted, otherConnections, signedIn), Connecting (user, lastPage), InitializingConnection ws ->
         state |> handleConnected ws serverStarted otherConnections signedIn user lastPage
-    | SignInCmdResult result, Unauth unauthState, Connected _ -> state |> handleSignInResult result unauthState
-    | AutoSignInCmdResult result, AutomaticallySigningIn ((userName, _), lastPage), Connected _ -> state |> handleAutoSignInResult result userName lastPage
-    | ChangePasswordCmdResult result, Auth authState, Connected _ -> state |> handleChangePasswordResult result authState
-    | SignOutCmdResult result, Auth authState, Connected _ -> state |> handleSignOutResult result authState
-    | AutoSignOutMsg reason, Auth authState, Connected _ -> state |> handleAutoSignOut reason authState
-    | _, _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerAppMsg when %A (%A) -> %A" state.AppState state.ConnectionState serverAppMsg)
+    | SignInCmdResult result, Unauth unauthState, Connected _ ->
+        state |> handleSignInResult result unauthState
+    | AutoSignInCmdResult result, AutomaticallySigningIn ((userName, _), lastPage), Connected _ ->
+        state |> handleAutoSignInResult result userName lastPage
+    | ChangePasswordCmdResult result, Auth authState, Connected _ ->
+        state |> handleChangePasswordResult result authState
+    | SignOutCmdResult result, Auth authState, Connected _ ->
+        state |> handleSignOutResult result authState
+    | AutoSignOutMsg reason, Auth authState, Connected _ ->
+        state |> handleAutoSignOut reason authState
+    | _, _, _ ->
+        state |> shouldNeverHappen (sprintf "Unexpected ServerAppMsg when %A (%A) -> %A" state.AppState state.ConnectionState serverAppMsg)
 
 let private handleServerMsg serverMsg state =
     match serverMsg, state.AppState with
-    | Waff, _ -> state, Cmd.none // note: silently ignored
-    | ServerAppMsg serverAppMsg, _ -> state |> handleServerAppMsg serverAppMsg
-    | ServerChatMsg serverChatMsg, Auth _ -> state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | ServerChatMsg _, Unauth _ -> state, Cmd.none // note: silently ignore ServerChatMsg if Unauth
-    | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %A -> %A" state.AppState serverMsg)
+    | Waff, _ -> // note: silently ignored
+        state, Cmd.none
+    | ServerAppMsg serverAppMsg, _ ->
+        state |> handleServerAppMsg serverAppMsg
+    | ServerChatMsg serverChatMsg, Auth _ ->
+        state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerChatMsg _, Unauth _ -> // note: silently ignore ServerChatMsg if Unauth
+        state, Cmd.none
+    | _, _ ->
+        state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %A -> %A" state.AppState serverMsg)
 
 let private handleReadingPreferencesInput (result:Result<Preferences option, exn>) (state:State) =
     match result with
@@ -324,7 +350,8 @@ let private handleReadingPreferencesInput (result:Result<Preferences option, exn
         let state = { state with UseDefaultTheme = preferences.UseDefaultTheme ; SessionId = preferences.SessionId }
         setBodyClass state.UseDefaultTheme
         { state with AppState = (preferences.User, preferences.LastPage) |> Connecting }, initializeWsSub |> Cmd.ofSub
-    | Ok None -> { state with AppState = (None, None) |> Connecting }, initializeWsSub |> Cmd.ofSub
+    | Ok None ->
+        { state with AppState = (None, None) |> Connecting }, initializeWsSub |> Cmd.ofSub
     | Error exn ->
         let state, _ = state |> addDebugError (sprintf "ReadPreferencesResult -> %s" exn.Message) None // note: no need for toast
         state, None |> Ok |> ReadingPreferencesInput |> AppInput |> Cmd.ofMsg
@@ -340,8 +367,10 @@ let private handleUnauthInput unauthInput unauthState state =
             let state = { state with AppState = Unauth unauthState }
             state, state |> writePreferencesCmd
         else state, Cmd.none
-    | UnauthPageInput NewsInput, None -> state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
-    | UnauthPageInput SquadsInput, None -> state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
+    | UnauthPageInput NewsInput, None ->
+        state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
+    | UnauthPageInput SquadsInput, None ->
+        state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
     | ShowSignInModal, None ->
         let unauthState = { unauthState with SignInState = defaultSignInState None None |> Some }
         { state with AppState = Unauth unauthState }, Cmd.none
@@ -365,14 +394,17 @@ let private handleUnauthInput unauthInput unauthState state =
         | Some _ | None ->
             let unauthState = { unauthState with SignInState = None }
             { state with AppState = Unauth unauthState }, Cmd.none
-    | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected UnauthInput when SignIsState is %A -> %A" unauthState.SignInState unauthInput)
+    | _, _ ->
+        state |> shouldNeverHappen (sprintf "Unexpected UnauthInput when SignIsState is %A -> %A" unauthState.SignInState unauthInput)
 
 let private handleAuthInput authInput authState state =
     match authInput, authState.ChangePasswordState, authState.SigningOut with
     | ShowPage page, None, false ->
         if authState.CurrentPage <> page then
             match page, authState.AuthUser.Permissions.UserAdministrationPermissions with
-            | AuthPage UserAdministrationPage, None -> state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None" // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
+            | AuthPage UserAdministrationPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
+                let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None"
+                state, cmd, false
             | _, _ ->
                 let chatState, chatCmd =
                     match page, authState.AuthPageStates.ChatState with
@@ -386,25 +418,40 @@ let private handleAuthInput authInput authState state =
                 let authState = { authState with CurrentPage = page ; AuthPageStates = authPageStates }
                 let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let state = { state with AppState = Auth authState }
-                state, Cmd.batch [ chatCmd ; state |> writePreferencesCmd ]
-        else state, Cmd.none
-    | PageInput (UPageInput NewsInput), None, false -> state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
-    | PageInput (UPageInput SquadsInput), None, false -> state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
-    | PageInput (APageInput DraftsInput), None, false -> state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
-    | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false -> state |> addNotificationMessage notificationMessage, Cmd.none
-    | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false -> { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none
-    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), _, false -> state, uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
+                state, Cmd.batch [ chatCmd ; state |> writePreferencesCmd ], true
+        else state, Cmd.none, true
+    | PageInput (UPageInput NewsInput), None, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
+        state, cmd, false
+    | PageInput (UPageInput SquadsInput), None, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected SquadsInput -> NYI"
+        state, cmd, false
+    | PageInput (APageInput DraftsInput), None, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
+        state, cmd, false
+    | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false ->
+        { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none, true
+    | PageInput (APageInput (ChatInput (SendUiAuthMsg uiAuthMsg))), _, false ->
+        let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
     | PageInput (APageInput (ChatInput chatInput)), _, _ ->
         match authState.AuthPageStates.ChatState with
         | Some chatState ->
-            let chatState, chatCmd = chatState |> Chat.State.transition chatInput
+            let chatState, chatCmd, isUserNonApiActivity = chatState |> Chat.State.transition chatInput
             let authPageStates = { authState.AuthPageStates with ChatState = chatState |> Some }
-            { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-        | None -> state |> shouldNeverHappen "Unexpected ChatInput when ChatState is None"
-    | PageInput (APageInput UserAdministrationInput), None, false -> state |> shouldNeverHappen "Unexpected UserAdministrationInput -> NYI"
+            let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+            { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, chatCmd, isUserNonApiActivity
+        | None ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected ChatInput when ChatState is None"
+            state, cmd, false
+    | PageInput (APageInput UserAdministrationInput), None, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected UserAdministrationInput -> NYI"
+        state, cmd, false
     | ShowChangePasswordModal, None, false ->
         let authState = { authState with ChangePasswordState = defaultChangePasswordState None None |> Some }
-        { state with AppState = Auth authState }, Cmd.none
+        { state with AppState = Auth authState }, Cmd.none, true
     | ChangePasswordInput (NewPasswordTextChanged newPasswordText), Some changePasswordState, false ->
         let newPasswordErrorText = validatePassword (Password newPasswordText)
         let confirmPasswordErrorText =
@@ -412,64 +459,105 @@ let private handleAuthInput authInput authState state =
             else validateConfirmPassword (Password newPasswordText) (Password changePasswordState.ConfirmPasswordText)
         let changePasswordState = { changePasswordState with NewPasswordText = newPasswordText ; NewPasswordErrorText = newPasswordErrorText ; ConfirmPasswordErrorText = confirmPasswordErrorText }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
-        { state with AppState = Auth authState }, Cmd.none
+        { state with AppState = Auth authState }, Cmd.none, true
     | ChangePasswordInput (ConfirmPasswordTextChanged confirmPasswordText), Some changePasswordState, false ->
         let confirmPasswordErrorText = validateConfirmPassword (Password changePasswordState.NewPasswordText) (Password confirmPasswordText)
         let changePasswordState = { changePasswordState with ConfirmPasswordText = confirmPasswordText ; ConfirmPasswordErrorText = confirmPasswordErrorText }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
-        { state with AppState = Auth authState }, Cmd.none
+        { state with AppState = Auth authState }, Cmd.none, true
     | ChangePasswordInput ChangePassword, Some changePasswordState, false -> // note: assume no need to validate NewPasswordText or ConfirmPasswordText (i.e. because App.Render.renderChangePasswordModal will ensure that ChangePassword can only be dispatched when valid)
         let changePasswordState = { changePasswordState with ChangePasswordStatus = ChangePasswordPending |> Some }
         let authState = { authState with ChangePasswordState = changePasswordState |> Some }
         let changePasswordCmdParams = authState.AuthUser.Rvn, Password (changePasswordState.NewPasswordText.Trim ())
-        let cmd = changePasswordCmdParams |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
-        { state with AppState = Auth authState }, cmd
+        let authState, cmd = changePasswordCmdParams |> ChangePasswordCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
     | ChangePasswordInput CancelChangePassword, Some changePasswordState, false ->
         match changePasswordState.MustChangePasswordReason, changePasswordState.ChangePasswordStatus with
-        | Some _, _ -> state |> shouldNeverHappen "Unexpected CancelChangePassword when MustChangePasswordReason is Some"
-        | None, Some ChangePasswordPending -> state |> shouldNeverHappen "Unexpected CancelChangePassword when ChangePasswordPending"
+        | Some _, _ ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected CancelChangePassword when MustChangePasswordReason is Some"
+            state, cmd, false
+        | None, Some ChangePasswordPending ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected CancelChangePassword when ChangePasswordPending"
+            state, cmd, false
         | None, Some _ | None, None ->
             let authState = { authState with ChangePasswordState = None }
-            { state with AppState = Auth authState }, Cmd.none
+            { state with AppState = Auth authState }, Cmd.none, true
     | SignOut, None, false ->
-        let cmd = SignOutCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState.AuthUser.Jwt
-        { state with AppState = Auth { authState with SigningOut = true } }, cmd
-    | _, _, false -> state |> shouldNeverHappen (sprintf "Unexpected AuthInput when not SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
-    | _, _, true -> state |> shouldNeverHappen (sprintf "Unexpected AuthInput when SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
+        let authState, cmd = SignOutCmd |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth { authState with SigningOut = true } }, cmd, false
+    | _, _, false ->
+        let state, cmd = state |> shouldNeverHappen (sprintf "Unexpected AuthInput when not SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
+        state, cmd, false
+    | _, _, true ->
+        let state, cmd = state |> shouldNeverHappen (sprintf "Unexpected AuthInput when SigningOut and ChangePasswordState is %A -> %A" authState.ChangePasswordState authInput)
+        state, cmd, false
 
 let private handleAppInput appInput state =
     match appInput, state.AppState with
-    | ReadingPreferencesInput result, ReadingPreferences -> state |> handleReadingPreferencesInput result
-    | ConnectingInput ws, Connecting _ -> state |> handleConnectingInput ws
-    | UnauthInput unauthInput, Unauth unauthState -> state |> handleUnauthInput unauthInput unauthState
-    | AuthInput authInput, Auth authState -> state |> handleAuthInput authInput authState
-    | _, _ -> state |> shouldNeverHappen (sprintf "Unexpected AppInput when %A -> %A" state.AppState appInput)
+    | ReadingPreferencesInput result, ReadingPreferences ->
+        let state, cmd = state |> handleReadingPreferencesInput result
+        state, cmd, false
+    | ConnectingInput ws, Connecting _ ->
+        let state, cmd = state |> handleConnectingInput ws
+        state, cmd, false
+    | UnauthInput unauthInput, Unauth unauthState ->
+        let state, cmd = state |> handleUnauthInput unauthInput unauthState
+        state, cmd, false
+    | AuthInput authInput, Auth authState ->
+        state |> handleAuthInput authInput authState
+    | _, _ ->
+        let state, cmd = state |> shouldNeverHappen (sprintf "Unexpected AppInput when %A -> %A" state.AppState appInput)
+        state, cmd, false
 
 let transition input state =
-    match input with
+    let state, cmd, isUserNonApiActivity =
+        match input with
 #if TICK
-    | Tick ->
-        // Note: Only sending Wiff messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
-        let lastWiff, cmd =
-            match state.ConnectionState with
-            | Connected connectedState ->
-                let now = DateTimeOffset.UtcNow
-                if (now.DateTime - state.LastWiff.DateTime).TotalSeconds * 1.<second> >= WIFF_INTERVAL then now, Wiff |> sendMsg connectedState.Ws
-                else state.LastWiff, Cmd.none
-            | NotConnected | InitializingConnection _ -> state.LastWiff, Cmd.none
-        { state with Ticks = state.Ticks + 1<tick> ; LastWiff = lastWiff }, cmd
+        | Tick ->
+            // Note: Only sending Wiff messages to server to see if this resolves issue with WebSocket "timeouts" for MS Edge (only seen with Azure, not dev-server).
+            let lastWiff, cmd =
+                match state.ConnectionState with
+                | Connected connectedState ->
+                    let now = DateTimeOffset.UtcNow
+                    if (now.DateTime - state.LastWiff.DateTime).TotalSeconds * 1.<second> >= WIFF_INTERVAL then now, Wiff |> sendMsg connectedState.Ws
+                    else state.LastWiff, Cmd.none
+                | NotConnected | InitializingConnection _ -> state.LastWiff, Cmd.none
+            { state with Ticks = state.Ticks + 1<tick> ; LastWiff = lastWiff }, cmd
 #endif
-    | AddNotificationMessage notificationMessage -> state |> addNotificationMessage notificationMessage, Cmd.none
-    | DismissNotificationMessage notificationId -> { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }, Cmd.none // note: silently ignore unknown notificationId
-    | ToggleTheme ->
-        let state = { state with UseDefaultTheme = (state.UseDefaultTheme |> not) }
-        setBodyClass state.UseDefaultTheme
-        state, state |> writePreferencesCmd
-    | ToggleNavbarBurger -> { state with NavbarBurgerIsActive = (state.NavbarBurgerIsActive |> not) }, Cmd.none
-    | ShowStaticModal staticModal -> { state with StaticModal = staticModal |> Some }, Cmd.none
-    | HideStaticModal -> { state with StaticModal = None }, Cmd.none
-    | WritePreferencesResult (Ok _) -> state, Cmd.none
-    | WritePreferencesResult (Error exn) -> state |> addDebugError (sprintf "WritePreferencesResult -> %s" exn.Message) None // note: no need for toast
-    | WsError wsError -> state |> handleWsError wsError
-    | HandleServerMsg serverMsg -> state |> handleServerMsg serverMsg
-    | AppInput appInput -> state |> handleAppInput appInput
+        | AddNotificationMessage notificationMessage ->
+            state |> addNotificationMessage notificationMessage, Cmd.none, false
+        | DismissNotificationMessage notificationId -> // note: silently ignore unknown notificationId
+            { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }, Cmd.none, true
+        | ToggleTheme ->
+            let state = { state with UseDefaultTheme = (state.UseDefaultTheme |> not) }
+            setBodyClass state.UseDefaultTheme
+            state, state |> writePreferencesCmd, true
+        | ToggleNavbarBurger ->
+            { state with NavbarBurgerIsActive = (state.NavbarBurgerIsActive |> not) }, Cmd.none, true
+        | ShowStaticModal staticModal ->
+            { state with StaticModal = staticModal |> Some }, Cmd.none, true
+        | HideStaticModal ->
+            { state with StaticModal = None }, Cmd.none, true
+        | WritePreferencesResult (Ok _) ->
+            state, Cmd.none, false
+        | WritePreferencesResult (Error exn) -> // note: no need for toast
+            let state, cmd = state |> addDebugError (sprintf "WritePreferencesResult -> %s" exn.Message) None
+            state, cmd, false
+        | WsError wsError ->
+            let state, cmd = state |> handleWsError wsError
+            state, cmd, false
+        | HandleServerMsg serverMsg ->
+            let state, cmd = state |> handleServerMsg serverMsg
+            state, cmd, false
+        | AppInput appInput ->
+            state |> handleAppInput appInput
+    let appState, userNonApiActivityCmd =
+        match state.AppState, isUserNonApiActivity with
+        | Auth authState, true ->
+            let authState, userNonApiActivityCmd =
+                if (DateTimeOffset.UtcNow - authState.LastUserActivity).TotalSeconds * 1.<second> < LAST_ACTIVITY_THROTTLE then authState, Cmd.none
+                else UserNonApiActivity |> sendAuthMsgCmd state.ConnectionState authState // note: updates authState.LastUserActivity
+            Auth authState, userNonApiActivityCmd
+        | _, _ ->
+            state.AppState, Cmd.none
+    { state with AppState = appState }, Cmd.batch [ cmd ; userNonApiActivityCmd ]

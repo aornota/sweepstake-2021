@@ -1,6 +1,6 @@
 module Aornota.Sweepstake2018.Server.Agents.Projections.Chat
 
-// Note: Chat agent broadcasts SendMsg - and subscribes to Tick | UsersRead | UserEventWritten | UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnected.
+// Note: Chat agent broadcasts SendMsg - and subscribes to Tick | UsersRead | UserEventWritten | UserSignedIn | UserActivity | UserSignedOut | ConnectionsSignedOut | Disconnected.
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Markdown
@@ -31,14 +31,14 @@ type private ChatInput =
     | OnUserCreated of userId : UserId * userName : UserName * userType : UserType
     | OnUserTypeChanged of userId : UserId * userType : UserType
     | OnUserSignedInOrOut of userId : UserId * signedIn : bool
-    | OnUserApi of userId : UserId
+    | OnUserActivity of userId : UserId
     | RemoveConnections of connectionIds : ConnectionId list
     | HandleInitializeChatProjectionQry of token : InitializeChatProjectionToken * connectionId : ConnectionId
         * reply : AsyncReplyChannel<Result<ChatProjectionDto, AuthQryError<string>>>
     | HandleSendChatMessageCmd of token : SendChatMessageToken * userId : UserId * chatMessageId : ChatMessageId * messageText : Markdown
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     
-type private ChatUser = { UserName : UserName ; UserType : UserType ; LastApi : DateTimeOffset option }
+type private ChatUser = { UserName : UserName ; UserType : UserType ; LastActivity : DateTimeOffset option }
 type private ChatUserDic = Dictionary<UserId, ChatUser>
 
 type private ChatMessage = { UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
@@ -52,7 +52,7 @@ type private ChatProjection = { Rvn : Rvn ; ChatUserDtoDic : ChatUserDtoDic ; Ch
 
 let [<Literal>] private HOUSEKEEPING_INTERVAL = 1.<minute>
 let [<Literal>] private CHAT_MESSAGE_EXPIRES_AFTER = 24.<hour>
-let [<Literal>] private LAST_API_THROTTLE = 10.<second>
+let [<Literal>] private LAST_ACTIVITY_THROTTLE = 10.<second>
 
 let private log category = (Projection Chat, category) |> consoleLogger.Log
 
@@ -75,7 +75,7 @@ let private chatProjectionDto (chatProjection:ChatProjection) =
 let private updateProjection source (chatUserDic:ChatUserDic) (chatMessageDic:ChatMessageDic) (connectionSet:ConnectionSet) (chatProjection:ChatProjection option) =
     let source = sprintf "%s#updateProjection" source  
     let chatUserDto filter (userId, chatUser:ChatUser) =
-        if chatUser |> filter then { UserId = userId ; UserName = chatUser.UserName ; LastApi = chatUser.LastApi } |> Some else None
+        if chatUser |> filter then { UserId = userId ; UserName = chatUser.UserName ; LastActivity = chatUser.LastActivity } |> Some else None
     let chatMessageDto (chatMessageId, chatMessage:ChatMessage) =
         { ChatMessageId = chatMessageId ; UserId = chatMessage.UserId ; MessageText = chatMessage.MessageText ; Timestamp = chatMessage.Timestamp }
     let chatUserDtoDic = ChatUserDtoDic ()
@@ -136,7 +136,7 @@ type Chat () =
             | OnUserCreated _ -> "OnUserCreated when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnUserTypeChanged _ -> "OnUserTypeChanged when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnUserSignedInOrOut _ -> "OnUserSignedInOrOut when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
-            | OnUserApi _ -> "OnUserApi when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | OnUserActivity _ -> "OnUserActivity when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnections _ -> "RemoveConnections when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeChatProjectionQry _ -> "HandleInitializeChatProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleSendChatMessageCmd _ -> "HandleSendChatMessageCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
@@ -149,7 +149,7 @@ type Chat () =
                 let source = "OnUsersRead"
                 sprintf "%s (%i user/s) when pendingOnUsersRead" source usersRead.Length |> Info |> log
                 let chatUserDic = ChatUserDic ()
-                usersRead |> List.iter (fun userRead -> (userRead.UserId, { UserName = userRead.UserName ; UserType = userRead.UserType ; LastApi = None }) |> chatUserDic.Add)           
+                usersRead |> List.iter (fun userRead -> (userRead.UserId, { UserName = userRead.UserName ; UserType = userRead.UserType ; LastActivity = None }) |> chatUserDic.Add)           
                 let chatMessageDic = ChatMessageDic ()
                 let connectionSet = ConnectionSet ()
                 let projection = None |> updateProjection source chatUserDic chatMessageDic connectionSet
@@ -157,7 +157,7 @@ type Chat () =
             | OnUserCreated _ -> "OnUserCreated when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserTypeChanged _ -> "OnUserTypeChanged when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserSignedInOrOut _ -> "OnUserSignedInOrOut when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
-            | OnUserApi _ -> "OnUserApi when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
+            | OnUserActivity _ -> "OnUserActivity when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | RemoveConnections _ -> "RemoveConnections when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleInitializeChatProjectionQry _ -> "HandleInitializeChatProjectionQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleSendChatMessageCmd _ -> "HandleSendChatMessageCmd when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead () }
@@ -179,7 +179,7 @@ type Chat () =
                 let source = "OnUserCreated"
                 sprintf "%s (%A %A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId userName userType chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
                 if userId |> chatUserDic.ContainsKey |> not then // note: silently ignore already-known userId (should never happen)
-                    (userId, { UserName = userName ; UserType = userType ; LastApi = None }) |> chatUserDic.Add
+                    (userId, { UserName = userName ; UserType = userType ; LastActivity = None }) |> chatUserDic.Add
                 sprintf "%s when projectingChat -> %i chat users/s)" source chatUserDic.Count |> Info |> log
                 let projection = chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet
                 return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
@@ -209,18 +209,18 @@ type Chat () =
                 if userId |> chatUserDic.ContainsKey then // note: silently ignore unknown userId (should never happen)
                     let chatUser = chatUserDic.[userId]
                     chatUser.UserName |> (if signedIn then UserSignedInMsg else UserSignedOutMsg) |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionSet
-                    chatUserDic.[userId] <- { chatUser with LastApi = match signedIn with | true -> DateTimeOffset.UtcNow |> Some | false -> None }
+                    chatUserDic.[userId] <- { chatUser with LastActivity = match signedIn with | true -> DateTimeOffset.UtcNow |> Some | false -> None }
                 let projection = chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet
                 return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
-            | OnUserApi userId ->
-                let source = "OnUserApi"
+            | OnUserActivity userId ->
+                let source = "OnUserActivity"
                 sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
                 let updated =
                     if userId |> chatUserDic.ContainsKey then // note: silently ignore unknown userId (should never happen)
                         let chatUser = chatUserDic.[userId]
                         let now = DateTimeOffset.UtcNow
-                        let throttled = match chatUser.LastApi with | Some lastApi -> (now - lastApi).TotalSeconds * 1.<second> < LAST_API_THROTTLE | None -> false
-                        if throttled |> not then chatUserDic.[userId] <- { chatUser with LastApi = now |> Some }
+                        let throttled = match chatUser.LastActivity with | Some lastActivity -> (now - lastActivity).TotalSeconds * 1.<second> < LAST_ACTIVITY_THROTTLE | None -> false
+                        if throttled |> not then chatUserDic.[userId] <- { chatUser with LastActivity = now |> Some }
                         else sprintf "%s throttled for %A" source userId |> Info |> log
                         throttled |> not
                     else false
@@ -270,7 +270,7 @@ type Chat () =
                 | _ -> ()
             | UserSignedIn userId -> (userId, true) |> OnUserSignedInOrOut |> agent.Post
             | UserSignedOut userId -> (userId, false) |> OnUserSignedInOrOut |> agent.Post
-            | UserApi userId -> userId |> OnUserApi |> agent.Post
+            | UserActivity userId -> userId |> OnUserActivity |> agent.Post
             | ConnectionsSignedOut connectionIds -> connectionIds |> RemoveConnections |> agent.Post
             | Disconnected connectionId -> [ connectionId ] |> RemoveConnections |> agent.Post
             | _ -> ())

@@ -64,8 +64,8 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
     let isUserAdministrationPage page = match page with | AuthPage UserAdministrationPage -> true | _ -> false
     let theme = getTheme useDefaultTheme
     let serverStarted =
-        match serverStarted with
-        | Some serverStarted ->
+        match headerStatus, serverStarted with
+        | SignedIn authUser, Some serverStarted when authUser.UserType = SuperUser ->
             let timestampText =
 #if TICK
                 ago serverStarted.LocalDateTime
@@ -73,7 +73,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
                 sprintf "at %s" (serverStarted.LocalDateTime.ToString ("HH:mm:ss"))
 #endif
             navbarItem [ [ str (sprintf "Server started %s" timestampText ) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDark } ] |> Some
-        | None -> None
+        | _, _ -> None
     let statusInfo =
         let paraStatus = { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker }
         let spinner = icon iconSpinnerPulseSmall

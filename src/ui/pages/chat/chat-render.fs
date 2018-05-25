@@ -19,14 +19,14 @@ open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open System
 
-let [<Literal>] private RECENTLY_ACTIVE = 5.<minute>
+let [<Literal>] private RECENTLY_ACTIVE = 1.<minute>
 
 let private cutoff (after:int<second>) = float (after * -1) |> DateTimeOffset.UtcNow.AddSeconds
 
 let private (|Self|RecentlyActive|SignedIn|NotSignedIn|) (authUserId:UserId, (userId:UserId, chatUser:ChatUser)) =
     if userId = authUserId then Self
     else
-        match chatUser.LastApi with
+        match chatUser.LastActivity with
         | Some lastApi ->   
             let recentlyActiveCutoff = cutoff (int (RECENTLY_ACTIVE |> minutesToSeconds) * 1<second>)
             if lastApi > recentlyActiveCutoff then RecentlyActive else SignedIn

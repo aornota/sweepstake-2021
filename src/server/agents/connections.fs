@@ -1,6 +1,6 @@
 module Aornota.Sweepstake2018.Server.Agents.Connections
 
-// Note: Connections agent broadcasts UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnected - and subscribes to SendMsg.
+// Note: Connections agent broadcasts UserSignedIn | UserActivity | UserSignedOut | ConnectionsSignedOut | Disconnected - and subscribes to SendMsg.
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Json
@@ -166,7 +166,7 @@ let private ifSignedInSession source connectionId fWithConnection (connectionDic
         sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" source connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log }
 
 let private tokensForAuthApi source (otherError, jwtError) updateLastApi userId jwt (signedInUserDic:SignedInUserDic) =
-    // Note: If successful, updates SignedInUser.LastApi and broadcasts UserApi.
+    // Note: If successful [and if requested], updates SignedInUser.LastApi and broadcasts UserActivity.
     match jwt |> fromJwt with
     | Ok (userIdFromJwt, permissionsFromJwt) ->
         if userIdFromJwt <> userId then // note: should never happen
@@ -182,7 +182,7 @@ let private tokensForAuthApi source (otherError, jwtError) updateLastApi userId 
                     if updateLastApi then
                         let signedInUser = { signedInUser with LastApi = DateTimeOffset.UtcNow }
                         signedInUserDic.[userIdFromJwt] <- signedInUser
-                        userIdFromJwt |> UserApi |> broadcaster.Broadcast
+                        userIdFromJwt |> UserActivity |> broadcaster.Broadcast
                     signedInUser.UserTokens |> Ok
             | false, _ -> // note: should never happen
                 let errorText = sprintf "%s -> No SignedInUser for %A" source userIdFromJwt
@@ -250,7 +250,7 @@ type Connections () =
                 | Wiff -> // note: logged - but otherwise ignored
                     sprintf "Wiff for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
-                // #region: UiUnauthAppMsg SignInCmd
+                // #region: UiUnauthMsg UiUnauthAppMsg SignInCmd
                 | UiUnauthMsg (UiUnauthAppMsg (SignInCmd (sessionId, userName, password))) ->
                     let source = "SignInCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userName connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -271,7 +271,7 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
-                // #region: UiUnauthAppMsg AutoSignInCmd
+                // #region: UiUnauthMsg UiUnauthAppMsg AutoSignInCmd
                 | UiUnauthMsg (UiUnauthAppMsg (AutoSignInCmd (sessionId, jwt))) ->
                     let source = "AutoSignInCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source sessionId jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -307,14 +307,22 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
-                // #region: UiAuthAppMsg SignOutCmd
+                // #region: UiAuthMsg UserNonApiActivity
+                | UiAuthMsg (jwt, UserNonApiActivity) ->
+                    let source = "UserNonApiActivity"
+                    sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (userId, _)) -> async { userId |> UserActivity |> broadcaster.Broadcast })
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                // #endregion
+                // #region: UiAuthMsg UiAuthAppMsg SignOutCmd
                 | UiAuthMsg (jwt, UiAuthAppMsg SignOutCmd) ->     
                     let source = "SignOutCmd"
                     sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (ws, (userId, sessionId)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source false userId jwt // note: if successful, does *not* update SignedInUser.LastApi (nor broadcast UserApi)
+                            else signedInUserDic |> tokensForAuthCmdApi source false userId jwt // note: if successful, does *not* update SignedInUser.LastApi (nor broadcast UserActivity)
                             |> Result.bind (fun _ ->
                                 connectionDic.[connectionId] <- (ws, None) // note: connectionId will be in connections (otherwise ifSignedInSession would bypass fWithConnection)
                                 [ connectionId ] |> ConnectionsSignedOut |> broadcaster.Broadcast
@@ -328,14 +336,14 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
-                // #region: UiAuthAppMsg ChangePasswordCmd
+                // #region: UiAuthMsg UiAuthAppMsg ChangePasswordCmd
                 | UiAuthMsg (jwt, UiAuthAppMsg (ChangePasswordCmd (currentRvn, password))) ->
                     let source = "ChangePasswordCmd"
                     sprintf "%s (%A) for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source currentRvn jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (userId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
@@ -364,14 +372,14 @@ type Connections () =
                     - UiAuthSquadsAdministrationMsg WithdrawPlayerCmd... 
                     - UiAuthSquadsAdministrationMsg EliminateSquadCmd... *)
 
-                // #region: UiAuthChatMsg InitializeChatProjectionQry
+                // #region: UiAuthMsg UiAuthChatMsg InitializeChatProjectionQry
                 | UiAuthMsg (jwt, UiAuthChatMsg InitializeChatProjectionQry) ->
                     let source = "InitializeChatProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (userId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthQryError |> Error
-                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
@@ -385,14 +393,14 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
-                // #region: UiAuthChatMsg SendChatMessageCmd
+                // #region: UiAuthMsg UiAuthChatMsg SendChatMessageCmd
                 | UiAuthMsg (jwt, UiAuthChatMsg (SendChatMessageCmd (chatMessageId, messageText))) ->
                     let source = "SendChatMessageCmd"
                     sprintf "%s %A for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source chatMessageId jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (userId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserApi)
+                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->

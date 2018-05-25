@@ -28,7 +28,7 @@ type NewChatMessage = {
     NewMessageText : string
     NewMessageErrorText : string option }
 
-type ChatUser = { UserName : UserName ; LastApi : DateTimeOffset option }
+type ChatUser = { UserName : UserName ; LastActivity : DateTimeOffset option }
 type ChatUserDic = Dictionary<UserId, ChatUser>
 
 type ChatMessage = { UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset ; Expired : bool }

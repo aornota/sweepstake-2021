@@ -27,6 +27,6 @@ type Signal =
     | SquadEventWritten of rvn : Rvn * squadEvent : SquadEvent
     | UserSignedIn of userId : UserId
     | UserSignedOut of userId : UserId
-    | UserApi of userId : UserId
+    | UserActivity of userId : UserId
     | ConnectionsSignedOut of connectionIds : ConnectionId list
     | Disconnected of connectionId : ConnectionId

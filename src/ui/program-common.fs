@@ -158,6 +158,7 @@ type AuthPageStates = {
 
 type AuthState = {
     AuthUser : AuthUser
+    LastUserActivity : DateTimeOffset
     CurrentPage : Page
     UnauthPageStates : UnauthPageStates
     AuthPageStates : AuthPageStates

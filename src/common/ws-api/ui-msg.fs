@@ -41,6 +41,7 @@ type UiAuthChatMsg =
     | SendChatMessageCmd of chatMessageId : ChatMessageId * messageText : Markdown
 
 type UiAuthMsg =
+    | UserNonApiActivity
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg
     (*| UiAuthUserAdministrationMsg of uiAuthUserAdministrationMsg : UiAuthUserAdministrationMsg*)
     (*| UiAuthSquadsAdministrationMsg of uiAuthSquadsAdministrationMsg : UiAuthSquadsAdministrationMsg*)

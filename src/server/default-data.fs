@@ -42,6 +42,41 @@ let private superUser = SuperUser
 let private nephId = Guid.Empty |> UserId
 let private nephTokens = permissions nephId superUser |> UserTokens
 
+// #region SquadIds
+let egyptId = Guid "00000011-0000-0000-0000-000000000000" |> SquadId
+let russiaId = Guid "00000012-0000-0000-0000-000000000000" |> SquadId
+let saudiArabiaId = Guid "00000013-0000-0000-0000-000000000000" |> SquadId
+let uruguayId = Guid "00000014-0000-0000-0000-000000000000" |> SquadId
+let iranId = Guid "00000021-0000-0000-0000-000000000000" |> SquadId
+let moroccoId = Guid "00000022-0000-0000-0000-000000000000" |> SquadId
+let portugalId = Guid "00000023-0000-0000-0000-000000000000" |> SquadId
+let spainId = Guid "00000024-0000-0000-0000-000000000000" |> SquadId
+let australiaId = Guid "00000031-0000-0000-0000-000000000000" |> SquadId
+let denmarkId = Guid "00000032-0000-0000-0000-000000000000" |> SquadId
+let franceId = Guid "00000033-0000-0000-0000-000000000000" |> SquadId
+let peruId = Guid "00000034-0000-0000-0000-000000000000" |> SquadId
+let argentinaId = Guid "00000041-0000-0000-0000-000000000000" |> SquadId
+let croatiaId = Guid "00000042-0000-0000-0000-000000000000" |> SquadId
+let icelandId = Guid "00000043-0000-0000-0000-000000000000" |> SquadId
+let nigeriaId = Guid "00000044-0000-0000-0000-000000000000" |> SquadId
+let brazilId = Guid "00000051-0000-0000-0000-000000000000" |> SquadId
+let costaRicaId = Guid "00000052-0000-0000-0000-000000000000" |> SquadId
+let serbiaId = Guid "00000053-0000-0000-0000-000000000000" |> SquadId
+let switzerlandId = Guid "00000054-0000-0000-0000-000000000000" |> SquadId
+let germanyId = Guid "00000061-0000-0000-0000-000000000000" |> SquadId
+let mexicoId = Guid "00000062-0000-0000-0000-000000000000" |> SquadId
+let southKoreaId = Guid "00000063-0000-0000-0000-000000000000" |> SquadId
+let swedenId = Guid "00000064-0000-0000-0000-000000000000" |> SquadId
+let belgiumId = Guid "00000071-0000-0000-0000-000000000000" |> SquadId
+let englandId = Guid "00000072-0000-0000-0000-000000000000" |> SquadId
+let panamaId = Guid "00000073-0000-0000-0000-000000000000" |> SquadId
+let tunisiaId = Guid "00000074-0000-0000-0000-000000000000" |> SquadId
+let colombiaId = Guid "00000081-0000-0000-0000-000000000000" |> SquadId
+let japanId = Guid "00000082-0000-0000-0000-000000000000" |> SquadId
+let polandId = Guid "00000083-0000-0000-0000-000000000000" |> SquadId
+let senegalId = Guid "00000084-0000-0000-0000-000000000000" |> SquadId
+// #endregion
+
 let private createInitialUsersEventsIfNecessary = async {
     let usersDir = directory EntityType.Users
 
@@ -207,94 +242,94 @@ let private createInitialSquadsEventsIfNecessary = async {
         // TODO-NMB-HIGH: Decide what to do about Russia's seeding (and update SCORING_SYSTEM_MARKDOWN accordingly)...
 
         // #region: Group A
-        let egyptId, egypt = Guid "00000011-0000-0000-0000-000000000000" |> SquadId, SquadName "Egypt"
+        let egypt = SquadName "Egypt"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, egyptId, egypt, GroupA, Seeding 22, CoachName "Héctor Cúper") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" egypt)
-        let russiaId, russia = Guid "00000012-0000-0000-0000-000000000000" |> SquadId, SquadName "Russia"
+        let russia = SquadName "Russia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, russiaId, russia, GroupA, Seeding 1, CoachName "Stanislav Cherchesov") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" russia)
-        let saudiArabiaId, saudiArabia = Guid "00000013-0000-0000-0000-000000000000" |> SquadId, SquadName "Saudi Arabia"
+        let saudiArabia = SquadName "Saudi Arabia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, saudiArabiaId, saudiArabia, GroupA, Seeding 32, CoachName "Juan Antonio Pizzi") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" saudiArabia)
-        let uruguayId, uruguay = Guid "00000014-0000-0000-0000-000000000000" |> SquadId, SquadName "Uruguay"
+        let uruguay = SquadName "Uruguay"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, uruguayId, uruguay, GroupA, Seeding 15, CoachName "Óscar Tabárez") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" uruguay)
         // #endregion
         // #region: Group B
-        let iranId, iran = Guid "00000021-0000-0000-0000-000000000000" |> SquadId, SquadName "Iran"
+        let iran = SquadName "Iran"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, iranId, iran, GroupB, Seeding 24, CoachName "Carlos Queiroz") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" iran)
-        let moroccoId, morocco = Guid "00000022-0000-0000-0000-000000000000" |> SquadId, SquadName "Morocco"
+        let morocco = SquadName "Morocco"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, moroccoId, morocco, GroupB, Seeding 29, CoachName "Hervé Renard") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" morocco)
-        let portugalId, portugal = Guid "00000023-0000-0000-0000-000000000000" |> SquadId, SquadName "Portugal"
+        let portugal = SquadName "Portugal"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, portugalId, portugal, GroupB, Seeding 4, CoachName "Fernando Santos") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" portugal)
-        let spainId, spain = Guid "00000024-0000-0000-0000-000000000000" |> SquadId, SquadName "Spain"
+        let spain = SquadName "Spain"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, spainId, spain, GroupB, Seeding 9, CoachName "Julen Lopetegui") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" spain)
         // #endregion
         // #region: Group C
-        let australiaId, australia = Guid "00000031-0000-0000-0000-000000000000" |> SquadId, SquadName "Australia"
+        let australia = SquadName "Australia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, australiaId, australia, GroupC, Seeding 27, CoachName "Bert van Marwijk") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" australia)
-        let denmarkId, denmark = Guid "00000032-0000-0000-0000-000000000000" |> SquadId, SquadName "Denmark"
+        let denmark = SquadName "Denmark"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, denmarkId, denmark, GroupC, Seeding 17, CoachName "Åge Hareide") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" denmark)
-        let franceId, france = Guid "00000033-0000-0000-0000-000000000000" |> SquadId, SquadName "France"
+        let france = SquadName "France"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, franceId, france, GroupC, Seeding 8, CoachName "Didier Deschamps") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" france)
-        let peruId, peru = Guid "00000034-0000-0000-0000-000000000000" |> SquadId, SquadName "Peru"
+        let peru = SquadName "Peru"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, peruId, peru, GroupC, Seeding 10, CoachName "Ricardo Gareca") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUseHandleCreateSquadCmdAsyncrCmdAsync (%A)" peru)
         // #endregion
         // #region: Group D
-        let argentinaId, argentina = Guid "00000041-0000-0000-0000-000000000000" |> SquadId, SquadName "Argentina"
+        let argentina = SquadName "Argentina"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, argentinaId, argentina, GroupD, Seeding 5, CoachName "Jorge Sampaoli") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" argentina)
-        let croatiaId, croatia = Guid "00000042-0000-0000-0000-000000000000" |> SquadId, SquadName "Croatia"
+        let croatia = SquadName "Croatia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, croatiaId, croatia, GroupD, Seeding 16, CoachName "Zlatko Dalić") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" croatia)
-        let icelandId, iceland = Guid "00000043-0000-0000-0000-000000000000" |> SquadId, SquadName "Iceland"
+        let iceland = SquadName "Iceland"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, icelandId, iceland, GroupD, Seeding 18, CoachName "Heimir Hallgrímsson") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" iceland)
-        let nigeriaId, nigeria = Guid "00000044-0000-0000-0000-000000000000" |> SquadId, SquadName "Nigeria"
+        let nigeria = SquadName "Nigeria"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, nigeriaId, nigeria, GroupD, Seeding 26, CoachName "Gernot Rohr") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" nigeria)
         // #endregion
         // #region: Group E
-        let brazilId, brazil = Guid "00000051-0000-0000-0000-000000000000" |> SquadId, SquadName "Brazil"
+        let brazil = SquadName "Brazil"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, brazilId, brazil, GroupE, Seeding 3, CoachName "Tite") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" brazil)
-        let costaRicaId, costaRica = Guid "00000052-0000-0000-0000-000000000000" |> SquadId, SquadName "Costa Rica"
+        let costaRica = SquadName "Costa Rica"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, costaRicaId, costaRica, GroupE, Seeding 19, CoachName "Óscar Ramírez") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" costaRica)
-        let serbiaId, serbia = Guid "00000053-0000-0000-0000-000000000000" |> SquadId, SquadName "Serbia"
+        let serbia = SquadName "Serbia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, serbiaId, serbia, GroupE, Seeding 25, CoachName "Mladen Krstajić") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" serbia)
-        let switzerlandId, switzerland = Guid "00000054-0000-0000-0000-000000000000" |> SquadId, SquadName "Switzerland"
+        let switzerland = SquadName "Switzerland"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, switzerlandId, switzerland, GroupE, Seeding 11, CoachName "Vladimir Petković") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" switzerland)
         // #endregion
         // #region: Group F
-        let germanyId, germany = Guid "00000061-0000-0000-0000-000000000000" |> SquadId, SquadName "Germany"
+        let germany = SquadName "Germany"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, germanyId, germany, GroupF, Seeding 2, CoachName "Joachim Löw") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" germany)
-        let mexicoId, mexico = Guid "00000062-0000-0000-0000-000000000000" |> SquadId, SquadName "Mexico"
+        let mexico = SquadName "Mexico"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, mexicoId, mexico, GroupF, Seeding 14, CoachName "Juan Carlos Osorio") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" mexico)
-        let southKoreaId, southKorea = Guid "00000063-0000-0000-0000-000000000000" |> SquadId, SquadName "South Korea"
+        let southKorea = SquadName "South Korea"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, southKoreaId, southKorea, GroupF, Seeding 31, CoachName "Shin Tae-yong") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" southKorea)
-        let swedenId, sweden = Guid "00000064-0000-0000-0000-000000000000" |> SquadId, SquadName "Sweden"
+        let sweden = SquadName "Sweden"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, swedenId, sweden, GroupF, Seeding 20, CoachName "Janne Andersson") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" sweden)
         // #endregion
         // #region: Group G
-        let belgiumId, belgium = Guid "00000071-0000-0000-0000-000000000000" |> SquadId, SquadName "Belgium"
+        let belgium = SquadName "Belgium"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, belgiumId, belgium, GroupG, Seeding 6, CoachName "Roberto Martínez") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" belgium)
-        let englandId, england = Guid "00000072-0000-0000-0000-000000000000" |> SquadId, SquadName "England"
+        let england = SquadName "England"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, englandId, england, GroupG, Seeding 12, CoachName "Gareth Southgate") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" england)
         // #region: England Players
@@ -368,24 +403,24 @@ let private createInitialSquadsEventsIfNecessary = async {
         let! result = nephTokens.AddOrEditPlayerToken |> ifToken (fun token -> (token, nephId, englandId, Rvn 23, dannyWelbeckId, dannyWelbeck, Forward) |> squads.HandleAddPlayerCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddPlayerCmdAsync (%A %A)" england dannyWelbeck)
         // #endregion
-        let panamaId, panama = Guid "00000073-0000-0000-0000-000000000000" |> SquadId, SquadName "Panama"
+        let panama = SquadName "Panama"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, panamaId, panama, GroupG, Seeding 30, CoachName "Hernán Darío Gómez") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" panama)
-        let tunisiaId, tunisia = Guid "00000074-0000-0000-0000-000000000000" |> SquadId, SquadName "Tunisia"
+        let tunisia = SquadName "Tunisia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, tunisiaId, tunisia, GroupG, Seeding 21, CoachName "Nabil Maâloul") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" tunisia)
         // #endregion
         // #region: Group H
-        let colombiaId, colombia = Guid "00000081-0000-0000-0000-000000000000" |> SquadId, SquadName "Colombia"
+        let colombia = SquadName "Colombia"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, colombiaId, colombia, GroupH, Seeding 13, CoachName "José Pékerman") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" colombia)
-        let japanId, japan = Guid "00000082-0000-0000-0000-000000000000" |> SquadId, SquadName "Japan"
+        let japan = SquadName "Japan"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, japanId, japan, GroupH, Seeding 28, CoachName "Akira Nishino") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" japan)
-        let polandId, poland = Guid "00000083-0000-0000-0000-000000000000" |> SquadId, SquadName "Poland"
+        let poland = SquadName "Poland"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, polandId, poland, GroupH, Seeding 7, CoachName "Adam Nawałka") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" poland)
-        let senegalId, senegal = Guid "00000084-0000-0000-0000-000000000000" |> SquadId, SquadName "Senegal"
+        let senegal = SquadName "Senegal"
         let! result = nephTokens.CreateSquadToken |> ifToken (fun token -> (token, nephId, senegalId, senegal, GroupH, Seeding 23, CoachName "Aliou Cissé") |> squads.HandleCreateSquadCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateUserCmdAsync (%A)" senegal)
         // #endregion

@@ -7,7 +7,7 @@ open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
 
-type ChatUserDto = { UserId : UserId ; UserName : UserName ; LastApi : DateTimeOffset option }
+type ChatUserDto = { UserId : UserId ; UserName : UserName ; LastActivity : DateTimeOffset option }
 
 type ChatMessageId = | ChatMessageId of guid : Guid with
     static member Create () = Guid.NewGuid () |> ChatMessageId
