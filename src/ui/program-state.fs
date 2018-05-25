@@ -522,7 +522,7 @@ let transition input state =
                     if (now.DateTime - state.LastWiff.DateTime).TotalSeconds * 1.<second> >= WIFF_INTERVAL then now, Wiff |> sendMsg connectedState.Ws
                     else state.LastWiff, Cmd.none
                 | NotConnected | InitializingConnection _ -> state.LastWiff, Cmd.none
-            { state with Ticks = state.Ticks + 1<tick> ; LastWiff = lastWiff }, cmd
+            { state with Ticks = state.Ticks + 1<tick> ; LastWiff = lastWiff }, cmd, false
 #endif
         | AddNotificationMessage notificationMessage ->
             state |> addNotificationMessage notificationMessage, Cmd.none, false
