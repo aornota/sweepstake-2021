@@ -81,6 +81,7 @@ let renderNotificationMessages (useDefaultTheme, source, notificationMessages, _
     | _ :: _ ->
         let render = render (getTheme useDefaultTheme) source dispatch
         columnContent [
+            yield divVerticalSpace 15
             yield! notificationMessages
                 |> List.sortBy (fun notificationMessage -> match notificationMessage.Type with | Debug -> 0 | Info -> 3 | Warning -> 2 | Danger -> 1)
                 |> List.map render

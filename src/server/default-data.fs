@@ -117,7 +117,7 @@ let private createInitialUsersEventsIfNecessary = async {
         // #endregion
 
         // #region: TEMP-NMB: Test various scenarios (note: expects initial SuperUser | Administrators | Plebs to have been created)...
-        (*let initialRvn, newDummyPassword = Rvn 1, Password "drowssap"
+        (*let newDummyPassword = Password "drowssap"
         let rosieTokens = permissions rosieId adminType |> UserTokens
         let willId, will = Guid "ffffffff-ffff-0003-0000-000000000000" |> UserId, UserName "will"
         let personaNonGrataId, personaNonGrata = Guid "ffffffff-ffff-ffff-0001-000000000000" |> UserId, UserName "persona non grata"
@@ -334,7 +334,7 @@ let private createInitialSquadsEventsIfNecessary = async {
         result |> logShouldSucceed (sprintf "HandleCreateSquadCmdAsync (%A)" england)
         // #region: England Players
         let jackButlandId, jackButland = Guid "00000072-0001-0000-0000-000000000000" |> PlayerId, PlayerName "Jack Butland"
-        let! result = nephTokens.AddOrEditPlayerToken |> ifToken (fun token -> (token, nephId, englandId, Rvn 1, jackButlandId, jackButland, Goalkeeper) |> squads.HandleAddPlayerCmdAsync)
+        let! result = nephTokens.AddOrEditPlayerToken |> ifToken (fun token -> (token, nephId, englandId, initialRvn, jackButlandId, jackButland, Goalkeeper) |> squads.HandleAddPlayerCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddPlayerCmdAsync (%A %A)" england jackButland)
         let jordanPickfordId, jordanPickford = Guid "00000072-0002-0000-0000-000000000000" |> PlayerId, PlayerName "Jordan Pickford"
         let! result = nephTokens.AddOrEditPlayerToken |> ifToken (fun token -> (token, nephId, englandId, Rvn 2, jordanPickfordId, jordanPickford, Goalkeeper) |> squads.HandleAddPlayerCmdAsync)

@@ -21,6 +21,7 @@ type Input =
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
     | NewMessageTextChanged of newMessageText : string
+    | MoreChatMessages
     | SendChatMessage
 
 type NewChatMessage = {
@@ -38,6 +39,8 @@ type ChatProjection = { Rvn : Rvn ; ChatUserDic : ChatUserDic ; ChatMessageDic :
 
 type ActiveState = {
     ChatProjection : ChatProjection
+    HasMoreChatMessages : bool
+    MoreChatMessagesPending : bool
     UnconfirmedChatMessageDic : ChatMessageDic
     NewChatMessage : NewChatMessage }
 

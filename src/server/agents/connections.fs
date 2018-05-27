@@ -194,6 +194,7 @@ let private tokensForAuthQryApi source userId jwt signedInUsers = tokensForAuthA
 
 type Connections () =
     let agent = MailboxProcessor.Start (fun inbox ->
+        // #region: awaitingStart
         let rec awaitingStart () = async {
             let! input = inbox.Receive ()
             match input with
@@ -207,6 +208,8 @@ type Connections () =
             | OnDeserializeUiMsgError _ -> "OnDeserializeUiMsgError when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleUiMsg _ -> "HandleUiMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnSendMsg _ -> "SendMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+        // #endregion
+        // #region: managingConnections
         and managingConnections (serverStarted, connectionDic, signedInUserDic) = async {
             let! input = inbox.Receive ()
             do! ifDebugSleepAsync 100 500
@@ -383,11 +386,32 @@ type Connections () =
                         let! result =
                             match result with
                             | Ok userTokens ->
-                                match userTokens.InitializeChatProjectionToken with
-                                | Some initializeChatProjectionToken -> (initializeChatProjectionToken, connectionId) |> chat.HandleInitializeChatProjectionQry
+                                match userTokens.ChatProjectionQryToken with
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleInitializeChatProjectionQry
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeChatProjectionQryResult |> ServerChatMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                // #endregion
+                // #region: UiAuthMsg UiAuthChatMsg MoreChatMessagesQry
+                | UiAuthMsg (jwt, UiAuthChatMsg MoreChatMessagesQry) ->
+                    let source = "MoreChatMessagesQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthQryError |> Error
+                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.ChatProjectionQryToken with
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleMoreChatMessagesQry
+                                | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> MoreChatMessagesQryResult |> ServerChatMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
@@ -414,6 +438,7 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic) }
                 // #endregion
+        // #endregion
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Connections |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

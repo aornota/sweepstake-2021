@@ -108,7 +108,7 @@ let private writeEvent source entityType (entityId:Guid) rvn eventJson auditUser
                 File.AppendAllLines (fileName, [ json ], encoding)
                 () |> Ok
         else
-            if rvn <> Rvn 1 then
+            if rvn <> initialRvn then
                 ifDebug (sprintf "No existing file %s when writing %A (%A)" fileName rvn eventJson) UNEXPECTED_ERROR |> persistenceError source
             else
                 File.WriteAllLines (fileName, [ json ], encoding)
@@ -272,7 +272,7 @@ let readPersistedEvents () =
     let userEvent = (UserId (Guid "ffffffff-ffff-ffff-ffff-ffffffffffff"), UserName "skippy", Salt "salt", Hash "hash", Pleb) |> UserCreated
     // Note: Need to call via Async.Start since WriteUserEventAsync will block (since input will be "skipped" when in read lock) until _disposable disposed (which will release the read lock).
     async {
-        let! _ = (UserId Guid.Empty, Rvn 1, userEvent) |> persistence.WriteUserEventAsync
+        let! _ = (UserId Guid.Empty, initialRvn, userEvent) |> persistence.WriteUserEventAsync
         return () } |> Async.Start *)
     readLockId |> persistence.ReadUsersEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
     readLockId |> persistence.ReadSquadsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent

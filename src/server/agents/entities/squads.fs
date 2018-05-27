@@ -215,7 +215,7 @@ type Squads () =
                         match validateSquadName squadNames squadName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ -> match validateCoachName coachName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ ->
-                        (squadId, squadName, group, seeding, coachName) |> SquadCreated |> tryApplySquadEvent source squadId None (Rvn 1))
+                        (squadId, squadName, group, seeding, coachName) |> SquadCreated |> tryApplySquadEvent source squadId None initialRvn)
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply

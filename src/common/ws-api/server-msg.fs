@@ -81,12 +81,13 @@ type ServerAppMsg =
 
 type ChatProjectionMsg =
     | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>
-    | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto>
+    | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto> * hasMoreChatMessages : bool
     | UserSignedInMsg of userName : UserName
     | UserSignedOutMsg of userName : UserName
 
 type ServerChatMsg =
-    | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto, AuthQryError<string>>
+    | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto * bool, AuthQryError<string>>
+    | MoreChatMessagesQryResult of result : Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>
     | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
     | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
 

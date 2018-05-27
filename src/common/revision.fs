@@ -2,6 +2,8 @@ module Aornota.Common.Revision
 
 type Rvn = | Rvn of rvn : int
 
+let initialRvn = Rvn 1
+
 let incrementRvn (Rvn rvn) = Rvn (rvn + 1)
 
 let validateNextRvn (currentRvn:Rvn option) (Rvn nextRvn) =

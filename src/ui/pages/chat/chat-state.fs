@@ -25,27 +25,30 @@ let initialize authUser isCurrentPage : State * Cmd<Input> =
         ProjectionState = Initializing
         IsCurrentPage = isCurrentPage
         UnseenCount = 0 }
-    state, InitializeChatProjectionQry |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
+    let cmd = InitializeChatProjectionQry |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
+    state, cmd
 
 let private defaultNewChatMessage () = { NewChatMessageId = ChatMessageId.Create () ; NewMessageText = String.Empty ; NewMessageErrorText = None }
 
-let private shouldNeverHappen debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+
+let private chatUser (chatUserDto:ChatUserDto) = { UserName = chatUserDto.UserName ; LastActivity = chatUserDto.LastActivity }
+
+let private chatMessage (chatMessageDto:ChatMessageDto) =
+    { UserId = chatMessageDto.UserId ; MessageText = chatMessageDto.MessageText ; Timestamp = chatMessageDto.Timestamp ; Expired = false }
 
 let private chatProjection (chatProjectionDto:ChatProjectionDto) =
     let chatUserDic = ChatUserDic ()
     chatProjectionDto.ChatUserDtos |> List.iter (fun chatUserDto ->
         if chatUserDto.UserId |> chatUserDic.ContainsKey |> not then // note: silently ignore duplicate UserIds (should never happer)
-            let chatUser = { UserName = chatUserDto.UserName ; LastActivity = chatUserDto.LastActivity }
-            (chatUserDto.UserId, chatUser) |> chatUserDic.Add)
+            (chatUserDto.UserId, chatUserDto |> chatUser) |> chatUserDic.Add)
     let chatMessageDic = ChatMessageDic ()
     chatProjectionDto.ChatMessageDtos |> List.iter (fun chatMessageDto ->
         if chatMessageDto.ChatMessageId |> chatMessageDic.ContainsKey |> not then // note: silently ignore duplicate ChatMessageIds (should never happer)
-            let chatMessage = { UserId = chatMessageDto.UserId ; MessageText = chatMessageDto.MessageText ; Timestamp = chatMessageDto.Timestamp ; Expired = false }
-            (chatMessageDto.ChatMessageId, chatMessage) |> chatMessageDic.Add)
-    { Rvn = chatProjectionDto.Rvn ; ChatUserDic = chatUserDic ; ChatMessageDic = chatMessageDic }
+            (chatMessageDto.ChatMessageId, chatMessageDto |> chatMessage) |> chatMessageDic.Add)
+    { Rvn = initialRvn ; ChatUserDic = chatUserDic ; ChatMessageDic = chatMessageDic }
 
 let private applyChatUserDelta currentRvn deltaRvn (delta:Delta<UserId, ChatUserDto>) (chatUserDic:ChatUserDic) =
-    let chatUser (chatUserDto:ChatUserDto) = { UserName = chatUserDto.UserName ; LastActivity = chatUserDto.LastActivity }
     let chatUserDic = ChatUserDic chatUserDic // note: copy to ensure that passed-in dictionary *not* modified if error
     if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
     |> Result.bind (fun _ ->
@@ -63,8 +66,6 @@ let private applyChatUserDelta currentRvn deltaRvn (delta:Delta<UserId, ChatUser
     |> Result.bind (fun _ -> chatUserDic |> Ok)
 
 let private applyChatMessageDelta currentRvn deltaRvn (delta:Delta<ChatMessageId, ChatMessageDto>) (chatMessageDic:ChatMessageDic) =
-    let chatMessage (chatMessageDto:ChatMessageDto) =
-        { UserId = chatMessageDto.UserId ; MessageText = chatMessageDto.MessageText ; Timestamp = chatMessageDto.Timestamp ; Expired = false }
     let chatMessageDic = ChatMessageDic chatMessageDic // note: copy to ensure that passed-in dictionary *not* modified if error
     if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
     |> Result.bind (fun _ ->
@@ -88,12 +89,43 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
     let cmdErrorText error = match error with | AuthCmdJwtError _ | AuthCmdAuthznError _ | AuthCmdPersistenceError _ -> UNEXPECTED_ERROR | OtherAuthCmdError (OtherError errorText) -> errorText
     let qryErrorText error = match error with | AuthQryJwtError _ | AuthQryAuthznError _ -> UNEXPECTED_ERROR | OtherAuthQryError (OtherError errorText) -> errorText
     match serverChatMsg, state.ProjectionState with
-    | InitializeChatProjectionQryResult (Ok chatProjectionDto), Initializing ->
-        let activeState = { ChatProjection = chatProjectionDto |> chatProjection ; UnconfirmedChatMessageDic = ChatMessageDic () ; NewChatMessage = defaultNewChatMessage () }
+    | InitializeChatProjectionQryResult (Ok (chatProjectionDto, hasMoreChatMessages)), Initializing ->
+        let activeState = { 
+            ChatProjection = chatProjectionDto |> chatProjection
+            HasMoreChatMessages = hasMoreChatMessages
+            MoreChatMessagesPending = false
+            UnconfirmedChatMessageDic = ChatMessageDic ()
+            NewChatMessage = defaultNewChatMessage () }
         let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatProjectionDto.ChatMessageDtos.Length
         { state with ProjectionState = Active activeState ; UnseenCount = unseenCount }, Cmd.none
     | InitializeChatProjectionQryResult (Error error), Initializing ->
         { state with ProjectionState = InitializationFailed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+    | MoreChatMessagesQryResult (Ok (rvn, chatMessageDtos, hasMoreChatMessages)), Active activeState ->
+        if activeState.MoreChatMessagesPending |> not then // note: silently ignore unexpected result
+            state, Cmd.none
+        else if chatMessageDtos.Length = 0 then
+            let activeState = { activeState with HasMoreChatMessages = hasMoreChatMessages ; MoreChatMessagesPending = false }
+            { state with ProjectionState = Active activeState }, "Unable to retrieve more chat messages<br><br>They have probably expired" |> warningToastCmd
+        else
+            let chatProjection = activeState.ChatProjection
+            let addedChatMessageDtos = chatMessageDtos |> List.map (fun chatMessageDto -> chatMessageDto.ChatMessageId, chatMessageDto)
+            let chatMessageDtoDelta = { Added = addedChatMessageDtos ; Changed = [] ; Removed = [] }
+            match chatProjection.ChatMessageDic |> applyChatMessageDelta chatProjection.Rvn rvn chatMessageDtoDelta with
+            | Ok chatMessageDic ->
+                let chatProjection = { chatProjection with Rvn = rvn ; ChatMessageDic = chatMessageDic }
+                let activeState = { activeState with ChatProjection = chatProjection ; HasMoreChatMessages = hasMoreChatMessages ; MoreChatMessagesPending = false }
+                let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatMessageDtos.Length
+                { state with ProjectionState = Active activeState ; UnseenCount = unseenCount }, Cmd.none
+            | Error error ->
+                let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" chatMessageDtoDelta chatProjection.ChatMessageDic error)
+                let state, cmd = initialize state.AuthUser state.IsCurrentPage
+                state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
+    | MoreChatMessagesQryResult (Error error), Active activeState ->
+        if activeState.MoreChatMessagesPending |> not then // note: silently ignore unexpected result
+            state, Cmd.none
+        else
+            let activeState = { activeState with MoreChatMessagesPending = false }
+            { state with ProjectionState = Active activeState }, shouldNeverHappenCmd (sprintf "MoreChatMessagesQryResult Error %A" error)
     | ChatProjectionMsg (ChatUsersDeltaMsg (deltaRvn, chatUserDtoDelta)), Active activeState ->
         let chatProjection = activeState.ChatProjection
         match chatProjection.ChatUserDic |> applyChatUserDelta chatProjection.Rvn deltaRvn chatUserDtoDelta with
@@ -102,10 +134,10 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
             let activeState = { activeState with ChatProjection = chatProjection }
             { state with ProjectionState = Active activeState }, Cmd.none
         | Error error ->
-            let shouldNeverHappenCmd = shouldNeverHappen (sprintf "Unable to apply %A to %A -> %A" chatUserDtoDelta chatProjection.ChatUserDic error)
+            let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" chatUserDtoDelta chatProjection.ChatUserDic error)
             let state, cmd = initialize state.AuthUser state.IsCurrentPage
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
-    | ChatProjectionMsg (ChatMessagesDeltaMsg (deltaRvn, chatMessageDtoDelta)), Active activeState ->
+    | ChatProjectionMsg (ChatMessagesDeltaMsg (deltaRvn, chatMessageDtoDelta, hasMoreChatMessages)), Active activeState ->
         let chatProjection = activeState.ChatProjection
         match chatProjection.ChatMessageDic |> applyChatMessageDelta chatProjection.Rvn deltaRvn chatMessageDtoDelta with
         | Ok chatMessageDic ->
@@ -113,11 +145,11 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
                 if chatMessageId |> chatMessageDic.ContainsKey then chatMessageId |> Some else None)
             remove |> List.iter (activeState.UnconfirmedChatMessageDic.Remove >> ignore)
             let chatProjection = { chatProjection with Rvn = deltaRvn ; ChatMessageDic = chatMessageDic }
-            let activeState = { activeState with ChatProjection = chatProjection }
+            let activeState = { activeState with ChatProjection = chatProjection ; HasMoreChatMessages = hasMoreChatMessages }
             let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatMessageDtoDelta.Added.Length
             { state with ProjectionState = Active activeState ; UnseenCount = unseenCount }, Cmd.none
         | Error error ->
-            let shouldNeverHappenCmd = shouldNeverHappen (sprintf "Unable to apply %A to %A -> %A" chatMessageDtoDelta chatProjection.ChatMessageDic error)
+            let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" chatMessageDtoDelta chatProjection.ChatMessageDic error)
             let state, cmd = initialize state.AuthUser state.IsCurrentPage
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | ChatProjectionMsg (UserSignedInMsg (UserName userName)), Active _ ->
@@ -133,7 +165,7 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
         let cmd = error |> cmdErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
         state, Cmd.batch [ cmd ; "sending chat message" |> unexpectedErrorWhen |> errorToastCmd ]
     | _, _ ->
-        state, shouldNeverHappen (sprintf "Unexpected ServerChatMsg when %A -> %A" state.ProjectionState serverChatMsg)
+        state, shouldNeverHappenCmd (sprintf "Unexpected ServerChatMsg when %A -> %A" state.ProjectionState serverChatMsg)
 
 let transition input state =
     let state, cmd, isUserNonApiActivity =
@@ -156,6 +188,10 @@ let transition input state =
             let newChatMessage = { activeState.NewChatMessage with NewMessageText = newMessageText ; NewMessageErrorText = Markdown newMessageText |> validateChatMessageText }
             let activeState = { activeState with NewChatMessage = newChatMessage }
             { state with ProjectionState = Active activeState }, Cmd.none, true
+        | MoreChatMessages, Active activeState -> // note: assume no need to validate HasMoreChatMessages (i.e. because Chat.Render.render will ensure that MoreChatMessages can only be dispatched when true)
+            let activeState = { activeState with MoreChatMessagesPending = true }
+            let cmd = MoreChatMessagesQry |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
+            { state with ProjectionState = Active activeState }, cmd, false
         | SendChatMessage, Active activeState -> // note: assume no need to validate NewMessageText (i.e. because Chat.Render.render will ensure that SendChatMessage can only be dispatched when valid)
             let newChatMessageId, newMessageText = activeState.NewChatMessage.NewChatMessageId, Markdown (activeState.NewChatMessage.NewMessageText.Trim ())
             if newChatMessageId |> activeState.UnconfirmedChatMessageDic.ContainsKey |> not then // note: silently ignore already-known newChatMessageId (should never happen)
@@ -165,5 +201,5 @@ let transition input state =
             let activeState = { activeState with NewChatMessage = defaultNewChatMessage () }
             { state with ProjectionState = Active activeState }, cmd, false
         | _, _ ->
-            state, shouldNeverHappen (sprintf "Unexpected Input when %A -> %A" state.ProjectionState input), false
+            state, shouldNeverHappenCmd (sprintf "Unexpected Input when %A -> %A" state.ProjectionState input), false
     state, cmd, isUserNonApiActivity

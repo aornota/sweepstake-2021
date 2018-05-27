@@ -26,7 +26,7 @@ type SquadAdministrationPermissions = {
     EliminateSquadPermission : bool }
 
 type ChatPermissions = {
-    InitializeChatProjectionPermission : bool
+    ChatProjectionQryPermission : bool
     SendChatMessagePermission : bool }
 
 type Permissions = {
@@ -71,12 +71,12 @@ let permissions userId userType =
         match createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission with
         | false, false, false, false -> None
         | _ -> { CreateSquadPermission = createSquadPermission ; AddOrEditPlayerPermission = addOrEditPlayerPermission ; WithdrawPlayerPermission = withdrawPlayerPermission ; EliminateSquadPermission = eliminateSquadPermission } |> Some
-    let initializeChatProjectionPermission, sendChatMessagePermission =
+    let chatProjectionQryPermission, sendChatMessagePermission =
         match userType with | SuperUser | Administrator | Pleb -> true, true | PersonaNonGrata -> false, false
     let chatPermissions =
-        match initializeChatProjectionPermission, sendChatMessagePermission with
+        match chatProjectionQryPermission, sendChatMessagePermission with
         | false, false -> None
-        | _ -> { InitializeChatProjectionPermission = initializeChatProjectionPermission ; SendChatMessagePermission = sendChatMessagePermission } |> Some
+        | _ -> { ChatProjectionQryPermission = chatProjectionQryPermission ; SendChatMessagePermission = sendChatMessagePermission } |> Some
     {
         ChangePasswordPermission = changePasswordPermission
         UserAdministrationPermissions = userAdministrationPermissions

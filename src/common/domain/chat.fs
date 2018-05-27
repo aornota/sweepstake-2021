@@ -1,7 +1,6 @@
 module Aornota.Sweepstake2018.Common.Domain.Chat
 
 open Aornota.Common.Markdown
-open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.User
 
@@ -14,7 +13,7 @@ type ChatMessageId = | ChatMessageId of guid : Guid with
 
 type ChatMessageDto = { ChatMessageId : ChatMessageId ; UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
 
-type ChatProjectionDto = { Rvn : Rvn ; ChatUserDtos : ChatUserDto list ; ChatMessageDtos : ChatMessageDto list }
+type ChatProjectionDto = { ChatUserDtos : ChatUserDto list ; ChatMessageDtos : ChatMessageDto list }
 
 let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
 

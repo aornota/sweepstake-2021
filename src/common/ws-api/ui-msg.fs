@@ -38,6 +38,7 @@ type UiAuthAppMsg =
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
+    | MoreChatMessagesQry
     | SendChatMessageCmd of chatMessageId : ChatMessageId * messageText : Markdown
 
 type UiAuthMsg =

@@ -2,6 +2,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Chat
 
 // Note: Chat agent broadcasts SendMsg - and subscribes to Tick | UsersRead | UserEventWritten | UserSignedIn | UserActivity | UserSignedOut | ConnectionsSignedOut | Disconnected.
 
+open Aornota.Common.Delta
 open Aornota.Common.IfDebug
 open Aornota.Common.Markdown
 open Aornota.Common.Revision
@@ -33,26 +34,30 @@ type private ChatInput =
     | OnUserSignedInOrOut of userId : UserId * signedIn : bool
     | OnUserActivity of userId : UserId
     | RemoveConnections of connectionIds : ConnectionId list
-    | HandleInitializeChatProjectionQry of token : InitializeChatProjectionToken * connectionId : ConnectionId
-        * reply : AsyncReplyChannel<Result<ChatProjectionDto, AuthQryError<string>>>
+    | HandleInitializeChatProjectionQry of token : ChatProjectionQryToken * connectionId : ConnectionId
+        * reply : AsyncReplyChannel<Result<ChatProjectionDto * bool, AuthQryError<string>>>
+    | HandleMoreChatMessagesQry of token : ChatProjectionQryToken * connectionId : ConnectionId
+        * reply : AsyncReplyChannel<Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>>
     | HandleSendChatMessageCmd of token : SendChatMessageToken * userId : UserId * chatMessageId : ChatMessageId * messageText : Markdown
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     
 type private ChatUser = { UserName : UserName ; UserType : UserType ; LastActivity : DateTimeOffset option }
 type private ChatUserDic = Dictionary<UserId, ChatUser>
 
-type private ChatMessage = { UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
+type private ChatMessage = { Ordinal : int ; UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
 type private ChatMessageDic = Dictionary<ChatMessageId, ChatMessage>
 
-type private ConnectionSet = HashSet<ConnectionId>
+type private Projectee = { LastRvn : Rvn ; MinChatMessageOrdinal : int option ; LastHasMoreChatMessages : bool }
+type private ProjecteeDic = Dictionary<ConnectionId, Projectee>
+
+type private State = { ChatUserDic : ChatUserDic ; ChatMessageDic : ChatMessageDic }
 
 type private ChatUserDtoDic = Dictionary<UserId, ChatUserDto>
-type private ChatMessageDtoDic = Dictionary<ChatMessageId, ChatMessageDto>
-type private ChatProjection = { Rvn : Rvn ; ChatUserDtoDic : ChatUserDtoDic ; ChatMessageDtoDic : ChatMessageDtoDic }
 
 let [<Literal>] private HOUSEKEEPING_INTERVAL = 1.<minute>
 let [<Literal>] private CHAT_MESSAGE_EXPIRES_AFTER = 24.<hour>
 let [<Literal>] private LAST_ACTIVITY_THROTTLE = 10.<second>
+let [<Literal>] private CHAT_MESSAGE_BATCH_SIZE = 10
 
 let private log category = (Projection Chat, category) |> consoleLogger.Log
 
@@ -65,70 +70,114 @@ let private logResult source successText result =
 
 let private cutoff (after:int<second>) = float (after * -1) |> DateTimeOffset.UtcNow.AddSeconds
 
-let private sendMsg (connectionSet:ConnectionSet) serverMsg = (serverMsg, connectionSet |> List.ofSeq) |> SendMsg |> broadcaster.Broadcast
+let private chatUserDto (userId, chatUser:ChatUser) =
+    match chatUser.UserType with
+    | SuperUser | Administrator | Pleb -> { UserId = userId ; UserName = chatUser.UserName ; LastActivity = chatUser.LastActivity } |> Some
+    | PersonaNonGrata -> None
 
-let private chatProjectionDto (chatProjection:ChatProjection) =
-    let chatUserDtos = chatProjection.ChatUserDtoDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatUser)) -> chatUser)
-    let chatMessageDtos = chatProjection.ChatMessageDtoDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatMessage)) -> chatMessage)
-    { Rvn = chatProjection.Rvn ; ChatUserDtos = chatUserDtos ; ChatMessageDtos = chatMessageDtos }
-
-let private updateProjection source (chatUserDic:ChatUserDic) (chatMessageDic:ChatMessageDic) (connectionSet:ConnectionSet) (chatProjection:ChatProjection option) =
-    let source = sprintf "%s#updateProjection" source  
-    let chatUserDto filter (userId, chatUser:ChatUser) =
-        if chatUser |> filter then { UserId = userId ; UserName = chatUser.UserName ; LastActivity = chatUser.LastActivity } |> Some else None
-    let chatMessageDto (chatMessageId, chatMessage:ChatMessage) =
-        { ChatMessageId = chatMessageId ; UserId = chatMessage.UserId ; MessageText = chatMessage.MessageText ; Timestamp = chatMessage.Timestamp }
+let private chatUserDtoDic (chatUserDic:ChatUserDic) =
     let chatUserDtoDic = ChatUserDtoDic ()
-    let filter = (fun chatUser -> match chatUser.UserType with | SuperUser | Administrator | Pleb -> true | PersonaNonGrata -> false)
     chatUserDic |> List.ofSeq |> List.iter (fun (KeyValue (userId, chatUser)) ->
-        match (userId, chatUser) |> chatUserDto filter with
-        | Some chatUserDto -> (userId, chatUserDto) |> chatUserDtoDic.Add
-        | None -> ())
-    let chatMessageDtoDic = ChatMessageDtoDic ()
-    chatMessageDic |> List.ofSeq |> List.iter (fun (KeyValue (chatMessageId, chatMessage)) ->
-        let chatMessageDto = (chatMessageId, chatMessage) |> chatMessageDto
-        (chatMessageId, chatMessageDto) |> chatMessageDtoDic.Add)
-    let newChatProjection =
-        match chatProjection with
-        | Some chatProjection ->
-            let nextRvn = chatProjection.Rvn
-            let chatUserDtoDelta = chatUserDtoDic |> delta chatProjection.ChatUserDtoDic
-            let nextRvn =
-                if chatUserDtoDelta |> isEmpty then nextRvn
+        match (userId, chatUser) |> chatUserDto with | Some chatUserDto -> (chatUserDto.UserId, chatUserDto) |> chatUserDtoDic.Add | None -> ())
+    chatUserDtoDic
+
+let private chatMessageDto (chatMessageId, chatMessage:ChatMessage) =
+    { ChatMessageId = chatMessageId ; UserId = chatMessage.UserId ; MessageText = chatMessage.MessageText ; Timestamp = chatMessage.Timestamp }
+
+let private chatProjectionDto (state:State) =
+    let chatUserDtos = state.ChatUserDic |> List.ofSeq |> List.choose (fun (KeyValue (userId, chatUser)) -> (userId, chatUser) |> chatUserDto)
+    let chatMessageDtos = state.ChatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (chatMessageId, chatMessage)) -> (chatMessageId, chatMessage) |> chatMessageDto)
+    { ChatUserDtos = chatUserDtos ; ChatMessageDtos = chatMessageDtos }
+
+let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
+
+let private sendChatUserDtoDelta (projecteeDic:ProjecteeDic) chatUserDtoDelta =
+    let updatedProjecteeDic = ProjecteeDic ()
+    projecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) ->
+        let projectee = { projectee with LastRvn = incrementRvn projectee.LastRvn }
+        sprintf "sendChatUserDtoDelta -> %A (%A)" connectionId projectee.LastRvn |> Info |> log
+        (projectee.LastRvn, chatUserDtoDelta) |> ChatUsersDeltaMsg |> ChatProjectionMsg |> ServerChatMsg |> sendMsg [ connectionId ]
+        (connectionId, projectee) |> updatedProjecteeDic.Add)
+    updatedProjecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) -> projecteeDic.[connectionId] <- projectee)
+
+let private sendChatMessageDelta removedOrdinals minChatMessageOrdinal (projecteeDic:ProjecteeDic) (chatMessageDelta:Delta<ChatMessageId, ChatMessage>) =
+    let isRelevant projecteeMinChatMessageOrdinal ordinal =
+        match projecteeMinChatMessageOrdinal with
+        | Some projecteeMinChatMessageOrdinal when projecteeMinChatMessageOrdinal > ordinal -> false
+        | Some _ | None -> true
+    let updatedProjecteeDic = ProjecteeDic ()
+    projecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) ->
+        let hasMoreChatMessages =
+            match projectee.MinChatMessageOrdinal, minChatMessageOrdinal with
+            | Some projecteeMinChatMessageOrdinal, Some minChatMessageOrdinal when projecteeMinChatMessageOrdinal > minChatMessageOrdinal -> true
+            | Some _, Some _ | Some _, None | None, Some _ | None, None -> false
+        let addedChatMessageDtos =
+            chatMessageDelta.Added // note: no need to filter based on projectee.MinChatMessageOrdinal
+            |> List.map (fun (chatMessageId, chatMessage) -> chatMessageId, (chatMessageId, chatMessage) |> chatMessageDto)
+        let changedChatMessageDtos =
+            chatMessageDelta.Changed
+            |> List.filter (fun (_, chatMessage) -> chatMessage.Ordinal |> isRelevant projectee.MinChatMessageOrdinal)
+            |> List.map (fun (chatMessageId, chatMessage) -> chatMessageId, (chatMessageId, chatMessage) |> chatMessageDto)
+        let removedChatMessageIds =
+            chatMessageDelta.Removed
+            |> List.choose (fun chatMessageId ->
+                match removedOrdinals |> List.tryFind (fun (removedChatMessageId, _) -> removedChatMessageId = chatMessageId) with
+                | Some (_, ordinal) -> (chatMessageId, ordinal) |> Some
+                | None -> None) // note: should never happen
+            |> List.filter (fun (_, ordinal) -> ordinal |> isRelevant projectee.MinChatMessageOrdinal)
+            |> List.map fst
+        let chatMessageDtoDelta = { Added = addedChatMessageDtos ; Changed = changedChatMessageDtos ; Removed = removedChatMessageIds }
+        if chatMessageDtoDelta |> isEmpty |> not || hasMoreChatMessages <> projectee.LastHasMoreChatMessages then
+            let projectee = { projectee with LastRvn = incrementRvn projectee.LastRvn ; LastHasMoreChatMessages = hasMoreChatMessages }
+            sprintf "sendChatMessageDtoDelta -> %A (%A)" connectionId projectee.LastRvn |> Info |> log
+            (projectee.LastRvn, chatMessageDtoDelta, hasMoreChatMessages) |> ChatMessagesDeltaMsg |> ChatProjectionMsg |> ServerChatMsg |> sendMsg [ connectionId ]
+            (connectionId, projectee) |> updatedProjecteeDic.Add)
+    updatedProjecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) -> projecteeDic.[connectionId] <- projectee)
+
+let private updateState source (chatUserDic:ChatUserDic) (chatMessageDic:ChatMessageDic) (projecteeDic:ProjecteeDic) (state:State option) =
+    let source = sprintf "%s#updateState" source
+    let newState =
+        match state with
+        | Some state ->
+            let previousChatUserDtoDic = state.ChatUserDic |> chatUserDtoDic
+            let chatUserDtoDic = chatUserDic |> chatUserDtoDic
+            let chatUserDtoDelta = chatUserDtoDic |> delta previousChatUserDtoDic
+            if chatUserDtoDelta |> isEmpty |> not then
+                sprintf "%s -> ChatUserDto delta %A -> %i projectee/s" source chatUserDtoDelta projecteeDic.Count |> Info |> log
+                chatUserDtoDelta |> sendChatUserDtoDelta projecteeDic
+            let chatMessageDelta = chatMessageDic |> delta state.ChatMessageDic
+            if chatMessageDelta |> isEmpty |> not then
+                let removedOrdinals = chatMessageDelta.Removed |> List.choose (fun chatMessageId ->
+                    if chatMessageId |> state.ChatMessageDic.ContainsKey |> not then None // note: ignore unknown ChatMessageId (should never happen)
+                    else
+                        let chatMessage = state.ChatMessageDic.[chatMessageId]
+                        (chatMessageId, chatMessage.Ordinal) |> Some)
+                let minChatMessageOrdinal =
+                    if chatMessageDic.Count > 0 then chatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatMessage)) -> chatMessage.Ordinal) |> List.min |> Some
+                    else None
+                sprintf "%s -> ChatMessage delta %A -> %i (potential) projectee/s" source chatMessageDelta projecteeDic.Count |> Info |> log
+                chatMessageDelta |> sendChatMessageDelta removedOrdinals minChatMessageOrdinal projecteeDic
+            let newState =
+                if chatUserDtoDelta |> isEmpty && chatMessageDelta |> isEmpty then
+                    sprintf "%s -> State (unchanged)" source |> Info |> log
+                    state
                 else
-                    let nextRvn = incrementRvn nextRvn
-                    (nextRvn, chatUserDtoDelta) |> ChatUsersDeltaMsg |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionSet
-                    sprintf "%s -> %A %A -> %i connection/s" source nextRvn chatUserDtoDelta connectionSet.Count |> Info |> log
-                    nextRvn
-            let chatMessageDtoDelta = chatMessageDtoDic |> delta chatProjection.ChatMessageDtoDic
-            let nextRvn =
-                if chatMessageDtoDelta |> isEmpty then nextRvn
-                else
-                    let nextRvn = incrementRvn nextRvn
-                    (nextRvn, chatMessageDtoDelta) |> ChatMessagesDeltaMsg |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionSet
-                    sprintf "%s -> %A %A -> %i connection/s" source nextRvn chatMessageDtoDelta connectionSet.Count |> Info |> log
-                    nextRvn
-            let newChatProjection =
-                if nextRvn = chatProjection.Rvn then
-                    sprintf "%s -> ChatProjection %A (unchanged)" source chatProjection.Rvn |> Info |> log
-                    chatProjection
-                else
-                    sprintf "%s -> ChatProjection %A" source nextRvn |> Info |> log
-                    { Rvn = nextRvn ; ChatUserDtoDic = chatUserDtoDic ; ChatMessageDtoDic = chatMessageDtoDic }
-            newChatProjection
+                    sprintf "%s -> State (updated)" source |> Info |> log
+                    { ChatUserDic = ChatUserDic chatUserDic ; ChatMessageDic = ChatMessageDic chatMessageDic }
+            newState
         | None ->
-            let initialRvn = Rvn 1
-            sprintf "%s -> ChatProjection %A" source initialRvn |> Info |> log
-            { Rvn = initialRvn ; ChatUserDtoDic = chatUserDtoDic ; ChatMessageDtoDic = chatMessageDtoDic }
-    newChatProjection
+            sprintf "%s -> State (initial)" source |> Info |> log
+            { ChatUserDic = ChatUserDic chatUserDic ; ChatMessageDic = ChatMessageDic chatMessageDic }
+    newState
 
 type Chat () =
     let agent = MailboxProcessor.Start (fun inbox ->
+        // #region: awaitingStart
         let rec awaitingStart () = async {
             let! input = inbox.Receive ()
             match input with
             | Start reply ->
-                "Start when awaitingStart -> projectingChat (0 chat users) (0 chat messages) (0 connections)" |> Info |> log
+                "Start when awaitingStart -> projectingChat (0 chat users) (0 chat messages) (0 projectees)" |> Info |> log
                 () |> reply.Reply
                 return! pendingOnUsersRead ()
             | Housekeeping -> "Housekeeping when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
@@ -139,7 +188,10 @@ type Chat () =
             | OnUserActivity _ -> "OnUserActivity when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnections _ -> "RemoveConnections when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeChatProjectionQry _ -> "HandleInitializeChatProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | HandleMoreChatMessagesQry _ -> "HandleMoreChatMessagesQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleSendChatMessageCmd _ -> "HandleSendChatMessageCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+        // #endregion
+        // #region pendingOnUsersRead
         and pendingOnUsersRead () = async {
             let! input = inbox.Receive ()
             match input with
@@ -151,41 +203,45 @@ type Chat () =
                 let chatUserDic = ChatUserDic ()
                 usersRead |> List.iter (fun userRead -> (userRead.UserId, { UserName = userRead.UserName ; UserType = userRead.UserType ; LastActivity = None }) |> chatUserDic.Add)           
                 let chatMessageDic = ChatMessageDic ()
-                let connectionSet = ConnectionSet ()
-                let projection = None |> updateProjection source chatUserDic chatMessageDic connectionSet
-                return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
+                let projecteeDic = ProjecteeDic ()
+                let state = None |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserCreated _ -> "OnUserCreated when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserTypeChanged _ -> "OnUserTypeChanged when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserSignedInOrOut _ -> "OnUserSignedInOrOut when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserActivity _ -> "OnUserActivity when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | RemoveConnections _ -> "RemoveConnections when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleInitializeChatProjectionQry _ -> "HandleInitializeChatProjectionQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
+            | HandleMoreChatMessagesQry _ -> "HandleMoreChatMessagesQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleSendChatMessageCmd _ -> "HandleSendChatMessageCmd when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead () }
-        and projectingChat (chatProjection, chatUserDic, chatMessageDic, connectionSet) = async {
+        // #endregion
+        // #region projectingChat
+        and projectingChat (state, chatUserDic, chatMessageDic, projecteeDic) = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (chatProjection, chatUserDic, chatMessageDic, connectionSet)
+            | Start _ -> "Start when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | Housekeeping ->
                 let source = "Housekeeping"
-                sprintf "%s when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 let expirationCutoff = cutoff (int (CHAT_MESSAGE_EXPIRES_AFTER |> hoursToSeconds) * 1<second>)
                 let updatedChatMessageDic = ChatMessageDic ()
                 chatMessageDic |> List.ofSeq |> List.iter (fun (KeyValue (chatMessageId, chatMessage)) ->
                     if chatMessage.Timestamp > expirationCutoff then (chatMessageId, chatMessage) |> updatedChatMessageDic.Add)
-                let projection, chatMessageDtoDic = chatProjection |> Some |> updateProjection source chatUserDic updatedChatMessageDic connectionSet, updatedChatMessageDic
-                return! projectingChat (projection, chatUserDic, chatMessageDtoDic, connectionSet)
-            | OnUsersRead _ -> "OnUsersRead when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (chatProjection, chatUserDic, chatMessageDic, connectionSet)
+                let chatMessageDic = updatedChatMessageDic
+                let state = state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+            | OnUsersRead _ -> "OnUsersRead when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserCreated (userId, userName, userType) ->
                 let source = "OnUserCreated"
-                sprintf "%s (%A %A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId userName userType chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s (%A %A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId userName userType chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 if userId |> chatUserDic.ContainsKey |> not then // note: silently ignore already-known userId (should never happen)
                     (userId, { UserName = userName ; UserType = userType ; LastActivity = None }) |> chatUserDic.Add
                 sprintf "%s when projectingChat -> %i chat users/s)" source chatUserDic.Count |> Info |> log
-                let projection = chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet
-                return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
+                let state = state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserTypeChanged (userId, userType) ->
                 let source = "OnUserTypeChanged"
-                sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId userType chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId userType chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 let updatedChatMessageDic =
                     if userId |> chatUserDic.ContainsKey then // note: silently ignore unknown userId (should never happen)
                         let chatUser = chatUserDic.[userId]
@@ -201,20 +257,22 @@ type Chat () =
                         updatedChatMessageDic
                     else chatMessageDic
                 sprintf "%s when projectingChat -> %i chat users/s)" source chatUserDic.Count |> Info |> log
-                let projection, chatMessageDtoDic = chatProjection |> Some |> updateProjection source chatUserDic updatedChatMessageDic connectionSet, updatedChatMessageDic
-                return! projectingChat (projection, chatUserDic, chatMessageDtoDic, connectionSet)
+                let chatMessageDic = updatedChatMessageDic
+                let state = state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserSignedInOrOut (userId, signedIn) ->
                 let source = "OnUserSignedInOrOut"
-                sprintf "%s (%A %b) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId signedIn chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s (%A %b) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId signedIn chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 if userId |> chatUserDic.ContainsKey then // note: silently ignore unknown userId (should never happen)
                     let chatUser = chatUserDic.[userId]
-                    chatUser.UserName |> (if signedIn then UserSignedInMsg else UserSignedOutMsg) |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionSet
+                    let connectionIds = projecteeDic.Keys |> List.ofSeq
+                    chatUser.UserName |> (if signedIn then UserSignedInMsg else UserSignedOutMsg) |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionIds
                     chatUserDic.[userId] <- { chatUser with LastActivity = match signedIn with | true -> DateTimeOffset.UtcNow |> Some | false -> None }
-                let projection = chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet
-                return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
+                let state = state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserActivity userId ->
                 let source = "OnUserActivity"
-                sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 let updated =
                     if userId |> chatUserDic.ContainsKey then // note: silently ignore unknown userId (should never happen)
                         let chatUser = chatUserDic.[userId]
@@ -224,37 +282,88 @@ type Chat () =
                         else sprintf "%s throttled for %A" source userId |> Info |> log
                         throttled |> not
                     else false
-                let projection = if updated then chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet else chatProjection
-                return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet)
+                let state = if updated then state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic else state
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
-                sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source connectionIds chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
-                connectionIds // note: silently ignore unknown connectionIds
-                |> List.iter (fun connectionId -> if connectionId |> connectionSet.Contains then connectionId |> connectionSet.Remove |> ignore)
-                sprintf "%s when projectingChat -> %i connection/s)" source connectionSet.Count |> Info |> log
-                return! projectingChat (chatProjection, chatUserDic, chatMessageDic, connectionSet)
+                sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionIds chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
+                connectionIds |> List.iter (fun connectionId -> if connectionId |> projecteeDic.ContainsKey then connectionId |> projecteeDic.Remove |> ignore) // note: silently ignore unknown connectionIds                
+                sprintf "%s when projectingChat -> %i projectee/s)" source projecteeDic.Count |> Info |> log
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | HandleInitializeChatProjectionQry (_, connectionId, reply) ->
                 let source = "HandleInitializeChatProjectionQry"
-                sprintf "%s for %A when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source connectionId chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
-                if connectionId |> connectionSet.Contains |> not then // note: silently ignore already-known connectionId (e.g. re-initialization)
-                    connectionId |> connectionSet.Add |> ignore
-                sprintf "%s when projectingChat -> %i connection/s)" source connectionSet.Count |> Info |> log
-                let result = chatProjection |> chatProjectionDto |> Ok
+                sprintf "%s for %A when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
+                let initializedState, minChatMessageOrdinal, hasMoreChatMessages =
+                    if chatMessageDic.Count <= CHAT_MESSAGE_BATCH_SIZE then
+                        let minChatMessageOrdinal =
+                            if chatMessageDic.Count > 0 then chatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatMessage)) -> chatMessage.Ordinal) |> List.min |> Some
+                            else None
+                        state, minChatMessageOrdinal, false
+                    else
+                        let initialChatMessages =
+                            chatMessageDic
+                            |> List.ofSeq
+                            |> List.map (fun (KeyValue (chatMessageId, chatMessage)) -> chatMessageId, chatMessage)
+                            |> List.sortBy (fun (_, chatMessage) -> chatMessage.Ordinal) |> List.rev |> List.take CHAT_MESSAGE_BATCH_SIZE
+                        let minChatMessageOrdinal = initialChatMessages |> List.map (fun (_, chatMessage) -> chatMessage.Ordinal) |> List.min |> Some
+                        let initialChatMessageDic = ChatMessageDic ()
+                        initialChatMessages |> List.iter (fun (chatMessageId, chatMessage) -> (chatMessageId, chatMessage) |> initialChatMessageDic.Add)
+                        { state with ChatMessageDic = initialChatMessageDic }, minChatMessageOrdinal, true
+                let projectee = { LastRvn = initialRvn ; MinChatMessageOrdinal = minChatMessageOrdinal ; LastHasMoreChatMessages = hasMoreChatMessages }
+                // Note: connectionId might already be known, e.g. re-initialization.
+                if connectionId |> projecteeDic.ContainsKey |> not then (connectionId, projectee) |> projecteeDic.Add
+                else projecteeDic.[connectionId] <- projectee
+                sprintf "%s when projectingChat -> %i projectee/s)" source projecteeDic.Count |> Info |> log
+                let result = (initializedState |> chatProjectionDto, hasMoreChatMessages) |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingChat (chatProjection, chatUserDic, chatMessageDic, connectionSet)
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+            | HandleMoreChatMessagesQry (_, connectionId, reply) ->
+                let source = "HandleMoreChatMessagesQry"
+                sprintf "%s for %A when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
+                let result =
+                    if connectionId |> projecteeDic.ContainsKey |> not then ifDebug (sprintf "%A does not exist" connectionId) UNEXPECTED_ERROR |> OtherError |> OtherAuthQryError |> Error
+                    else
+                        let projectee = projecteeDic.[connectionId]
+                        let moreChatMessages =
+                            chatMessageDic
+                            |> List.ofSeq
+                            |> List.map (fun (KeyValue (chatMessageId, chatMessage)) -> chatMessageId, chatMessage)
+                            |> List.filter (fun (_, chatMessage) ->
+                                match projectee.MinChatMessageOrdinal with
+                                | Some minChatMessageOrdinal -> minChatMessageOrdinal > chatMessage.Ordinal
+                                | None -> true) // note: should never happen                                   
+                            |> List.sortBy (fun (_, chatMessage) -> chatMessage.Ordinal) |> List.rev                       
+                        let moreChatMessages, hasMoreChatMessages =
+                            if moreChatMessages.Length <= CHAT_MESSAGE_BATCH_SIZE then moreChatMessages, false
+                            else moreChatMessages |> List.take CHAT_MESSAGE_BATCH_SIZE, true
+                        let minChatMessageOrdinal =
+                            if moreChatMessages.Length > 0 then moreChatMessages |> List.map (fun (_, chatMessage) -> chatMessage.Ordinal) |> List.min |> Some
+                            else projectee.MinChatMessageOrdinal // note: should never happen
+                        let chatMessageDtos = moreChatMessages |> List.map chatMessageDto
+                        let projectee = { projectee with LastRvn = incrementRvn projectee.LastRvn ; MinChatMessageOrdinal = minChatMessageOrdinal ; LastHasMoreChatMessages = hasMoreChatMessages }
+                        projecteeDic.[connectionId] <- projectee
+                        (projectee.LastRvn, chatMessageDtos, hasMoreChatMessages) |> Ok
+                result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                result |> reply.Reply
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | HandleSendChatMessageCmd (_, userId, chatMessageId, messageText, reply) ->
                 let source = "HandleSendChatMessageCmd" 
-                sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i connection/s)" source userId chatMessageId chatUserDic.Count chatMessageDic.Count connectionSet.Count |> Info |> log
+                sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId chatMessageId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 let result =
                     if chatMessageId |> chatMessageDic.ContainsKey then ifDebug (sprintf "%A already exists" chatMessageId) UNEXPECTED_ERROR |> OtherError |> OtherAuthCmdError |> Error
                     else
                         if userId |> chatUserDic.ContainsKey |> not then ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> OtherError |> OtherAuthCmdError |> Error
-                        else (chatMessageId, { UserId = userId ; MessageText = messageText ; Timestamp = DateTimeOffset.UtcNow }) |> chatMessageDic.Add |> Ok
+                        else
+                            let nextOrdinal =
+                                if chatMessageDic.Count = 0 then 1
+                                else (chatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatMessage)) -> chatMessage.Ordinal) |> List.max) + 1
+                            (chatMessageId, { Ordinal = nextOrdinal ; UserId = userId ; MessageText = messageText ; Timestamp = DateTimeOffset.UtcNow }) |> chatMessageDic.Add |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                let projection = chatProjection |> Some |> updateProjection source chatUserDic chatMessageDic connectionSet
-                return! projectingChat (projection, chatUserDic, chatMessageDic, connectionSet) }
+                let state = state |> Some |> updateState source chatUserDic chatMessageDic projecteeDic
+                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic) }
+        // #endregion
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Projection Projection.Chat |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
@@ -279,6 +388,8 @@ type Chat () =
         Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.HandleInitializeChatProjectionQry (token, connectionId) =
         (fun reply -> (token, connectionId, reply) |> HandleInitializeChatProjectionQry) |> agent.PostAndAsyncReply
+    member __.HandleMoreChatMessagesQry (token, connectionId) =
+        (fun reply -> (token, connectionId, reply) |> HandleMoreChatMessagesQry) |> agent.PostAndAsyncReply
     member __.HandleSendChatMessageCmd (token, userId, chatMessageId, messageText) =
         (fun reply -> (token, userId, chatMessageId, messageText, reply) |> HandleSendChatMessageCmd) |> agent.PostAndAsyncReply
 

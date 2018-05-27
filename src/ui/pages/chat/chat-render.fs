@@ -19,7 +19,7 @@ open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 
 open System
 
-let [<Literal>] private RECENTLY_ACTIVE = 1.<minute>
+let [<Literal>] private RECENTLY_ACTIVE = 5.<minute>
 
 let private cutoff (after:int<second>) = float (after * -1) |> DateTimeOffset.UtcNow.AddSeconds
 
@@ -74,7 +74,7 @@ let private renderChatUser theme semantic chatUser =
     let (UserName userName) = chatUser.UserName
     [ str userName ] |> tag theme { tagChatUser with TagSemantic = semantic |> Some }
 
-let render (useDefaultTheme, state, _:int<tick>) dispatch =
+let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ str "Chat" ] |> para theme paraCentredSmall
@@ -109,8 +109,15 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
                 match chatUserDic |> tryFindChatUser chatMessage.UserId with | Some chatUser -> (chatMessageId, chatMessage, true, chatMessage.UserId, chatUser) |> Some | None -> None)
             let confirmedChatMessages = activeState.ChatProjection.ChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
                 match chatUserDic |> tryFindChatUser chatMessage.UserId with | Some chatUser -> (chatMessageId, chatMessage, false, chatMessage.UserId, chatUser) |> Some | None -> None)
+            let moreChatMessages =
+                let paraMore = { paraDefaultSmallest with ParaAlignment = RightAligned }
+                if activeState.MoreChatMessagesPending then
+                    [ br ; [ str "Retrieving more chat messages... " ; icon iconSpinnerPulseSmall ] |> para theme paraMore ]
+                else if activeState.HasMoreChatMessages then
+                    [ br ; [ [ str "More chat messages..." ] |> link theme (ClickableLink (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
+                else []
             yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
-                yield textArea theme newChatMessageId newMessageText newChatMessage.NewMessageErrorText helpInfo true false (NewMessageTextChanged >> dispatch)
+                yield textArea theme newChatMessageId newMessageText newChatMessage.NewMessageErrorText helpInfo (hasModal |> not) false (NewMessageTextChanged >> dispatch)
                 if String.IsNullOrWhiteSpace newMessageText |> not then
                     yield notification theme notificationInfo [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
             yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Send chat message" ] |> button theme { buttonLinkSmall with Interaction = sendButtonInteraction } ]
@@ -121,4 +128,5 @@ let render (useDefaultTheme, state, _:int<tick>) dispatch =
                 |> List.sortBy (fun (_, chatMessage, _, _, _) -> chatMessage.Timestamp)
                 |> List.rev
                 |> List.map (renderChatMessage theme authUserId dispatch)
-                |> List.collect id ]
+                |> List.collect id
+            yield! moreChatMessages ]

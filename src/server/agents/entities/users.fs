@@ -261,7 +261,7 @@ type Users () =
                     |> Result.bind (fun _ -> match validatePassword password with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ ->
                         let salt = salt ()
-                        (userId, userName, salt, hash password salt, userType) |> UserCreated |> tryApplyUserEvent source userId None (Rvn 1))
+                        (userId, userName, salt, hash password salt, userType) |> UserCreated |> tryApplyUserEvent source userId None initialRvn)
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> sprintf "Audit%A %A %A" auditUserId userId user |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply

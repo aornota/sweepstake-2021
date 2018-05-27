@@ -276,6 +276,7 @@ let private renderUserAdministration useDefaultTheme =
 // ...NMB-TEMP
 
 let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
+    let hasModal = match authState.ChangePasswordState, authState.SigningOut with | Some _, _ -> true | None, true -> true | None, false -> false
     div divDefault [
         match authState.ChangePasswordState with
         | Some changePasswordState ->
@@ -296,7 +297,7 @@ let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
         | AuthPage ChatPage ->
             match authState.AuthPageStates.ChatState with
             | Some chatState ->
-                yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, ticks) (ChatInput >> APageInput >> PageInput >> dispatch)
+                yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage ChatPage when ChatState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
