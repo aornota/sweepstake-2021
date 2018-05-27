@@ -80,7 +80,8 @@ let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
         yield [ str "Chat" ] |> para theme paraCentredSmall
         yield hr theme false
         match state.ProjectionState with
-        | Initializing -> yield div divCentred [ icon iconSpinnerPulseLarge ]
+        | Initializing ->
+            yield div divCentred [ icon iconSpinnerPulseLarge ]
         | InitializationFailed _ -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState ->
