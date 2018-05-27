@@ -7,7 +7,7 @@ open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 //open Aornota.Sweepstake2018.Server.Events.SquadEvents
 //open Aornota.Sweepstake2018.Server.Signal
 
-type private SquadsInput = | ToDo
+type private SquadsInput = | ToDo | Temp
 
 let private log category = (Projection Squads, category) |> consoleLogger.Log
 
