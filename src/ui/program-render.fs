@@ -49,8 +49,8 @@ let private headerPages (appState:AppState) =
         ]
     | Auth authState ->
         // TODO-NMB-LOW: Finesse handling of "unseen" count/s (i.e. something better than count-in-parentheses)?...
-        let unseenChatCount = match authState.AuthPageStates.ChatState with | Some chatState -> chatState.UnseenCount |> Some | None -> None
-        let chatText = match unseenChatCount with | Some unseenCount when unseenCount > 0 -> sprintf "Chat (%i)" unseenCount | Some _ | None -> "Chat"
+        let unseenChatCount = authState.AuthPageStates.ChatState.UnseenCount
+        let chatText = if unseenChatCount > 0 then sprintf "Chat (%i)" unseenChatCount else "Chat"
         [
             "News", authState.CurrentPage = UnauthPage NewsPage, UnauthPage NewsPage, NewsPage |> UnauthPage |> ShowPage |> AuthInput
             "Squads", authState.CurrentPage = UnauthPage SquadsPage, UnauthPage SquadsPage, SquadsPage |> UnauthPage |> ShowPage |> AuthInput
@@ -201,23 +201,25 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
 let private renderNews useDefaultTheme =
         let theme = getTheme useDefaultTheme
         columnContent [ [ str "News" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-let private renderSquads useDefaultTheme =
-        let theme = getTheme useDefaultTheme
-        columnContent [ [ str "Squads" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 // ...NMB-TEMP
 
-let private renderUnauth (useDefaultTheme, unauthState, _ticks) (dispatch:UnauthInput -> unit) =
+let private renderUnauth (useDefaultTheme, unauthState, ticks) (dispatch:UnauthInput -> unit) =
+    let hasModal = match unauthState.SignInState with | Some _ -> true | None -> false
     div divDefault [
         match unauthState.SignInState with
         | Some signInState ->
             yield lazyViewOrHMR2 renderSignInModal (useDefaultTheme, signInState) (SignInInput >> dispatch)
         | None -> ()
         match unauthState.CurrentUnauthPage with
-        // TEMP-NMB: No lazyViewOrHMR[n] since renderNews | renderSquads will return "much the same" until implemented properly [so may not re-render as expected]...
         | NewsPage ->
             yield renderNews useDefaultTheme
         | SquadsPage ->
-            yield renderSquads useDefaultTheme ]
+            match unauthState.UnauthPageStates.SquadsState with
+            | Some squadsState ->
+                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
+            | None ->
+                let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
+                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks) ]
 
 let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -287,20 +289,20 @@ let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
             yield lazyViewOrHMR renderSigningOutModal useDefaultTheme
         | false -> ()
         match authState.CurrentPage with
-        // TEMP-NMB: No lazyViewOrHMR[n] since renderNews | renderSquads | &c. will return "much the same" until implemented properly [so may not re-render as expected]...
+        // TEMP-NMB: No lazyViewOrHMR[n] since renderNews | renderDrafts will return "much the same" until implemented properly [so may not re-render as expected]...
         | UnauthPage NewsPage ->
             yield renderNews useDefaultTheme
         | UnauthPage SquadsPage ->
-            yield renderSquads useDefaultTheme
+            match authState.UnauthPageStates.SquadsState with
+            | Some squadsState ->
+                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authState.AuthUser |> Some, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
+            | None ->
+                let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
+                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
             yield renderDrafts useDefaultTheme
         | AuthPage ChatPage ->
-            match authState.AuthPageStates.ChatState with
-            | Some chatState ->
-                yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is AuthPage ChatPage when ChatState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, authState.AuthPageStates.ChatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch)
         | AuthPage UserAdministrationPage ->
             yield renderUserAdministration useDefaultTheme ]
 

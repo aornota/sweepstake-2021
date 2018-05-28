@@ -37,9 +37,9 @@ type private UsersInput =
     | HandleCreateUserCmd of token : CreateUserToken * auditUserId : UserId * userId : UserId * userName : UserName * password : Password * userType : UserType
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleResetPasswordCmd of token : ResetPasswordToken * auditUserId : UserId * userId : UserId * currentRvn : Rvn * password : Password
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
     | HandleChangeUserTypeCmd of token : ChangeUserTypeToken * auditUserId : UserId * userId : UserId * currentRvn : Rvn * userType : UserType
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
 
 type private User = { Rvn : Rvn ; UserName : UserName ; PasswordSalt : Salt ; PasswordHash : Hash ; UserType : UserType ; MustChangePasswordReason : MustChangePasswordReason option }
 
@@ -286,7 +286,7 @@ type Users () =
                         (userId, salt, hash password salt) |> PasswordReset |> tryApplyUserEvent source userId (Some user) (incrementRvn currentRvn))
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, user) -> user.Rvn) |> reply.Reply
                 let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
                 return! managingUsers users
             | HandleChangeUserTypeCmd (changeUserTypeToken, auditUserId, userId, currentRvn, userType, reply) ->
@@ -309,7 +309,7 @@ type Users () =
                         (userId, userType) |> UserTypeChanged |> tryApplyUserEvent source userId (Some user) (incrementRvn currentRvn))
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, user) -> user.Rvn) |> reply.Reply
                 let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
                 return! managingUsers users }
         "agent instantiated -> awaitingStart" |> Info |> log

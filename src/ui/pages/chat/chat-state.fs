@@ -126,6 +126,12 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
         else
             let activeState = { activeState with MoreChatMessagesPending = false }
             { state with ProjectionState = Active activeState }, shouldNeverHappenCmd (sprintf "MoreChatMessagesQryResult Error %A" error)
+    | SendChatMessageCmdResult (Ok _), Active _ -> // note: nothing to do here
+        state, Cmd.none
+    | SendChatMessageCmdResult (Error (chatMessageId, error)), Active activeState -> // note: silently ignore unknown chatMessageId (should never happen)
+        if chatMessageId |> activeState.UnconfirmedChatMessageDic.ContainsKey then chatMessageId |> activeState.UnconfirmedChatMessageDic.Remove |> ignore
+        let cmd = error |> cmdErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+        state, Cmd.batch [ cmd ; "sending chat message" |> unexpectedErrorWhen |> errorToastCmd ]
     | ChatProjectionMsg (ChatUsersDeltaMsg (deltaRvn, chatUserDtoDelta)), Active activeState ->
         let chatProjection = activeState.ChatProjection
         match chatProjection.ChatUserDic |> applyChatUserDelta chatProjection.Rvn deltaRvn chatUserDtoDelta with
@@ -158,12 +164,6 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
         state, if UserName userName = state.AuthUser.UserName then Cmd.none else sprintf "<strong>%s</strong> has signed out" userName |> infoToastCmd
     | ChatProjectionMsg _, _ -> // note: silently ignore ChatProjectionMsg if not Active
         state, Cmd.none
-    | SendChatMessageCmdResult (Ok _), Active _ -> // note: nothing to do here
-        state, Cmd.none
-    | SendChatMessageCmdResult (Error (chatMessageId, error)), Active activeState -> // note: silently ignore unknown chatMessageId (should never happen)
-        if chatMessageId |> activeState.UnconfirmedChatMessageDic.ContainsKey then chatMessageId |> activeState.UnconfirmedChatMessageDic.Remove |> ignore
-        let cmd = error |> cmdErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
-        state, Cmd.batch [ cmd ; "sending chat message" |> unexpectedErrorWhen |> errorToastCmd ]
     | _, _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ServerChatMsg when %A -> %A" state.ProjectionState serverChatMsg)
 

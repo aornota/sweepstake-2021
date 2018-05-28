@@ -13,6 +13,7 @@ open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2018.Server.Agents
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Agents.Entities.Users
@@ -145,12 +146,19 @@ let private autoSignOut autoSignOutReason userId onlySessionId exceptConnectionI
     if connectionDic |> hasConnections userId |> not then signedInUserDic |> removeSignedInUser userId
     return () }
 
+let private ifConnection source connectionId fWithWs (connectionDic:ConnectionDic, signedInUserDic:SignedInUserDic) = async {
+    match connectionId |> connectionDic.TryGetValue with
+    | true, (ws, _) ->
+        do! ws |> fWithWs
+    | false, _ -> // note: should never happen
+        sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" source connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log }
+
 let private ifNoSignedInSession source connectionId fWithWs (connectionDic:ConnectionDic, signedInUserDic:SignedInUserDic) = async {
     match connectionId |> connectionDic.TryGetValue with
     | true, (ws, signedInSession) ->
         match signedInSession with
         | Some _ -> // note: should never happen
-            sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A already has a SignedInSession" source connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log
+            sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A already has a signed-in session" source connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log
         | None -> do! ws |> fWithWs
     | false, _ -> // note: should never happen
         sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" source connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log }
@@ -310,6 +318,28 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
+                // #region: UiUnauthMsg UiUnauthSquadsMsg InitializeSquadsProjectionQry
+                | UiUnauthMsg (UiUnauthSquadsMsg InitializeSquadsProjectionQry) ->
+                    let source = "InitializeSquadsProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ ->
+
+                                // TODO-NEXT... connectionId |> Projections.Squads.squads.HandleInitializeSquadsProjectionQry
+
+                                () |> Ok |> thingAsync // TEMP-NMB...
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeSquadsProjectionQryResult |> ServerSquadsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                    })
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                // #endregion
                 // #region: UiAuthMsg UserNonApiActivity
                 | UiAuthMsg (jwt, UserNonApiActivity) ->
                     let source = "UserNonApiActivity"
@@ -360,20 +390,40 @@ type Connections () =
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 // #endregion
+                // #region: UiAuthMsg UiAuthSquadsMsg AddPlayerCmd
+                | UiAuthMsg (jwt, UiAuthSquadsMsg (AddPlayerCmd (squadId, currentRvn, playerId, playerName, playerType))) ->
+                    let source = "AddPlayerCmd"
+                    sprintf "%s (%A %A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.AddOrEditPlayerToken with
+                                | Some addOrEditPlayerToken ->
+                                    (addOrEditPlayerToken, userId, squadId, currentRvn, playerId, playerName, playerType) |> Entities.Squads.squads.HandleAddPlayerCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> AddPlayerCmdResult |> ServerSquadsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                // #endregion
 
                 (* TODO-NMB-HIGH:
-                    - UiAuthUserAdministrationMsg InitializeUserAdministrationProjectionQry...
-                    - UiAuthUserAdministrationMsg CreateUserCmd...
-                    - UiAuthUserAdministrationMsg ResetPasswordCmd [remember to autoSignOut PasswordReset [any SessionId / any ConnectionId], cf. SignOutCmd]...
-                    - UiAuthUserAdministrationMsg ChangeUserTypeCmd [remember to autoSignOut PermissionsChanged [any SessionId / any ConnectionId], cf. SignOutCmd]... *)
+                    - UiAuthUserAdminMsg InitializeUserAdminProjectionQry...
+                    - UiAuthUserAdminMsg CreateUserCmd...
+                    - UiAuthUserAdminMsg ResetPasswordCmd [remember to autoSignOut PasswordReset [any SessionId / any ConnectionId], cf. SignOutCmd]...
+                    - UiAuthUserAdminMsg ChangeUserTypeCmd [remember to autoSignOut PermissionsChanged [any SessionId / any ConnectionId], cf. SignOutCmd]... *)
 
                 (* TODO-NMB-HIGH:
-                    - UiUnauthSquadsMsg InitializeSquadsProjectionQry...
-                    - UiAuthSquadsAdministrationMsg AddPlayerCmd... 
-                    - UiAuthSquadsAdministrationMsg ChangePlayerNameCmd... 
-                    - UiAuthSquadsAdministrationMsg ChangePlayerTypeCmd... 
-                    - UiAuthSquadsAdministrationMsg WithdrawPlayerCmd... 
-                    - UiAuthSquadsAdministrationMsg EliminateSquadCmd... *)
+                    - UiAuthSquadsMsg ChangePlayerNameCmd... 
+                    - UiAuthSquadsMsg ChangePlayerTypeCmd... 
+                    - UiAuthSquadsMsg WithdrawPlayerCmd... 
+                    - UiAuthSquadsMsg EliminateSquadCmd... *)
 
                 // #region: UiAuthMsg UiAuthChatMsg InitializeChatProjectionQry
                 | UiAuthMsg (jwt, UiAuthChatMsg InitializeChatProjectionQry) ->

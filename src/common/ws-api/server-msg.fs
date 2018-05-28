@@ -5,7 +5,7 @@ open Aornota.Common.IfDebug
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
-(*open Aornota.Sweepstake2018.Common.Domain.Squad*)
+open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
@@ -43,7 +43,7 @@ type AuthQryError<'a> =
     | OtherAuthQryError of otherError : OtherError<'a>
 
 type AutoSignOutReason =
-    // TODO-NMB-LOW?...| SessionExpired
+    // TODO-NMB-LOW?... | SessionExpired
     | PasswordReset
     | PermissionsChanged of isPersonaNonGrata : bool
 
@@ -56,28 +56,28 @@ type ServerAppMsg =
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
 
-(*type UserAdministrationProjectionMsg =
-    | UserAdministrationDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, UserAdministrationDto>*)
+(*type UserAdminProjectionMsg =
+    | UserAdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, UserAdminDto>*)
 
-(*type ServerUserAdministrationMsg =
-    | InitializeUserAdministrationProjectionQryResult of result : Result<UserAdministrationProjectionDto, AuthQryError<string>>
-    | UserAdministrationProjectionMsg of userAdministrationProjectionMsg : UserAdministrationProjectionMsg
-    | CreateUserCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
-    | ResetPasswordCmdResult of result : Result<unit, UserId * AuthCmdError<string>>
-    | ChangeUserTypeCmdResult of result : Result<unit, UserId * AuthCmdError<string>>*)
+(*type ServerUserAdminMsg =
+    | InitializeUserAdminProjectionQryResult of result : Result<UserAdminProjectionDto, AuthQryError<string>>
+    | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
+    | CreateUserCmdResult of result : Result<unit, AuthCmdError<string>>
+    | ResetPasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    | ChangeUserTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>*)
 
-(*type SquadsProjectionMsg =
+(* TODO-NEXT... type SquadsProjectionMsg =
     | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadDto>
     | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * Delta<PlayerId, PlayerDto>*)
 
-(*type ServerSquadsMsg =
-    | InitializeSquadsProjectionQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
-    | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
-    | ChangePlayerNameCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
-    | ChangePlayerTypeCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
-    | WithdrawPlayerCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
-    | AddPlayerCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>
-    | EliminateSquadCmdResult of result : Result<unit, SquadId * AuthCmdError<string>>*)
+type ServerSquadsMsg =
+    | InitializeSquadsProjectionQryResult of result : Result<unit, OtherError<string>> // TEMP-NMB...
+    | AddPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-NEXT... | ChangePlayerNameCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-NEXT... | ChangePlayerTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-NEXT... | WithdrawPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-NEXT... | EliminateSquadCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-NEXT... | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
 type ChatProjectionMsg =
     | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>
@@ -88,14 +88,14 @@ type ChatProjectionMsg =
 type ServerChatMsg =
     | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto * bool, AuthQryError<string>>
     | MoreChatMessagesQryResult of result : Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>
-    | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
     | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
+    | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
 
 type ServerMsg =
     | Waff
     | ServerAppMsg of serverAppMsg : ServerAppMsg
-    (*| ServerUserAdministrationMsg of serverUserAdministrationMsg : ServerUserAdministrationMsg*)
-    (*| ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg*)
+    (*| ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg*)
+    | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError source errorText = ifDebugSource source errorText |> OtherError |> Error

@@ -30,15 +30,15 @@ type private UsersInput =
     | HandleCreateSquadCmd of token : CreateSquadToken * auditUserId : UserId * squadId : SquadId * squadName : SquadName * group : Group * seeding : Seeding * coachName : CoachName
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleAddPlayerCmd of token : AddOrEditPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
     | HandleChangePlayerNameCmd of token : AddOrEditPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
     | HandleChangePlayerTypeCmd of token : AddOrEditPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
     | HandleWithdrawPlayerCmd of token : WithdrawPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId // TODO-NMB-MEDIUM: dateWithdrawn?...
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
     | HandleEliminateSquadCmd of token : EliminateSquadToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn 
-        * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+        * reply : AsyncReplyChannel<Result<Rvn, AuthCmdError<string>>>
 
 type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn?...
 
@@ -242,7 +242,7 @@ type Squads () =
                         (squadId, playerId, playerName, playerType) |> PlayerAdded |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, squad) -> squad.Rvn) |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
             | HandleChangePlayerNameCmd (_, auditUserId, squadId, currentRvn, playerId, PlayerName playerName, reply) ->
@@ -267,7 +267,7 @@ type Squads () =
                         (squadId, playerId, playerName) |> PlayerNameChanged |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, squad) -> squad.Rvn) |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
             | HandleChangePlayerTypeCmd (_, auditUserId, squadId, currentRvn, playerId, playerType, reply) ->
@@ -286,7 +286,7 @@ type Squads () =
                         (squadId, playerId, playerType) |> PlayerTypeChanged |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, squad) -> squad.Rvn) |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
             | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) -> // TODO-NMB-MEDIUM: dateWithdrawn?...
@@ -305,7 +305,7 @@ type Squads () =
                         (squadId, playerId) |> PlayerWithdrawn |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, squad) -> squad.Rvn) |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
             | HandleEliminateSquadCmd (_, auditUserId, squadId, currentRvn, reply) ->
@@ -320,7 +320,7 @@ type Squads () =
                         squadId |> SquadEliminated |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
-                result |> discardOk |> reply.Reply
+                result |> Result.map (fun (_, squad) -> squad.Rvn) |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads }
         "agent instantiated -> awaitingStart" |> Info |> log

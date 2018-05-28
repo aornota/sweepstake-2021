@@ -48,7 +48,7 @@ type WsError =
 
 type UnauthPageInput =
     | NewsInput
-    | SquadsInput
+    | SquadsInput of squadsInput : Squads.Common.Input
 
 type SignInInput =
     | UserNameTextChanged of userNameText : string
@@ -130,7 +130,7 @@ type SignInState = {
 
 type UnauthPageStates = {
     NewsState : ToDo
-    SquadsState : ToDo }
+    SquadsState : Squads.Common.State option }
 
 type UnauthState = {
     CurrentUnauthPage : UnauthPage
@@ -153,7 +153,7 @@ type ChangePasswordState = {
 
 type AuthPageStates = {
     DraftsState : ToDo
-    ChatState : Chat.Common.State option
+    ChatState : Chat.Common.State
     UserAdministrationState : ToDo }
 
 type AuthState = {

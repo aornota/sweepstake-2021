@@ -159,14 +159,14 @@ let private updateState source (chatUserDic:ChatUserDic) (chatMessageDic:ChatMes
                 chatMessageDelta |> sendChatMessageDelta removedOrdinals minChatMessageOrdinal projecteeDic
             let newState =
                 if chatUserDtoDelta |> isEmpty && chatMessageDelta |> isEmpty then
-                    sprintf "%s -> State (unchanged)" source |> Info |> log
+                    sprintf "%s -> unchanged" source |> Info |> log
                     state
                 else
-                    sprintf "%s -> State (updated)" source |> Info |> log
+                    sprintf "%s -> updated" source |> Info |> log
                     { ChatUserDic = ChatUserDic chatUserDic ; ChatMessageDic = ChatMessageDic chatMessageDic }
             newState
         | None ->
-            sprintf "%s -> State (initial)" source |> Info |> log
+            sprintf "%s -> initial" source |> Info |> log
             { ChatUserDic = ChatUserDic chatUserDic ; ChatMessageDic = ChatMessageDic chatMessageDic }
     newState
 
