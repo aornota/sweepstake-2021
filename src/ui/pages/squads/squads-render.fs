@@ -37,8 +37,6 @@ let private playerTypeRadios selectedPlayerType dispatch =
         radioInline (playerType |> playerTypeText) isSelected onChange)
     |> List.collect id
 
-let private squadIsFullText = sprintf "Squad contains the maximum of %i non-withdrawn players" MAX_PLAYERS_PER_SQUAD
-
 let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayersState) dispatch =
     let theme = getTheme useDefaultTheme
     let squadId = addPlayersState.SquadId

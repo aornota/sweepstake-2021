@@ -31,6 +31,8 @@ type SquadsProjectionDto = { SquadDtos : SquadDto list }
 
 let [<Literal>] MAX_PLAYERS_PER_SQUAD = 23
 
+let squadIsFullText = sprintf "Squad contains the maximum of %i non-withdrawn players" MAX_PLAYERS_PER_SQUAD
+
 let validateSquadName (squadNames:SquadName list) (SquadName squadName) =
     if String.IsNullOrWhiteSpace squadName then "Squad name must not be blank" |> Some
     else if (squadName.Trim ()).Length < 4 then "Squad name must be at least 4 characters" |> Some

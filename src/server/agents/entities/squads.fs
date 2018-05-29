@@ -233,7 +233,7 @@ type Squads () =
                         else ifDebug (sprintf "%A already exists" playerId) UNEXPECTED_ERROR |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId) ->
                         if squad.Players |> nonWithdrawnCount < MAX_PLAYERS_PER_SQUAD then (squadId, squad, playerId) |> Ok
-                        else sprintf "Squad cannot have more than %i non-withdrawn players" MAX_PLAYERS_PER_SQUAD |> otherCmdError source)
+                        else squadIsFullText |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId) ->
                         let playerNames = squad.Players |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player.PlayerName)
                         match validatePlayerName playerNames playerName with
