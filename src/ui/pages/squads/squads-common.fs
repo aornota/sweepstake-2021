@@ -17,6 +17,20 @@ type AddPlayersInput =
     | AddPlayer
     | CancelAddPlayers
 
+type ChangePlayerNameInput =
+    | PlayerNameTextChanged of newPlayerNameText : string
+    | ChangePlayerName
+    | CancelChangePlayerName
+
+type ChangePlayerTypeInput =
+    | PlayerTypeChanged of playerType : PlayerType
+    | ChangePlayerType
+    | CancelChangePlayerType
+
+type EliminateSquadInput =
+    | ConfirmEliminateSquad
+    | CancelEliminateSquad
+
 type Input =
     | AddNotificationMessage of notificationMessage : NotificationMessage
     | SendUiUnauthMsg of uiUnauthMsg : UiUnauthMsg
@@ -26,6 +40,14 @@ type Input =
     | ShowSquad of squadId : SquadId
     | ShowAddPlayersModal of squadId : SquadId
     | AddPlayersInput of addPlayersInput : AddPlayersInput
+    | ShowChangePlayerNameModal of squadId : SquadId * playerId : PlayerId
+    | ChangePlayerNameInput of changePlayerNameInput : ChangePlayerNameInput
+    | ShowChangePlayerTypeModal of squadId : SquadId * playerId : PlayerId
+    | ChangePlayerTypeInput of changePlayerTypeInput : ChangePlayerTypeInput
+    | ShowWithdrawPlayerModal of squadId : SquadId * playerId : PlayerId
+    //| WithdrawPlayerInput...
+    | ShowEliminateSquadModal of squadId : SquadId
+    | EliminateSquadInput of eliminateSquadInput : EliminateSquadInput
 
 type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn? draftedBy? pickedBy? score?...
 type PlayerDic = Dictionary<PlayerId, Player>
@@ -48,10 +70,42 @@ type AddPlayersState = {
     AddPlayerStatus : AddPlayerStatus option
     ResultRvn : Rvn option }
 
+type ChangePlayerNameStatus =
+    | ChangePlayerNamePending
+    | ChangePlayerNameFailed of errorText : string
+
+type ChangePlayerNameState = {
+    SquadId : SquadId   
+    PlayerId : PlayerId
+    PlayerNameText : string
+    PlayerNameErrorText : string option
+    ChangePlayerNameStatus : ChangePlayerNameStatus option }
+
+type ChangePlayerTypeStatus =
+    | ChangePlayerTypePending
+    | ChangePlayerTypeFailed of errorText : string
+
+type ChangePlayerTypeState = {
+    SquadId : SquadId   
+    PlayerId : PlayerId
+    PlayerType : PlayerType option
+    ChangePlayerTypeStatus : ChangePlayerTypeStatus option }
+
+type EliminateSquadStatus =
+    | EliminateSquadPending
+    | EliminateSquadFailed of errorText : string
+
+type EliminateSquadState = {
+    SquadId : SquadId
+    EliminateSquadStatus : EliminateSquadStatus option }
+
 type ActiveState = {
     SquadsProjection : SquadsProjection
     CurrentSquadId : SquadId option
-    AddPlayersState : AddPlayersState option }
+    AddPlayersState : AddPlayersState option
+    ChangePlayerNameState : ChangePlayerNameState option
+    ChangePlayerTypeState : ChangePlayerTypeState option
+    EliminateSquadState : EliminateSquadState option }
 
 type ProjectionState =
     | Initializing of currentSquadId : SquadId option

@@ -1,5 +1,7 @@
 module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 
+open Aornota.Common.IfDebug
+
 open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
@@ -27,17 +29,18 @@ let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ]
 let private playerTypeSortOrder playerType = match playerType with | Goalkeeper -> 1 | Defender -> 2 | Midfielder -> 3 | Forward -> 4
 let private playerTypeText playerType = match playerType with | Goalkeeper -> "Goalkeeper" | Defender -> "Defender" | Midfielder -> "Midfielder" | Forward -> "Forward"
 
-let private playerTypeRadios selectedPlayerType dispatch =
-    let onChange playerType = (fun _ -> playerType |> NewPlayerTypeChanged |> dispatch)
+let private playerTypeRadios selectedPlayerType disabledPlayerType disableAll dispatch =
+    let onChange playerType = (fun _ -> playerType |> dispatch)
     playerTypes
     |> List.sortBy playerTypeSortOrder
     |> List.map (fun playerType ->
-        let isSelected = playerType = selectedPlayerType
-        let onChange = if isSelected then ignore else playerType |> onChange
-        radioInline (playerType |> playerTypeText) isSelected onChange)
+        let isSelected = playerType |> Some = selectedPlayerType
+        let disabled = disableAll || playerType |> Some = disabledPlayerType
+        let onChange = if isSelected || disabled then ignore else playerType |> onChange
+        radioInline (playerType |> playerTypeText) isSelected disabled onChange)
     |> List.collect id
 
-let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayersState) dispatch =
+let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayersState:AddPlayersState) dispatch =
     let theme = getTheme useDefaultTheme
     let squadId = addPlayersState.SquadId
     let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
@@ -63,7 +66,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
     let (PlayerId newPlayerKey) = addPlayersState.NewPlayerId
     let body = [
         if squadIsFull then
-            yield notification theme notificationInfo [ [ str squadIsFullText ] |> para theme paraDefaultSmallest ]
+            yield notification theme notificationWarning [ [ str squadIsFullText ] |> para theme paraCentredSmallest ]
             yield br
         match errorText with
         | Some errorText ->
@@ -77,8 +80,116 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
             textBox theme newPlayerKey addPlayersState.NewPlayerNameText (iconMaleSmall |> Some) false addPlayersState.NewPlayerNameErrorText [] true isAddingPlayer
                 (NewPlayerNameTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
-            yield! playerTypeRadios addPlayersState.NewPlayerType dispatch ]
+            yield! playerTypeRadios (addPlayersState.NewPlayerType |> Some) None isAddingPlayer (NewPlayerTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Add player" ] |> button theme { buttonLinkSmall with Interaction = addPlayerInteraction } ] ]
+    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+
+let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, changePlayerNameState:ChangePlayerNameState) dispatch =
+    let theme = getTheme useDefaultTheme
+    let squadId = changePlayerNameState.SquadId
+    let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+    let playerId = changePlayerNameState.PlayerId
+    let player = match squad with | Some squad -> (if playerId |> squad.PlayerDic.ContainsKey then squad.PlayerDic.[playerId] |> Some else None) | None -> None
+    let currentPlayerName, titleText =
+        match player with
+        | Some player ->
+            let (PlayerName playerName) = player.PlayerName
+            player.PlayerName |> Some, sprintf "Edit name for %s" playerName
+        | None -> None, "Edit player name" // note: should never happen
+    let onDismiss = match changePlayerNameState.ChangePlayerNameStatus with | Some ChangePlayerNamePending -> None | Some _ | None -> (fun _ -> CancelChangePlayerName |> dispatch) |> Some
+    let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
+    let isChangingPlayerName, changePlayerNameInteraction, onEnter =
+        let changePlayerName = (fun _ -> ChangePlayerName |> dispatch)
+        match changePlayerNameState.ChangePlayerNameStatus with
+        | Some ChangePlayerNamePending -> true, Loading, ignore
+        | Some (ChangePlayerNameFailed _) | None ->
+            let isSame = match currentPlayerName with | Some playerName -> playerName = (PlayerName changePlayerNameState.PlayerNameText) | None -> false
+            match validatePlayerName playerNames (PlayerName changePlayerNameState.PlayerNameText), isSame with
+            | Some _, _ | None, true  -> false, NotEnabled None, ignore
+            | None, false -> false, Clickable (changePlayerName, None), changePlayerName
+    let errorText = match changePlayerNameState.ChangePlayerNameStatus with | Some (ChangePlayerNameFailed errorText) -> errorText |> Some | Some ChangePlayerNamePending | None -> None
+    let (PlayerId playerKey) = changePlayerNameState.PlayerId
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield [ str "Please enter the new name for the player" ] |> para theme paraCentredSmaller
+        yield br
+        // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            textBox theme playerKey changePlayerNameState.PlayerNameText (iconMaleSmall |> Some) false changePlayerNameState.PlayerNameErrorText [] true isChangingPlayerName
+                (PlayerNameTextChanged >> dispatch) onEnter ]
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Edit name" ] |> button theme { buttonLinkSmall with Interaction = changePlayerNameInteraction } ] ]
+    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+
+let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, changePlayerTypeState:ChangePlayerTypeState) dispatch =
+    let theme = getTheme useDefaultTheme
+    let squadId = changePlayerTypeState.SquadId
+    let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+    let playerId = changePlayerTypeState.PlayerId
+    let player = match squad with | Some squad -> (if playerId |> squad.PlayerDic.ContainsKey then squad.PlayerDic.[playerId] |> Some else None) | None -> None
+    let currentPlayerType, titleText =
+        match player with
+        | Some player ->
+            let (PlayerName playerName) = player.PlayerName
+            player.PlayerType |> Some, sprintf "Change position for %s" playerName
+        | None -> None, "Change player position" // note: should never happen
+    let onDismiss = match changePlayerTypeState.ChangePlayerTypeStatus with | Some ChangePlayerTypePending -> None | Some _ | None -> (fun _ -> CancelChangePlayerType |> dispatch) |> Some
+    let isChangingPlayerType, changePlayerTypeInteraction, onEnter =
+        let changePlayerType = (fun _ -> ChangePlayerType |> dispatch)
+        match changePlayerTypeState.ChangePlayerTypeStatus with
+        | Some ChangePlayerTypePending -> true, Loading, ignore
+        | Some (ChangePlayerTypeFailed _) | None ->
+            let isValid = match changePlayerTypeState.PlayerType with | Some playerType -> playerType |> Some <> currentPlayerType | None -> false
+            if isValid |> not then false, NotEnabled None, ignore
+            else false, Clickable (changePlayerType, None), changePlayerType
+    let errorText = match changePlayerTypeState.ChangePlayerTypeStatus with | Some (ChangePlayerTypeFailed errorText) -> errorText |> Some | Some ChangePlayerTypePending | None -> None
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield [ str "Please enter the new position for the player" ] |> para theme paraCentredSmaller
+        yield br
+        // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            yield! playerTypeRadios changePlayerTypeState.PlayerType currentPlayerType isChangingPlayerType (PlayerTypeChanged >> dispatch) ]
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change position" ] |> button theme { buttonLinkSmall with Interaction = changePlayerTypeInteraction } ] ]
+    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+
+let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, eliminateSquadState:EliminateSquadState) dispatch =
+    let theme = getTheme useDefaultTheme
+    let squadId = eliminateSquadState.SquadId
+    let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+    let titleText =
+        match squad with
+        | Some squad ->
+            let (SquadName squadName) = squad.SquadName
+            sprintf "Eliminate %s" squadName
+        | None -> "Eliminate team" // note: should never happen
+    let confirmInteraction, onDismiss =
+        let confirm = (fun _ -> ConfirmEliminateSquad |> dispatch)
+        let cancel = (fun _ -> CancelEliminateSquad |> dispatch)
+        match eliminateSquadState.EliminateSquadStatus with
+        | Some EliminateSquadPending -> Loading, None
+        | Some (EliminateSquadFailed _) | None -> Clickable (confirm, None), cancel |> Some
+    let errorText = match eliminateSquadState.EliminateSquadStatus with | Some (EliminateSquadFailed errorText) -> errorText |> Some | Some EliminateSquadPending | None -> None
+    let warning = [
+        [ str "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmallest
+        [ str "Please note that this action is irreversible" ] |> para theme paraCentredSmallest ]
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield notification theme notificationWarning warning
+        yield br
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            [ str "Eliminate team" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
     cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private group squadId (squadDic:SquadDic) = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
@@ -103,35 +214,79 @@ let private scoreText score =
     let scoreText = sprintf "%i" score
     if score > 0 then bold scoreText else str scoreText
 
-let private renderSquad (useDefaultTheme, squad:Squad) _dispatch =
+let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = // TODO-NEXT: Enable elimination in release builds...
     let theme = getTheme useDefaultTheme
-    let (CoachName coachName), (Seeding seeding) = squad.CoachName, squad.Seeding
+    let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
+    let canEliminate =
+        match authUser with
+        | Some authUser -> match authUser.Permissions.SquadPermissions with | Some squadPermissions -> squadPermissions.EliminateSquadPermission | None -> false
+        | None -> false
+    let eliminate =
+        if canEliminate && squad.Eliminated |> not then
+            let onClick = (fun _ -> squadId |> ShowEliminateSquadModal |> dispatch)
+            let eliminate = [ [ str "Eliminate" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick)
+            ifDebug (eliminate |> Some) None // TEMP-NMB...
+        else if squad.Eliminated then
+            [ [ str "Eliminated" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
+        else None
     let score = 0 // TEMP-NMB...
     div divCentred [
         table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
             thead [ 
                 tr false [
+                    th [ [ bold "Team"] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Seeding" ] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Coach" ] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
-                    th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
+                    th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                    th [] ] ]
             tbody [
                 tr false [
+                    td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                     td [ [ str (sprintf "%i" seeding) ] |> para theme paraDefaultSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
                     td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
-                    td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ] ] ]
+                    td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                    td [ Rct.ofOption eliminate ] ] ] ] ]
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic) _dispatch =
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, authUser) dispatch = // TODO-NEXT: Enable withdraw in release builds...
     let theme = getTheme useDefaultTheme
-    let playerRow (_playerId, player) =
+    let canEdit, canWithdraw =
+        match authUser with
+        | Some authUser ->
+            match authUser.Permissions.SquadPermissions with
+            | Some squadPermissions -> squadPermissions.AddOrEditPlayerPermission, squadPermissions.WithdrawPlayerPermission
+            | None -> false, false
+        | None -> false, false
+    let editName playerId =
+        if canEdit then
+            let onClick = (fun _ -> (squadId, playerId) |> ShowChangePlayerNameModal |> dispatch)
+            [ [ str "Edit name" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
+        else None
+    let changePosition playerId =
+        if canEdit then
+            let onClick = (fun _ -> (squadId, playerId) |> ShowChangePlayerTypeModal |> dispatch)
+            [ [ str "Change position" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
+        else None
+    let withdraw playerId player =
+        if canWithdraw && squad.Eliminated |> not && player.Withdrawn |> not then
+            let onClick = (fun _ -> (squadId, playerId) |> ShowWithdrawPlayerModal |> dispatch)
+            let withdraw = [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick)
+            ifDebug (withdraw |> Some) None // TEMP-NMB...
+        else if player.Withdrawn then
+            [ [ str "Withdrawn" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
+        else None
+    let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
         let score = 0 // TEMP-NMB...
         tr false [
             td [ [ str playerName ] |> para theme paraDefaultSmallest ]
+            td [ Rct.ofOption (editName playerId) ]
             td [ [ str playerTypeText ] |> para theme paraCentredSmallest ]
+            td [ Rct.ofOption (changePosition playerId) ]
             td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
-            td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ]
+            td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+            td [ Rct.ofOption (withdraw playerId player) ] ]
     let sortedPlayers = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
         player.PlayerType |> playerTypeSortOrder, player.PlayerName)
     let playerRows = sortedPlayers |> List.map (fun (playerId, player) -> (playerId, player) |> playerRow)
@@ -141,17 +296,20 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic) _dispatch =
                 thead [ 
                     tr false [
                         th [ [ bold "Player" ] |> para theme paraDefaultSmallest ]
+                        th []
                         th [ [ bold "Position" ] |> para theme paraCentredSmallest ]
+                        th []
                         th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
+                        th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                        th [] ] ]
                 tbody [ yield! playerRows ] ]
         else yield [ str "Player details coming soon" ] |> para theme paraCentredSmaller ]    
 
 let addPlayers theme squadId squad authUser dispatch =
     let nonWithdrawnCount = squad.PlayerDic |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> player.Withdrawn |> not) |> List.length
     let paraAddPlayers = { paraDefaultSmallest with ParaAlignment = RightAligned }
-    match authUser with
-    | Some authUser ->
+    match squad.Eliminated, authUser with
+    | false, Some authUser ->
         match authUser.Permissions.SquadPermissions with
         | Some squadPermissions ->
             if squadPermissions.AddOrEditPlayerPermission then
@@ -161,7 +319,7 @@ let addPlayers theme squadId squad authUser dispatch =
                     [ italic squadIsFullText ] |> para theme paraAddPlayers |> Some
             else None
         | None -> None
-    | None -> None
+    | _, _ -> None
 
 let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
     let theme = getTheme useDefaultTheme
@@ -182,6 +340,21 @@ let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
             | Some addPlayersState ->
                 yield div divDefault [ lazyViewOrHMR2 renderAddPlayersModal (useDefaultTheme, squadDic, addPlayersState) (AddPlayersInput >> dispatch) ]
             | None -> ()
+            match activeState.ChangePlayerNameState with
+            | Some changePlayerNameState ->
+                yield div divDefault [ lazyViewOrHMR2 renderChangePlayerNameModal (useDefaultTheme, squadDic, changePlayerNameState) (ChangePlayerNameInput >> dispatch) ]
+            | None -> ()
+            match activeState.ChangePlayerTypeState with
+            | Some changePlayerTypeState ->
+                yield div divDefault [ lazyViewOrHMR2 renderChangePlayerTypeModal (useDefaultTheme, squadDic, changePlayerTypeState) (ChangePlayerTypeInput >> dispatch) ]
+            | None -> ()
+
+            // TODO-NEXT: WithdrawPlayerState...
+            
+            match activeState.EliminateSquadState with
+            | Some eliminateSquadState ->
+                yield div divDefault [ lazyViewOrHMR2 renderEliminateSquadModal (useDefaultTheme, squadDic, eliminateSquadState) (EliminateSquadInput >> dispatch) ]
+            | None -> ()
 
             // TODO-NMB-MEDIUM: Search box (e.g. for drafting)?...
 
@@ -194,7 +367,7 @@ let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
             | Some currentSquadId when currentSquadId |> squadDic.ContainsKey ->
                 let squad = squadDic.[currentSquadId]
                 yield br
-                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, squad) dispatch
-                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic) dispatch
+                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, authUser) dispatch
+                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, authUser) dispatch
                 yield Rct.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
             | Some _ | None -> () ] // note: should never happen

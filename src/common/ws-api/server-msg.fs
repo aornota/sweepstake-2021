@@ -62,22 +62,22 @@ type ServerAppMsg =
 (*type ServerUserAdminMsg =
     | InitializeUserAdminProjectionQryResult of result : Result<UserAdminProjectionDto, AuthQryError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
-    | CreateUserCmdResult of result : Result<unit, AuthCmdError<string>>
-    | ResetPasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    | ChangeUserTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>*)
+    | CreateUserCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    | ResetPasswordCmdResult of result : Result<unit, AuthCmdError<string>>
+    | ChangeUserTypeCmdResult of result : Result<unit, AuthCmdError<string>>*)
 
 type SquadsProjectionMsg =
-    // TODO-SOON... | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadDto>
+    | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
     | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
 
 type ServerSquadsMsg =
     | InitializeSquadsProjectionUnauthQryResult of result : Result<SquadsProjectionDto, OtherError<string>>
     | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
     | AddPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-SOON... | ChangePlayerNameCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-SOON... | ChangePlayerTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-SOON... | WithdrawPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-SOON... | EliminateSquadCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    | ChangePlayerNameCmdResult of result : Result<unit, AuthCmdError<string>>
+    | ChangePlayerTypeCmdResult of result : Result<unit, AuthCmdError<string>>
+    | WithdrawPlayerCmdResult of result : Result<unit, AuthCmdError<string>>
+    | EliminateSquadCmdResult of result : Result<unit, AuthCmdError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
 type ChatProjectionMsg =

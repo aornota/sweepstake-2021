@@ -32,10 +32,10 @@ type UiAuthAppMsg =
 type UiAuthSquadsMsg =
     | InitializeSquadsProjectionAuthQry
     | AddPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
-    // TODO-NEXT... | ChangePlayerNameCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName
-    // TODO-NEXT... | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
-    // TODO-NEXT... | WithdrawPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
-    // TODO-NEXT... | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn
+    | ChangePlayerNameCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName
+    | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
+    | WithdrawPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
+    | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry

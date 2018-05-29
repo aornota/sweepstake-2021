@@ -244,7 +244,7 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
                 match mustChangePasswordReason with
                 | FirstSignIn -> because "this is the first time you have signed in"
                 | PasswordReset -> because "it has been reset by a system administrator"
-            yield notification theme notificationInfo [ [ str reasonText ] |> para theme paraDefaultSmallest ]
+            yield notification theme notificationInfo [ [ str reasonText ] |> para theme paraCentredSmallest ]
             yield br
         | None -> ()
         match errorText with

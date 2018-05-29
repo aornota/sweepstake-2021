@@ -50,6 +50,10 @@ let private squad (squadDto:SquadDto) =
     { Rvn = squadOnlyDto.Rvn ; SquadName = squadOnlyDto.SquadName ; Group = squadOnlyDto.Group ; Seeding = squadOnlyDto.Seeding ; CoachName = squadOnlyDto.CoachName
       Eliminated = squadOnlyDto.Eliminated ; PlayerDic = playerDic }
 
+let private updateSquad (squadOnlyDto:SquadOnlyDto) (squad:Squad) =
+    { squad with Rvn = squadOnlyDto.Rvn ; SquadName = squadOnlyDto.SquadName ; Group = squadOnlyDto.Group ; Seeding = squadOnlyDto.Seeding ; CoachName = squadOnlyDto.CoachName
+                 Eliminated = squadOnlyDto.Eliminated ; PlayerDic = squad.PlayerDic }
+
 let private squadsProjection (squadsProjectionDto:SquadsProjectionDto) =
     let squadDic = SquadDic ()
     squadsProjectionDto.SquadDtos |> List.iter (fun squadDto ->
@@ -57,6 +61,27 @@ let private squadsProjection (squadsProjectionDto:SquadsProjectionDto) =
         if squadId |> squadDic.ContainsKey |> not then // note: silently ignore duplicate SquadIds (should never happen)
             (squadId, squadDto |> squad) |> squadDic.Add)
     { Rvn = initialRvn ; SquadDic = squadDic }
+
+let private applySquadDelta currentRvn deltaRvn (delta:Delta<SquadId, SquadOnlyDto>) (squadDic:SquadDic) =
+    let squadDic = SquadDic squadDic // note: copy to ensure that passed-in dictionary *not* modified if error [but no need to copy PlayerDic/s since not changing those]
+    if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
+    |> Result.bind (fun _ ->
+        let alreadyExist = delta.Added |> List.choose (fun (squadId, squadOnlyDto) -> if squadId |> squadDic.ContainsKey then (squadId, squadOnlyDto) |> Some else None)
+        if alreadyExist.Length = 0 then delta.Added |> List.iter (fun (squadId, squadOnlyDto) ->
+            let squadDto = { SquadOnlyDto = squadOnlyDto ; PlayerDtos = [] }
+            (squadId, squadDto |> squad) |> squadDic.Add) |> Ok
+        else alreadyExist |> AddedAlreadyExist |> Error)
+    |> Result.bind (fun _ ->
+        let doNotExist = delta.Changed |> List.choose (fun (squadId, squadOnlyDto) -> if squadId |> squadDic.ContainsKey |> not then (squadId, squadOnlyDto) |> Some else None)
+        if doNotExist.Length = 0 then delta.Changed |> List.iter (fun (squadId, squadOnlyDto) ->
+            let squad = squadDic.[squadId]
+            squadDic.[squadId] <- (squad |> updateSquad squadOnlyDto)) |> Ok
+        else doNotExist |> ChangedDoNotExist |> Error)
+    |> Result.bind (fun _ ->
+        let doNotExist = delta.Removed |> List.choose (fun squadId -> if squadId |> squadDic.ContainsKey |> not then squadId |> Some else None)
+        if doNotExist.Length = 0 then delta.Removed |> List.iter (squadDic.Remove >> ignore) |> Ok
+        else doNotExist |> RemovedDoNotExist |> Error)
+    |> Result.bind (fun _ -> squadDic |> Ok)
 
 let private applyPlayerDelta currentRvn deltaRvn (delta:Delta<PlayerId, PlayerDto>) (playerDic:PlayerDic) =
     let playerDic = PlayerDic playerDic // note: copy to ensure that passed-in dictionary *not* modified if error
@@ -107,6 +132,63 @@ let private handleAddPlayerCmdResult (result:Result<Rvn, AuthCmdError<string>>) 
     | _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected AddPlayerCmdResult when AddPlayersState is None -> %A" result)
 
+let private handleChangePlayerNameCmdResult (result:Result<unit, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
+    match activeState.ChangePlayerNameState with
+    | Some changePlayerNameState ->
+        match changePlayerNameState.ChangePlayerNameStatus with
+        | Some ChangePlayerNamePending ->
+            match result with
+            | Ok _ ->
+                let activeState = { activeState with ChangePlayerNameState = None }
+                { state with ProjectionState = Active activeState }, Cmd.none
+            | Error error ->
+                let errorText = ifDebug (sprintf "ChangePlayerNameCmdResult error -> %A" error) (error |> cmdErrorText)
+                let changePlayerNameState = { changePlayerNameState with ChangePlayerNameStatus = errorText |> ChangePlayerNameFailed |> Some }
+                let activeState = { activeState with ChangePlayerNameState = changePlayerNameState |> Some }
+                { state with ProjectionState = Active activeState }, "Unable to edit player name" |> errorToastCmd
+        | Some (ChangePlayerNameFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerNameCmdResult when ChangePlayerNameStatus is not ChangePlayerNamePending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerNameCmdResult when ChangePlayerNameState is None -> %A" result)
+
+let private handleChangePlayerTypeCmdResult (result:Result<unit, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
+    match activeState.ChangePlayerTypeState with
+    | Some changePlayerTypeState ->
+        match changePlayerTypeState.ChangePlayerTypeStatus with
+        | Some ChangePlayerTypePending ->
+            match result with
+            | Ok _ ->
+                let activeState = { activeState with ChangePlayerTypeState = None }
+                { state with ProjectionState = Active activeState }, Cmd.none
+            | Error error ->
+                let errorText = ifDebug (sprintf "ChangePlayerTypeCmdResult error -> %A" error) (error |> cmdErrorText)
+                let changePlayerTypeState = { changePlayerTypeState with ChangePlayerTypeStatus = errorText |> ChangePlayerTypeFailed |> Some }
+                let activeState = { activeState with ChangePlayerTypeState = changePlayerTypeState |> Some }
+                { state with ProjectionState = Active activeState }, "Unable to change player position" |> errorToastCmd
+        | Some (ChangePlayerTypeFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeCmdResult when ChangePlayerTypeStatus is not ChangePlayerTypePending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeCmdResult when ChangePlayerTypeState is None -> %A" result)
+
+let private handleEliminateSquadCmdResult (result:Result<unit, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
+    match activeState.EliminateSquadState with
+    | Some eliminateSquadState ->
+        match eliminateSquadState.EliminateSquadStatus with
+        | Some EliminateSquadPending ->
+            match result with
+            | Ok _ ->
+                let activeState = { activeState with EliminateSquadState = None }
+                { state with ProjectionState = Active activeState }, Cmd.none
+            | Error error ->
+                let errorText = ifDebug (sprintf "EliminateSquadCmdResult error -> %A" error) (error |> cmdErrorText)
+                let eliminateSquadState = { eliminateSquadState with EliminateSquadStatus = errorText |> EliminateSquadFailed |> Some }
+                let activeState = { activeState with EliminateSquadState = eliminateSquadState |> Some }
+                { state with ProjectionState = Active activeState }, "Unable to eliminate team" |> errorToastCmd
+        | Some (EliminateSquadFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadCmdResult when EliminateSquadStatus is not EliminateSquadPending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadCmdResult when EliminateSquadState is None -> %A" result)
+
 let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<Input> =
     match serverSquadsMsg, state.ProjectionState with
     | InitializeSquadsProjectionUnauthQryResult (Ok squadsProjectionDto), Initializing currentSquadId ->
@@ -114,7 +196,10 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
         let activeState = {
             SquadsProjection = squadsProjection
             CurrentSquadId = squadsProjection.SquadDic |> squadIdOrDefault currentSquadId
-            AddPlayersState = None }
+            AddPlayersState = None
+            ChangePlayerNameState = None
+            ChangePlayerTypeState = None
+            EliminateSquadState = None }
         { state with ProjectionState = Active activeState }, Cmd.none
     | InitializeSquadsProjectionUnauthQryResult (Error (OtherError errorText)), Initializing _ ->
         { state with ProjectionState = InitializationFailed }, errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
@@ -123,12 +208,35 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
         let activeState = {
             SquadsProjection = squadsProjection
             CurrentSquadId = squadsProjection.SquadDic |> squadIdOrDefault currentSquadId
-            AddPlayersState = None }
+            AddPlayersState = None
+            ChangePlayerNameState = None
+            ChangePlayerTypeState = None
+            EliminateSquadState = None }
         { state with ProjectionState = Active activeState }, Cmd.none
     | InitializeSquadsProjectionAuthQryResult (Error error), Initializing _ ->
         { state with ProjectionState = InitializationFailed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
     | AddPlayerCmdResult result, Active activeState ->
         state |> handleAddPlayerCmdResult result activeState
+    | ChangePlayerNameCmdResult result, Active activeState ->
+        state |> handleChangePlayerNameCmdResult result activeState
+    | ChangePlayerTypeCmdResult result, Active activeState ->
+        state |> handleChangePlayerTypeCmdResult result activeState
+
+    // TODO-NEXT: WithdrawPlayerCmdResult...
+
+    | EliminateSquadCmdResult result, Active activeState ->
+        state |> handleEliminateSquadCmdResult result activeState
+    | SquadsProjectionMsg (SquadsDeltaMsg (deltaRvn, squadOnlyDtoDelta)), Active activeState ->
+        let squadProjection = activeState.SquadsProjection
+        match squadProjection.SquadDic |> applySquadDelta squadProjection.Rvn deltaRvn squadOnlyDtoDelta with
+        | Ok squadDic ->
+            let squadProjection = { squadProjection with Rvn = deltaRvn ; SquadDic = squadDic }
+            let activeState = { activeState with SquadsProjection = squadProjection }
+            { state with ProjectionState = Active activeState }, Cmd.none
+        | Error error ->
+            let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" squadOnlyDtoDelta squadProjection.SquadDic error)
+            let state, cmd = initialize authUser activeState.CurrentSquadId
+            state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | SquadsProjectionMsg (PlayersDeltaMsg (deltaRvn, squadId, squadRvn, playerDtoDelta)), Active activeState ->
         let squadProjection = activeState.SquadsProjection
         let squadDic = squadProjection.SquadDic
@@ -149,7 +257,16 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
                             { addPlayersState with NewPlayerNameErrorText = newPlayerNameErrorText } |> Some
                         else addPlayersState |> Some
                     | Some _ | None -> None
-                let activeState = { activeState with SquadsProjection = squadsProjection ; AddPlayersState = addPlayersState }
+                let changePlayerNameState =
+                    match activeState.ChangePlayerNameState with
+                    | Some changePlayerNameState when changePlayerNameState.SquadId = squadId ->
+                        let playerNameText = changePlayerNameState.PlayerNameText
+                        if String.IsNullOrWhiteSpace playerNameText |> not then
+                            let playerNameErrorText = validatePlayerName (squad.PlayerDic |> playerNames) (PlayerName playerNameText)
+                            { changePlayerNameState with PlayerNameErrorText = playerNameErrorText } |> Some
+                        else changePlayerNameState |> Some
+                    | Some _ | None -> None
+                let activeState = { activeState with SquadsProjection = squadsProjection ; AddPlayersState = addPlayersState ; ChangePlayerNameState = changePlayerNameState }
                 { state with ProjectionState = Active activeState }, Cmd.none
             | Error error ->
                 let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" playerDtoDelta squad.PlayerDic error)
@@ -164,13 +281,6 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
 
 let handleAddPlayersInput addPlayersInput activeState state : State * Cmd<Input> * bool =
     match addPlayersInput, activeState.AddPlayersState with
-    | CancelAddPlayers, Some addPlayersState ->
-        match addPlayersState.AddPlayerStatus with
-        | Some AddPlayerPending ->
-            state, shouldNeverHappenCmd "Unexpected CancelAddPlayers when AddPlayerPending", false
-        | Some (AddPlayerFailed _) | None ->
-            let activeState = { activeState with AddPlayersState = None }
-            { state with ProjectionState = Active activeState }, Cmd.none, false
     | NewPlayerNameTextChanged newPlayerNameText, Some addPlayersState ->
         let squadId, squadDic = addPlayersState.SquadId, activeState.SquadsProjection.SquadDic
         let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
@@ -194,11 +304,96 @@ let handleAddPlayersInput addPlayersInput activeState state : State * Cmd<Input>
                 let (Rvn squadRvn) = squad.Rvn
                 match resultRvn with | Some (Rvn resultRvn) when resultRvn > squadRvn -> Rvn resultRvn | Some _ | None -> Rvn squadRvn
             | None -> match resultRvn with | Some rvn -> rvn | None -> initialRvn
-        let addPlayerCmdParams = addPlayersState.SquadId, currentRvn, addPlayersState.NewPlayerId, (PlayerName addPlayersState.NewPlayerNameText), addPlayersState.NewPlayerType
+        let addPlayerCmdParams = squadId, currentRvn, addPlayersState.NewPlayerId, (PlayerName addPlayersState.NewPlayerNameText), addPlayersState.NewPlayerType
         let cmd = addPlayerCmdParams |> AddPlayerCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
         { state with ProjectionState = Active activeState }, cmd, true
-    | _, _ ->
+    | CancelAddPlayers, Some addPlayersState ->
+        match addPlayersState.AddPlayerStatus with
+        | Some AddPlayerPending ->
+            state, shouldNeverHappenCmd "Unexpected CancelAddPlayers when AddPlayerPending", false
+        | Some (AddPlayerFailed _) | None ->
+            let activeState = { activeState with AddPlayersState = None }
+            { state with ProjectionState = Active activeState }, Cmd.none, false
+    | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected AddPlayersInput when AddPlayersState is None -> %A" addPlayersInput), false
+
+let handleChangePlayerNameInput changePlayerNameInput activeState state : State * Cmd<Input> * bool =
+    match changePlayerNameInput, activeState.ChangePlayerNameState with
+    | PlayerNameTextChanged playerNameText, Some changePlayerNameState ->
+        let squadId, squadDic = changePlayerNameState.SquadId, activeState.SquadsProjection.SquadDic
+        let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+        let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
+        let playerNameErrorText = validatePlayerName playerNames (PlayerName playerNameText)
+        let changePlayerNameState = { changePlayerNameState with PlayerNameText = playerNameText ; PlayerNameErrorText = playerNameErrorText }
+        let activeState = { activeState with ChangePlayerNameState = changePlayerNameState |> Some }
+        { state with ProjectionState = Active activeState }, Cmd.none, true
+    | ChangePlayerName, Some changePlayerNameState -> // note: assume no need to validate PlayerNameText (i.e. because Squads.Render.renderChangePlayerNameModal will ensure that ChangePlayerName can only be dispatched when valid)
+        let changePlayerNameState = { changePlayerNameState with ChangePlayerNameStatus = ChangePlayerNamePending |> Some }   
+        let activeState = { activeState with ChangePlayerNameState = changePlayerNameState |> Some }
+        let squadId, squadDic = changePlayerNameState.SquadId, activeState.SquadsProjection.SquadDic
+        let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+        let currentRvn = match squad with | Some squad -> squad.Rvn | None -> initialRvn
+        let changePlayerNameCmdParams = squadId, currentRvn, changePlayerNameState.PlayerId, (PlayerName changePlayerNameState.PlayerNameText)
+        let cmd = changePlayerNameCmdParams |> ChangePlayerNameCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        { state with ProjectionState = Active activeState }, cmd, true
+    | CancelChangePlayerName, Some changePlayerNameState ->
+        match changePlayerNameState.ChangePlayerNameStatus with
+        | Some ChangePlayerNamePending ->
+            state, shouldNeverHappenCmd "Unexpected CancelChangePlayerName when ChangePlayerNamePending", false
+        | Some (ChangePlayerNameFailed _) | None ->
+            let activeState = { activeState with ChangePlayerNameState = None }
+            { state with ProjectionState = Active activeState }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerNameInput when ChangePlayerNameState is None -> %A" changePlayerNameInput), false
+
+let handleChangePlayerTypeInput changePlayerTypeInput activeState state : State * Cmd<Input> * bool =
+    match changePlayerTypeInput, activeState.ChangePlayerTypeState with
+    | PlayerTypeChanged playerType, Some changePlayerTypeState ->
+        let changePlayerTypeState = { changePlayerTypeState with PlayerType = playerType |> Some }
+        let activeState = { activeState with ChangePlayerTypeState = changePlayerTypeState |> Some }
+        { state with ProjectionState = Active activeState }, Cmd.none, true
+    | ChangePlayerType, Some changePlayerTypeState -> // note: assume no need to validate PlayerType (i.e. because Squads.Render.renderChangePlayerTypeModal will ensure that ChangePlayerType can only be dispatched when valid)
+        match changePlayerTypeState.PlayerType with
+        | Some playerType ->
+            let changePlayerTypeState = { changePlayerTypeState with ChangePlayerTypeStatus = ChangePlayerTypePending |> Some }   
+            let activeState = { activeState with ChangePlayerTypeState = changePlayerTypeState |> Some }
+            let squadId, squadDic = changePlayerTypeState.SquadId, activeState.SquadsProjection.SquadDic
+            let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+            let currentRvn = match squad with | Some squad -> squad.Rvn | None -> initialRvn
+            let changePlayerTypeCmdParams = squadId, currentRvn, changePlayerTypeState.PlayerId, playerType
+            let cmd = changePlayerTypeCmdParams |> ChangePlayerTypeCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+            { state with ProjectionState = Active activeState }, cmd, true
+        | None -> // note: should never happen
+            state, Cmd.none, false
+    | CancelChangePlayerType, Some changePlayerTypeState ->
+        match changePlayerTypeState.ChangePlayerTypeStatus with
+        | Some ChangePlayerTypePending ->
+            state, shouldNeverHappenCmd "Unexpected CancelChangePlayerType when ChangePlayerTypePending", false
+        | Some (ChangePlayerTypeFailed _) | None ->
+            let activeState = { activeState with ChangePlayerTypeState = None }
+            { state with ProjectionState = Active activeState }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeInput when ChangePlayerTypeState is None -> %A" changePlayerTypeInput), false
+
+let handleEliminateSquadInput eliminateSquadInput activeState state : State * Cmd<Input> * bool =
+    match eliminateSquadInput, activeState.EliminateSquadState with
+    | ConfirmEliminateSquad, Some eliminateSquadState ->
+        let eliminateSquadState = { eliminateSquadState with EliminateSquadStatus = EliminateSquadPending |> Some }   
+        let activeState = { activeState with EliminateSquadState = eliminateSquadState |> Some }
+        let squadId, squadDic = eliminateSquadState.SquadId, activeState.SquadsProjection.SquadDic
+        let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+        let currentRvn = match squad with | Some squad -> squad.Rvn | None -> initialRvn
+        let cmd = (squadId, currentRvn) |> EliminateSquadCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        { state with ProjectionState = Active activeState }, cmd, true
+    | CancelEliminateSquad, Some eliminateSquadState ->
+        match eliminateSquadState.EliminateSquadStatus with
+        | Some EliminateSquadPending ->
+            state, shouldNeverHappenCmd "Unexpected CancelEliminateSquad when EliminateSquadPending", false
+        | Some (EliminateSquadFailed _) | None ->
+            let activeState = { activeState with EliminateSquadState = None }
+            { state with ProjectionState = Active activeState }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadInput when EliminateSquadState is None -> %A" eliminateSquadInput), false
 
 let transition input authUser state =
     let state, cmd, isUserNonApiActivity =
@@ -224,6 +419,30 @@ let transition input authUser state =
             { state with ProjectionState = Active activeState }, Cmd.none, true
         | AddPlayersInput addPlayersInput, Active activeState ->
             state |> handleAddPlayersInput addPlayersInput activeState
+        | ShowChangePlayerNameModal (squadId, playerId), Active activeState -> // note: no need to check for unknown SquadId / PlayerId (should never happen)
+            let changePlayerNameState = { SquadId = squadId ; PlayerId = playerId ; PlayerNameText = String.Empty ; PlayerNameErrorText = None ; ChangePlayerNameStatus = None }
+            let activeState = { activeState with ChangePlayerNameState = changePlayerNameState |> Some }
+            { state with ProjectionState = Active activeState }, Cmd.none, true
+        | ChangePlayerNameInput changePlayerNameInput, Active activeState ->
+            state |> handleChangePlayerNameInput changePlayerNameInput activeState
+        | ShowChangePlayerTypeModal (squadId, playerId), Active activeState -> // note: no need to check for unknown SquadId / PlayerId (should never happen)
+            let changePlayerTypeState = { SquadId = squadId ; PlayerId = playerId ; PlayerType = None ; ChangePlayerTypeStatus = None }
+            let activeState = { activeState with ChangePlayerTypeState = changePlayerTypeState |> Some }
+            { state with ProjectionState = Active activeState }, Cmd.none, true
+        | ChangePlayerTypeInput changePlayerTypeInput, Active activeState ->
+            state |> handleChangePlayerTypeInput changePlayerTypeInput activeState
+
+        | ShowWithdrawPlayerModal (squadId, playerId), Active activeState -> // note: no need to check for unknown SquadId / PlayerId (should never happen)
+            // TODO-NEXT...
+            state, "Not yet implemented" |> warningToastCmd, true
+        //| WithdrawPlayerInput...
+
+        | ShowEliminateSquadModal squadId, Active activeState -> // note: no need to check for unknown SquadId (should never happen)
+            let eliminateSquadState = { SquadId = squadId ; EliminateSquadStatus = None }
+            let activeState = { activeState with EliminateSquadState = eliminateSquadState |> Some }
+            { state with ProjectionState = Active activeState }, Cmd.none, true
+        | EliminateSquadInput eliminateSquadInput, Active activeState ->
+            state |> handleEliminateSquadInput eliminateSquadInput activeState
         | _, _ ->
             state, shouldNeverHappenCmd (sprintf "Unexpected Input when %A -> %A" state.ProjectionState input), false
     state, cmd, isUserNonApiActivity

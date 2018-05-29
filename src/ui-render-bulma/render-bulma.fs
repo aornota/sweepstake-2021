@@ -112,13 +112,14 @@ let navbarItem children = Navbar.Item.div [] children
 let navbarStart children = Navbar.Start.div [] children
 let navbarEnd children = Navbar.End.div [] children
 
-let radioInline text isChecked onChange =
+let radioInline text isChecked disabled onChange =
     let colour, text = if isChecked then IsSuccess, bold text else IsPrimary, str text
     Checkradio.radioInline [
         Checkradio.HasBackgroundColor
         Checkradio.Color colour
         Checkradio.Size IsSmall
         Checkradio.Checked isChecked
+        Checkradio.Disabled disabled
         Checkradio.OnChange onChange
     ] [ text ]
 
