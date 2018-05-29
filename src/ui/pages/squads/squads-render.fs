@@ -129,7 +129,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic) _dispatch =
         let score = 0 // TEMP-NMB...
         tr false [
             td [ [ str playerName ] |> para theme paraDefaultSmallest ]
-            td [ [ str playerTypeText ] |> para theme paraDefaultSmallest ]
+            td [ [ str playerTypeText ] |> para theme paraCentredSmallest ]
             td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
             td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ]
     let sortedPlayers = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
@@ -141,7 +141,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic) _dispatch =
                 thead [ 
                     tr false [
                         th [ [ bold "Player" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Position" ] |> para theme paraDefaultSmallest ]
+                        th [ [ bold "Position" ] |> para theme paraCentredSmallest ]
                         th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
                         th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
                 tbody [ yield! playerRows ] ]
