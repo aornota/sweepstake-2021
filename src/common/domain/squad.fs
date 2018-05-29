@@ -1,5 +1,9 @@
 module Aornota.Sweepstake2018.Common.Domain.Squad
 
+open Aornota.Common.Revision
+
+open Aornota.Sweepstake2018.Common.Domain.Core
+
 open System
 
 type SquadId = | SquadId of guid : Guid with
@@ -16,6 +20,14 @@ type PlayerId = | PlayerId of guid : Guid with
 type PlayerName = | PlayerName of playerName : string
 
 type PlayerType = | Goalkeeper | Defender | Midfielder | Forward
+
+type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn? draftedBy? pickedBy? score?...
+
+type SquadOnlyDto = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool }
+
+type SquadDto = { SquadOnlyDto : SquadOnlyDto ; PlayerDtos : PlayerDto list }
+
+type SquadsProjectionDto = { SquadDtos : SquadDto list }
 
 let [<Literal>] MAX_PLAYERS_PER_SQUAD = 23
 

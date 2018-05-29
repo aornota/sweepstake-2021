@@ -13,7 +13,7 @@ type UiUnauthAppMsg =
     | AutoSignInCmd of sessionId : SessionId * jwt : Jwt
 
 type UiUnauthSquadsMsg =
-    | InitializeSquadsProjectionQry
+    | InitializeSquadsProjectionUnauthQry
 
 type UiUnauthMsg =
     | UiUnauthAppMsg of uiUnauthAppMsg : UiUnauthAppMsg
@@ -30,6 +30,7 @@ type UiAuthAppMsg =
     | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType*)
 
 type UiAuthSquadsMsg =
+    | InitializeSquadsProjectionAuthQry
     | AddPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
     // TODO-NEXT... | ChangePlayerNameCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName
     // TODO-NEXT... | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType

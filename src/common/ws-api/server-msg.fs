@@ -66,18 +66,19 @@ type ServerAppMsg =
     | ResetPasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
     | ChangeUserTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>*)
 
-(* TODO-NEXT... type SquadsProjectionMsg =
-    | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadDto>
-    | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * Delta<PlayerId, PlayerDto>*)
+type SquadsProjectionMsg =
+    // TODO-SOON... | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadDto>
+    | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
 
 type ServerSquadsMsg =
-    | InitializeSquadsProjectionQryResult of result : Result<unit, OtherError<string>> // TEMP-NMB...
+    | InitializeSquadsProjectionUnauthQryResult of result : Result<SquadsProjectionDto, OtherError<string>>
+    | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
     | AddPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-NEXT... | ChangePlayerNameCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-NEXT... | ChangePlayerTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-NEXT... | WithdrawPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-NEXT... | EliminateSquadCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    // TODO-NEXT... | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
+    // TODO-SOON... | ChangePlayerNameCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-SOON... | ChangePlayerTypeCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-SOON... | WithdrawPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    // TODO-SOON... | EliminateSquadCmdResult of result : Result<Rvn, AuthCmdError<string>>
+    | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
 type ChatProjectionMsg =
     | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>

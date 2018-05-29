@@ -60,13 +60,13 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 
 // Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
 "starting Entities agents" |> Info |> log
-() |> Entities.Squads.squads.Start
 () |> Entities.Users.users.Start
+() |> Entities.Squads.squads.Start
 
 "starting Projections agents" |> Info |> log
-() |> Projections.Chat.chat.Start
-// TODO-NMB-HIGH...() |> Projections.Squads.squads.Start
 // TODO-NMB-HIGH...() |> Projections.UserAdministration.userAdministration.Start
+() |> Projections.Squads.squads.Start
+() |> Projections.Chat.chat.Start
 
 "reading persisted events" |> Info |> log
 readPersistedEvents ()
@@ -74,8 +74,8 @@ readPersistedEvents ()
 "starting Connections agent" |> Info |> log
 serverStarted |> connections.Start
 
-(* TEMP-NMB: Finesse logging for development/debugging purposes...
-("development/debugging", function | Host | Entity Entity.Users | Connections -> allCategories | Broadcaster | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+(* TEMP-NMB: Finesse logging for development/debugging purposes... *)
+("development/debugging", function | Entity Entity.Squads | Projection Projection.Squads -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
 
 "ready" |> Info |> log
 

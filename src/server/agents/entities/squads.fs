@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.Squads
 
-// Note: Squads agent broadcasts SquadsRead - and subscribes to SquadsEventsRead.
+(* Broadcasts: SquadsRead
+   Subscribes: SquadsEventsRead *)
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Revision

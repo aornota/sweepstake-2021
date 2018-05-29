@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Projections.UserAdministration
 
-// Note: UserAdministration agent broadcasts TODO-NMB-HIGH... - and subscribes to TODO-NMB-HIGH...
+(* Broadcasts: TBC...
+   Subscribes: TBC... *)
 
 //open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger

@@ -9,13 +9,14 @@ open Fulma
 open Fulma.Components
 open Fulma.Elements
 open Fulma.Elements.Form
+open Fulma.Extensions
 open Fulma.Layouts
 
 type ContainerWidth = | Fluid | Widescreen | FullHD
 
 type Size = | Large | Medium | Normal | Small
 
-type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Notes | File | Find | User | Password | Admin
+type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Notes | File | Find | User | Password | Admin | Male
 
 type IconData = {
     IconSize : Size
@@ -71,6 +72,7 @@ let icon iconData =
         | User -> "fa-user"
         | Password -> "fa-key"
         | Admin -> "fa-cog"
+        | Male -> "fa-male"
     Icon.icon [
         match size with Some size -> yield size | None -> ()
         match alignment with Some alignment -> yield alignment | None -> ()
@@ -109,6 +111,16 @@ let navbarBurger onClick isActive =
 let navbarItem children = Navbar.Item.div [] children
 let navbarStart children = Navbar.Start.div [] children
 let navbarEnd children = Navbar.End.div [] children
+
+let radioInline text isChecked onChange =
+    let colour, text = if isChecked then IsSuccess, bold text else IsPrimary, str text
+    Checkradio.radioInline [
+        Checkradio.HasBackgroundColor
+        Checkradio.Color colour
+        Checkradio.Size IsSmall
+        Checkradio.Checked isChecked
+        Checkradio.OnChange onChange
+    ] [ text ]
 
 let thead children = Rct.thead [] children
 let tbody children = Rct.tbody [] children
@@ -152,3 +164,5 @@ let iconPassword = { iconDefault with Icon = Password }
 let iconPasswordSmall = { iconPassword with IconSize = Small }
 let iconAdmin = { iconDefault with Icon = Admin }
 let iconAdminSmall = { iconAdmin with IconSize = Small }
+let iconMale = { iconDefault with Icon = Male }
+let iconMaleSmall = { iconMale with IconSize = Small }

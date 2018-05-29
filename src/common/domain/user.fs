@@ -14,25 +14,24 @@ type UserType = | SuperUser | Administrator | Pleb | PersonaNonGrata
 
 type UserTarget = | NotSelf of userTypes : UserType list
 
-type UserAdministrationPermissions = {
+type UserAdminPermissions = {
     CreateUserPermission : UserType list
     ResetPasswordPermission : UserTarget option
     ChangeUserTypePermission : (UserTarget * UserType list) option }
 
-type SquadAdministrationPermissions = {
+type SquadPermissions = {
+    SquadProjectionAuthQryPermission : bool
     CreateSquadPermission : bool
     AddOrEditPlayerPermission : bool
     WithdrawPlayerPermission : bool
     EliminateSquadPermission : bool }
 
-type ChatPermissions = {
-    ChatProjectionQryPermission : bool
-    SendChatMessagePermission : bool }
+type ChatPermissions = { SendChatMessagePermission : bool }
 
 type Permissions = {
     ChangePasswordPermission : UserId option
-    UserAdministrationPermissions : UserAdministrationPermissions option
-    SquadAdministrationPermissions : SquadAdministrationPermissions option
+    UserAdminPermissions : UserAdminPermissions option
+    SquadPermissions : SquadPermissions option
     ChatPermissions : ChatPermissions option }
 
 type MustChangePasswordReason =
@@ -61,26 +60,26 @@ let permissions userId userType =
             createUserPermission, resetPasswordPermission, changeUserTypePermission
         | Administrator -> [ Pleb ], NotSelf [ Pleb ] |> Some, None
         | Pleb | PersonaNonGrata -> [], None, None
-    let userAdministrationPermissions =
+    let userAdminPermissions =
         match createUserPermission, resetPasswordPermission, changeUserTypePermission with
         | [], None, None -> None
         | _ -> { CreateUserPermission = createUserPermission ; ResetPasswordPermission = resetPasswordPermission ; ChangeUserTypePermission = changeUserTypePermission } |> Some
-    let createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission =
-        match userType with | SuperUser -> true, true, true, true | Administrator -> false, true, true, true | Pleb | PersonaNonGrata -> false, false, false, false
-    let squadAdministrationPermissions =
-        match createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission with
-        | false, false, false, false -> None
-        | _ -> { CreateSquadPermission = createSquadPermission ; AddOrEditPlayerPermission = addOrEditPlayerPermission ; WithdrawPlayerPermission = withdrawPlayerPermission ; EliminateSquadPermission = eliminateSquadPermission } |> Some
-    let chatProjectionQryPermission, sendChatMessagePermission =
-        match userType with | SuperUser | Administrator | Pleb -> true, true | PersonaNonGrata -> false, false
-    let chatPermissions =
-        match chatProjectionQryPermission, sendChatMessagePermission with
-        | false, false -> None
-        | _ -> { ChatProjectionQryPermission = chatProjectionQryPermission ; SendChatMessagePermission = sendChatMessagePermission } |> Some
+    let squadProjectionAuthQryPermission, createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission =
+        match userType with
+        | SuperUser -> true, true, true, true, true
+        | Administrator -> true, false, true, true, true
+        | Pleb -> true, false, false, false, false
+        | PersonaNonGrata -> false, false, false, false, false
+    let squadPermissions =
+        match squadProjectionAuthQryPermission, createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission with
+        | false, false, false, false, false -> None
+        | _ -> { SquadProjectionAuthQryPermission = squadProjectionAuthQryPermission ; CreateSquadPermission = createSquadPermission ; AddOrEditPlayerPermission = addOrEditPlayerPermission
+                 WithdrawPlayerPermission = withdrawPlayerPermission ; EliminateSquadPermission = eliminateSquadPermission } |> Some
+    let chatPermissions = match userType with | SuperUser | Administrator | Pleb -> { SendChatMessagePermission = true } |> Some | PersonaNonGrata -> None
     {
         ChangePasswordPermission = changePasswordPermission
-        UserAdministrationPermissions = userAdministrationPermissions
-        SquadAdministrationPermissions = squadAdministrationPermissions
+        UserAdminPermissions = userAdminPermissions
+        SquadPermissions = squadPermissions
         ChatPermissions = chatPermissions
     }
 

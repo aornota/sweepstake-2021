@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Ticker
 
-// Note: ConsoleLogger agent broadcasts Tick - and subscribes to nothing.
+(* Broadcasts: Tick
+   Subscribes: N/A *)
 
 open Aornota.Common.UnitsOfMeasure
 

@@ -110,7 +110,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
     let additionalDropDown =
         match headerStatus with
         | SignedIn authUser ->
-            match authUser.Permissions.UserAdministrationPermissions with
+            match authUser.Permissions.UserAdminPermissions with
             | Some _ ->
                 let text, isActive, appInput =
                     match headerPages |> List.tryFind (fun (_, _, page, _) -> isUserAdministrationPage page) with
@@ -189,7 +189,7 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
-             textBox theme signInState.UserNameKey signInState.UserNameText (iconUserSmall |> Some) false signInState.UserNameErrorText [] (signInState.FocusPassword |> not) isSigningIn
+            textBox theme signInState.UserNameKey signInState.UserNameText (iconUserSmall |> Some) false signInState.UserNameErrorText [] (signInState.FocusPassword |> not) isSigningIn
                 (UserNameTextChanged >> dispatch) ignore ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             textBox theme signInState.PasswordKey signInState.PasswordText (iconPasswordSmall |> Some) true signInState.PasswordErrorText [] signInState.FocusPassword isSigningIn
@@ -216,7 +216,7 @@ let private renderUnauth (useDefaultTheme, unauthState, ticks) (dispatch:UnauthI
         | SquadsPage ->
             match unauthState.UnauthPageStates.SquadsState with
             | Some squadsState ->
-                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
+                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None) (SquadsInput >> UnauthPageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks) ]
@@ -256,7 +256,7 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
-             textBox theme changePasswordState.NewPasswordKey changePasswordState.NewPasswordText (iconPasswordSmall |> Some) true changePasswordState.NewPasswordErrorText []
+            textBox theme changePasswordState.NewPasswordKey changePasswordState.NewPasswordText (iconPasswordSmall |> Some) true changePasswordState.NewPasswordErrorText []
                 true isChangingPassword (NewPasswordTextChanged >> dispatch) ignore ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
              textBox theme changePasswordState.ConfirmPasswordKey changePasswordState.ConfirmPasswordText (iconPasswordSmall |> Some) true changePasswordState.ConfirmPasswordErrorText []
@@ -295,7 +295,7 @@ let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
         | UnauthPage SquadsPage ->
             match authState.UnauthPageStates.SquadsState with
             | Some squadsState ->
-                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authState.AuthUser |> Some, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
+                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authState.AuthUser |> Some) (SquadsInput >> UPageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)

@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.Users
 
-// Note: Users agent broadcasts UsersRead - and subscribes to UsersEventsRead.
+(* Broadcasts: UsersRead
+   Subscribes: UsersEventsRead *)
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Revision

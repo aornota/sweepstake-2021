@@ -1,6 +1,8 @@
 module Aornota.Sweepstake2018.Server.Agents.Persistence
 
-// Note: Persistence agent broadcasts UsersEventsRead | SquadsEventsRead | UserEventWritten | SquadEventWritten - and subscribes to nothing.
+(* Broadcasts: UsersEventsRead | UserEventWritten
+               SquadsEventsRead | SquadEventWritten
+   Subscribes: N/A *)
 
 open Aornota.Common.IfDebug
 open Aornota.Common.Json

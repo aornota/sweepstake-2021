@@ -133,23 +133,25 @@ let defaultSignInState userName signInStatus = {
     FocusPassword = match userName with | Some _ -> true | None -> false
     SignInStatus = signInStatus }
 
-let private defaultUnauthState currentPage (unauthPageStates:UnauthPageStates option) signInState state =
-    let currentPage = match currentPage with | Some currentPage -> currentPage | None -> NewsPage
+let private currentSquadId (squadsState:Squads.Common.State) = match squadsState.ProjectionState with | Active activeState -> activeState.CurrentSquadId | _ -> None
+
+let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) signInState state =
+    let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
     // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
-    let squadsState, squadsCmd =
+    let initializeSquadsState, currentSquadId =
         match unauthPageStates, currentPage with
         | Some unauthPageStates, _ ->
             match unauthPageStates.SquadsState, currentPage with
-            | Some squadsState, _ ->
-                squadsState |> Some, Cmd.none
-            | None, SquadsPage ->
-                let squadsState, squadsCmd = Squads.State.initialize ()
-                squadsState |> Some, squadsCmd
-            | None, _ -> None, Cmd.none
-        | None, SquadsPage ->
-            let squadsState, squadsCmd = Squads.State.initialize ()
+            | Some squadsState, _ -> true, (squadsState |> currentSquadId) // note: re-initialize to get "unauthenticated projection"
+            | None, SquadsPage -> true, None
+            | None, _ -> false, None
+        | None, SquadsPage -> true, None
+        | None, _ -> false, None
+    let squadsState, squadsCmd =
+        if initializeSquadsState then
+            let squadsState, squadsCmd = Squads.State.initialize None currentSquadId
             squadsState |> Some, squadsCmd
-        | None, _ -> None, Cmd.none
+        else None, Cmd.none
     let unauthState = {
         CurrentUnauthPage = currentPage
         UnauthPageStates = { NewsState = () ; SquadsState = squadsState }
@@ -170,20 +172,20 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
 let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageStates option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
     // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
-    let squadsState, squadsCmd =
+    let initializeSquadsState, currentSquadId =
         match unauthPageStates, currentPage with
         | Some unauthPageStates, _ ->
             match unauthPageStates.SquadsState, currentPage with
-            | Some squadsState, _ ->
-                squadsState |> Some, Cmd.none
-            | None, UnauthPage SquadsPage ->
-                let squadsState, squadsCmd = Squads.State.initialize ()
-                squadsState |> Some, squadsCmd
-            | None, _ -> None, Cmd.none
-        | None, UnauthPage SquadsPage ->
-            let squadsState, squadsCmd = Squads.State.initialize ()
+            | Some squadsState, _ -> true, (squadsState |> currentSquadId) // note: re-initialize to get "authenticated projection"
+            | None, UnauthPage SquadsPage -> true, None
+            | None, _ -> false, None
+        | None, UnauthPage SquadsPage -> true, None
+        | None, _ -> false, None
+    let squadsState, squadsCmd =
+        if initializeSquadsState then
+            let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
             squadsState |> Some, squadsCmd
-        | None, _ -> None, Cmd.none
+        else None, Cmd.none
     let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
     let authState = {
         AuthUser = authUser
@@ -319,13 +321,13 @@ let private handleSignOutResult (result:Result<unit, AuthCmdError<string>>) auth
     let toastCmd = "You have signed out" |> successToastCmd
     match authState.SigningOut, result with
     | true, Ok _ ->
-        let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
-        let state, cmd = state |> defaultUnauthState currentPage (authState.UnauthPageStates |> Some) None
+        let currentUnauthPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
+        let state, cmd = state |> defaultUnauthState currentUnauthPage (authState.UnauthPageStates |> Some) None
         state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; toastCmd ]
     | true, Error error ->
         let state, _ = ifDebug (state |> addDebugError (sprintf "SignOutCmdResult error -> %A" error) None) (state |> addError (unexpectedErrorWhen "signing out"), Cmd.none)
-        let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
-        let state, cmd = state |> defaultUnauthState currentPage (authState.UnauthPageStates |> Some) None
+        let currentUnauthPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
+        let state, cmd = state |> defaultUnauthState currentUnauthPage (authState.UnauthPageStates |> Some) None
         state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; toastCmd ]
     | false, _ ->
         state |> shouldNeverHappen (sprintf "Unexpected SignOutCmdResult when not SigningOut -> %A" result)
@@ -338,8 +340,8 @@ let private handleAutoSignOut autoSignOutReason authState state =
         | Some (PermissionsChanged false) -> state |> addWarningMessage (because "your permissions have been changed by a system administrator"), warningToastCmd
         | Some (PermissionsChanged true) -> state |> addDangerMessage (because "you are no longer permitted to access this system"), errorToastCmd
         | None -> state, infoToastCmd
-    let currentPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
-    let state, cmd = state |> defaultUnauthState currentPage (authState.UnauthPageStates |> Some) None
+    let currentUnauthPage = match authState.CurrentPage with | UnauthPage unauthPage -> unauthPage |> Some | AuthPage _ -> None
+    let state, cmd = state |> defaultUnauthState currentUnauthPage (authState.UnauthPageStates |> Some) None
     state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; "You have been automatically signed out" |> toastCmd ]
 
 let private handleServerAppMsg serverAppMsg state =
@@ -367,8 +369,8 @@ let private handleServerMsg serverMsg state =
         state, Cmd.none
     | ServerAppMsg serverAppMsg, _ ->
         state |> handleServerAppMsg serverAppMsg
-    | ServerSquadsMsg (InitializeSquadsProjectionQryResult result), Unauth _ ->
-        state, result |> InitializeSquadsProjectionQryResult |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerSquadsMsg (InitializeSquadsProjectionUnauthQryResult result), Unauth _ ->
+        state, result |> InitializeSquadsProjectionUnauthQryResult |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
     | ServerSquadsMsg _, Unauth _ -> // note: silently ignore other ServerSquadsMsg if Unauth
         state, Cmd.none
     | ServerSquadsMsg serverSquadsMsg, Auth _ ->
@@ -402,7 +404,7 @@ let private handleUnauthInput unauthInput unauthState state =
             let squadsState, squadsCmd =
                 match unauthPage, unauthState.UnauthPageStates.SquadsState with
                 | SquadsPage, None ->
-                    let squadsState, squadsCmd = Squads.State.initialize ()
+                    let squadsState, squadsCmd = Squads.State.initialize None None
                     squadsState |> Some, squadsCmd
                 | _, _ -> unauthState.UnauthPageStates.SquadsState, Cmd.none
             let unauthPageStates = { unauthState.UnauthPageStates with SquadsState = squadsState }
@@ -460,7 +462,7 @@ let private handleAuthInput authInput authState state =
     match authInput, authState.ChangePasswordState, authState.SigningOut with
     | ShowPage page, None, false ->
         if authState.CurrentPage <> page then
-            match page, authState.AuthUser.Permissions.UserAdministrationPermissions with
+            match page, authState.AuthUser.Permissions.UserAdminPermissions with
             | AuthPage UserAdministrationPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
                 let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None"
                 state, cmd, false
@@ -469,7 +471,7 @@ let private handleAuthInput authInput authState state =
                 let squadsState, squadsCmd =
                     match page, authState.UnauthPageStates.SquadsState with
                     | UnauthPage SquadsPage, None ->
-                        let squadsState, squadsCmd = Squads.State.initialize ()
+                        let squadsState, squadsCmd = Squads.State.initialize (authState.AuthUser |> Some) None
                         squadsState |> Some, squadsCmd
                     | _, _ -> authState.UnauthPageStates.SquadsState, Cmd.none
                 let chatCmd =

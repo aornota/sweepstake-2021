@@ -115,7 +115,7 @@ let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
                 if activeState.MoreChatMessagesPending then
                     [ br ; [ str "Retrieving more chat messages... " ; icon iconSpinnerPulseSmall ] |> para theme paraMore ]
                 else if activeState.HasMoreChatMessages then
-                    [ br ; [ [ str "More chat messages..." ] |> link theme (ClickableLink (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
+                    [ br ; [ [ str "More chat messages" ] |> link theme (ClickableLink (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
                 else []
             yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
                 yield textArea theme newChatMessageId newMessageText newChatMessage.NewMessageErrorText helpInfo (hasModal |> not) false (NewMessageTextChanged >> dispatch)
