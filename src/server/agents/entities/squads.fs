@@ -36,12 +36,12 @@ type private UsersInput =
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleChangePlayerTypeCmd of token : AddOrEditPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
-    | HandleWithdrawPlayerCmd of token : WithdrawPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId // TODO-NMB-MEDIUM: dateWithdrawn?...
+    | HandleWithdrawPlayerCmd of token : WithdrawPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleEliminateSquadCmd of token : EliminateSquadToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn 
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
 
-type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn?...
+type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
 
 type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; Players : Dictionary<PlayerId, Player> }
 
@@ -55,7 +55,7 @@ let private logResult source successText result =
     | Error error -> sprintf "%s Error -> %A" source error |> Danger |> log
 
 let private nonWithdrawnCount (players:Dictionary<PlayerId, Player>) =
-    players |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> player.Withdrawn |> not) |> List.length
+    players |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> match player.PlayerStatus with | Active -> true | Withdrawn _ -> false) |> List.length
 
 let private applySquadEvent source idAndSquadResult (nextRvn, squadEvent:SquadEvent) =
     let otherError errorText = otherError (sprintf "%s#applySquadEvent" source) errorText
@@ -78,7 +78,7 @@ let private applySquadEvent source idAndSquadResult (nextRvn, squadEvent:SquadEv
         else if playerId |> squad.Players.ContainsKey then // note: should never happen
             ifDebug (sprintf "%A already exists for %A -> %A" playerId squadId squadEvent) UNEXPECTED_ERROR |> otherError
         else 
-            (playerId, { PlayerName = playerName ; PlayerType = playerType ; Withdrawn = false }) |> squad.Players.Add
+            (playerId, { PlayerName = playerName ; PlayerType = playerType ; PlayerStatus = Active }) |> squad.Players.Add
             (squadId, { squad with Rvn = nextRvn } |> Some) |> Ok
     | Ok (squadId, Some squad), PlayerNameChanged (_, playerId, playerName) ->
         if playerId |> squad.Players.ContainsKey |> not then // note: should never happen
@@ -94,12 +94,12 @@ let private applySquadEvent source idAndSquadResult (nextRvn, squadEvent:SquadEv
             let player = squad.Players.[playerId]
             squad.Players.[playerId] <- { player with PlayerType = playerType }
             (squadId, { squad with Rvn = nextRvn } |> Some) |> Ok
-    | Ok (squadId, Some squad), PlayerWithdrawn (_, playerId) ->
+    | Ok (squadId, Some squad), PlayerWithdrawn (_, playerId, dateWithdrawn) ->
         if playerId |> squad.Players.ContainsKey |> not then // note: should never happen
             ifDebug (sprintf "%A does not exist for %A -> %A" playerId squadId squadEvent) UNEXPECTED_ERROR |> otherError
         else 
             let player = squad.Players.[playerId]
-            squad.Players.[playerId] <- { player with Withdrawn = true } // TODO-NMB-MEDIUM: dateWithdrawn?...
+            squad.Players.[playerId] <- { player with PlayerStatus = dateWithdrawn |> Withdrawn }
             (squadId, { squad with Rvn = nextRvn } |> Some) |> Ok
     | Ok (squadId, Some squad), SquadEliminated _ ->
         (squadId, { squad with Rvn = nextRvn ; Eliminated = true } |> Some) |> Ok
@@ -183,7 +183,7 @@ type Squads () =
                             squad.Players
                             |> List.ofSeq
                             |> List.map (fun (KeyValue (playerId, player)) ->
-                                { PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; Withdrawn = player.Withdrawn }) // TODO-NMB-MEDIUM: dateWithdrawn?...
+                                { PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; PlayerStatus = player.PlayerStatus })
                         { SquadId = squadId ; Rvn = squad.Rvn ; SquadName = squad.SquadName ; Group = squad.Group ; Seeding = squad.Seeding ; CoachName = squad.CoachName ; Eliminated = squad.Eliminated ; PlayersRead = playersRead })
                 squadsRead |> SquadsRead |> broadcaster.Broadcast       
                 return! managingSquads squads
@@ -290,7 +290,7 @@ type Squads () =
                 result |> discardOk |> reply.Reply
                 match result with | Ok (squadId, squad) -> squads.[squadId] <- squad | Error _ -> ()
                 return! managingSquads squads
-            | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) -> // TODO-NMB-MEDIUM: dateWithdrawn?...
+            | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) ->
                 let source = "HandleWithdrawPlayerCmd"
                 sprintf "%s for %A (%A) when managingSquads (%i squads/s)" source squadId playerId squads.Count |> Verbose |> log
                 let result =
@@ -300,10 +300,12 @@ type Squads () =
                         | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
                         | Error error -> error |> Error)
                     |> Result.bind (fun (squadId, squad, playerId, player) ->
-                        if player.Withdrawn |> not then (squadId, squad, playerId, player) |> Ok
-                        else "Player has already been withdrawn" |> otherCmdError source)
+                        match player.PlayerStatus with
+                        | Active -> (squadId, squad, playerId, player) |> Ok
+                        | Withdrawn _ -> "Player has already been withdrawn" |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId, _) ->
-                        (squadId, playerId) |> PlayerWithdrawn |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
+                        // TODO-SOON: Change "None" to "(DateTimeOffset.UtcNow |> Some)" once all *final* squads have been entered...
+                        (squadId, playerId, None) |> PlayerWithdrawn |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn))
                 let! result = match result with | Ok (squad, rvn, squadEvent) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
@@ -346,7 +348,7 @@ type Squads () =
         (fun reply -> (token, auditUserId, squadId, currentRvn, playerId, playerName, reply) |> HandleChangePlayerNameCmd) |> agent.PostAndAsyncReply
     member __.HandleChangePlayerTypeCmdAsync (token, auditUserId, squadId, currentRvn, playerId, playerType) =
         (fun reply -> (token, auditUserId, squadId, currentRvn, playerId, playerType, reply) |> HandleChangePlayerTypeCmd) |> agent.PostAndAsyncReply
-    member __.HandleWithdrawPlayerCmdAsync (token, auditUserId, squadId, currentRvn, playerId) = // TODO-NMB-MEDIUM: dateWithdrawn?...
+    member __.HandleWithdrawPlayerCmdAsync (token, auditUserId, squadId, currentRvn, playerId) =
         (fun reply -> (token, auditUserId, squadId, currentRvn, playerId, reply) |> HandleWithdrawPlayerCmd) |> agent.PostAndAsyncReply
     member __.HandleEliminateSquadCmdAsync (token, auditUserId, squadId, currentRvn) =
         (fun reply -> (token, auditUserId, squadId, currentRvn, reply) |> HandleEliminateSquadCmd) |> agent.PostAndAsyncReply

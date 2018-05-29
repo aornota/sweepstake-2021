@@ -3,6 +3,7 @@ module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 open Aornota.Common.IfDebug
 
 open Aornota.UI.Common.LazyViewOrHMR
+open Aornota.UI.Common.TimestampHelper
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -40,6 +41,12 @@ let private playerTypeRadios selectedPlayerType disabledPlayerType disableAll di
         radioInline (playerType |> playerTypeText) isSelected disabled onChange)
     |> List.collect id
 
+let private nonWithdrawnCount squad =
+    match squad with
+    | Some squad ->
+        squad.PlayerDic |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> match player.PlayerStatus with | PlayerStatus.Active -> true | Withdrawn _ -> false) |> List.length
+    | None -> 0
+
 let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayersState:AddPlayersState) dispatch =
     let theme = getTheme useDefaultTheme
     let squadId = addPlayersState.SquadId
@@ -52,7 +59,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
         | None -> "Add player/s" // note: should never happen
     let onDismiss = match addPlayersState.AddPlayerStatus with | Some AddPlayerPending -> None | Some _ | None -> (fun _ -> CancelAddPlayers |> dispatch) |> Some
     let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
-    let nonWithdrawnCount = match squad with | Some squad -> squad.PlayerDic |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> player.Withdrawn |> not) |> List.length | None -> 0
+    let nonWithdrawnCount = squad |> nonWithdrawnCount
     let squadIsFull = nonWithdrawnCount >= MAX_PLAYERS_PER_SQUAD
     let isAddingPlayer, addPlayerInteraction, onEnter =
         let addPlayer = (fun _ -> AddPlayer |> dispatch)
@@ -160,6 +167,40 @@ let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, cha
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change position" ] |> button theme { buttonLinkSmall with Interaction = changePlayerTypeInteraction } ] ]
     cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
 
+let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withdrawPlayerState:WithdrawPlayerState) dispatch =
+    let theme = getTheme useDefaultTheme
+    let squadId = withdrawPlayerState.SquadId
+    let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+    let playerId = withdrawPlayerState.PlayerId
+    let player = match squad with | Some squad -> (if playerId |> squad.PlayerDic.ContainsKey then squad.PlayerDic.[playerId] |> Some else None) | None -> None
+    let titleText =
+        match player with
+        | Some player ->
+            let (PlayerName playerName) = player.PlayerName
+            sprintf "Withdraw %s" playerName
+        | None -> "Withdraw player" // note: should never happen
+    let confirmInteraction, onDismiss =
+        let confirm = (fun _ -> ConfirmWithdrawPlayer |> dispatch)
+        let cancel = (fun _ -> CancelWithdrawPlayer |> dispatch)
+        match withdrawPlayerState.WithdrawPlayerStatus with
+        | Some WithdrawPlayerPending -> Loading, None
+        | Some (WithdrawPlayerFailed _) | None -> Clickable (confirm, None), cancel |> Some
+    let errorText = match withdrawPlayerState.WithdrawPlayerStatus with | Some (WithdrawPlayerFailed errorText) -> errorText |> Some | Some WithdrawPlayerPending | None -> None
+    let warning = [
+        [ str "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmallest
+        [ str "Please note that this action is irreversible" ] |> para theme paraCentredSmallest ]
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield notification theme notificationWarning warning
+        yield br
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            [ str "Withdraw player" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
+    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+
 let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, eliminateSquadState:EliminateSquadState) dispatch =
     let theme = getTheme useDefaultTheme
     let squadId = eliminateSquadState.SquadId
@@ -214,7 +255,7 @@ let private scoreText score =
     let scoreText = sprintf "%i" score
     if score > 0 then bold scoreText else str scoreText
 
-let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = // TODO-NEXT: Enable elimination in release builds...
+let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
     let theme = getTheme useDefaultTheme
     let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
     let canEliminate =
@@ -249,7 +290,7 @@ let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = /
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, authUser) dispatch = // TODO-NEXT: Enable withdraw in release builds...
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, authUser) dispatch = // TODO-SOON: Enable ShowWithdrawPlayerModal link in release builds...
     let theme = getTheme useDefaultTheme
     let canEdit, canWithdraw =
         match authUser with
@@ -269,12 +310,14 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             [ [ str "Change position" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
         else None
     let withdraw playerId player =
-        if canWithdraw && squad.Eliminated |> not && player.Withdrawn |> not then
+        let isWithdrawn, dateWithdrawn = match player.PlayerStatus with | PlayerStatus.Active -> false, None | Withdrawn dateWithdrawn -> true, dateWithdrawn
+        if canWithdraw && squad.Eliminated |> not && isWithdrawn |> not then
             let onClick = (fun _ -> (squadId, playerId) |> ShowWithdrawPlayerModal |> dispatch)
             let withdraw = [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick)
             ifDebug (withdraw |> Some) None // TEMP-NMB...
-        else if player.Withdrawn then
-            [ [ str "Withdrawn" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
+        else if isWithdrawn then
+            let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (ago dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
+            [ [ str withdrawnText ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
         else None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
@@ -306,7 +349,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
         else yield [ str "Player details coming soon" ] |> para theme paraCentredSmaller ]    
 
 let addPlayers theme squadId squad authUser dispatch =
-    let nonWithdrawnCount = squad.PlayerDic |> List.ofSeq |> List.filter (fun (KeyValue (_, player)) -> player.Withdrawn |> not) |> List.length
+    let nonWithdrawnCount = squad |> Some |> nonWithdrawnCount
     let paraAddPlayers = { paraDefaultSmallest with ParaAlignment = RightAligned }
     match squad.Eliminated, authUser with
     | false, Some authUser ->
@@ -348,16 +391,15 @@ let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
             | Some changePlayerTypeState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangePlayerTypeModal (useDefaultTheme, squadDic, changePlayerTypeState) (ChangePlayerTypeInput >> dispatch) ]
             | None -> ()
-
-            // TODO-NEXT: WithdrawPlayerState...
-            
+            match activeState.WithdrawPlayerState with
+            | Some withdrawPlayerState ->
+                yield div divDefault [ lazyViewOrHMR2 renderWithdrawPlayerModal (useDefaultTheme, squadDic, withdrawPlayerState) (WithdrawPlayerInput >> dispatch) ]
+            | None -> ()           
             match activeState.EliminateSquadState with
             | Some eliminateSquadState ->
                 yield div divDefault [ lazyViewOrHMR2 renderEliminateSquadModal (useDefaultTheme, squadDic, eliminateSquadState) (EliminateSquadInput >> dispatch) ]
             | None -> ()
-
             // TODO-NMB-MEDIUM: Search box (e.g. for drafting)?...
-
             yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             match squadTabs with
             | _ :: _ ->

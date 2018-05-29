@@ -39,7 +39,7 @@ let private defaultAddPlayersState squadId playerType addPlayerStatus resultRvn 
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
-let private player (playerDto:PlayerDto) = { PlayerName = playerDto.PlayerName ; PlayerType = playerDto.PlayerType ; Withdrawn = playerDto.Withdrawn }
+let private player (playerDto:PlayerDto) = { PlayerName = playerDto.PlayerName ; PlayerType = playerDto.PlayerType ; PlayerStatus = playerDto.PlayerStatus }
 
 let private squad (squadDto:SquadDto) =
     let playerDic = PlayerDic ()
@@ -170,6 +170,25 @@ let private handleChangePlayerTypeCmdResult (result:Result<unit, AuthCmdError<st
     | _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeCmdResult when ChangePlayerTypeState is None -> %A" result)
 
+let private handleWithdrawPlayerCmdResult (result:Result<unit, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
+    match activeState.WithdrawPlayerState with
+    | Some withdrawPlayerState ->
+        match withdrawPlayerState.WithdrawPlayerStatus with
+        | Some WithdrawPlayerPending ->
+            match result with
+            | Ok _ ->
+                let activeState = { activeState with WithdrawPlayerState = None }
+                { state with ProjectionState = Active activeState }, Cmd.none
+            | Error error ->
+                let errorText = ifDebug (sprintf "WithdrawPlayerCmdResult error -> %A" error) (error |> cmdErrorText)
+                let withdrawPlayerState = { withdrawPlayerState with WithdrawPlayerStatus = errorText |> WithdrawPlayerFailed |> Some }
+                let activeState = { activeState with WithdrawPlayerState = withdrawPlayerState |> Some }
+                { state with ProjectionState = Active activeState }, "Unable to withdraw player" |> errorToastCmd
+        | Some (WithdrawPlayerFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected WithdrawPlayerCmdResult when WithdrawPlayerStatus is not WithdrawPlayerPending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected WithdrawPlayerCmdResult when WithdrawPlayerState is None -> %A" result)
+
 let private handleEliminateSquadCmdResult (result:Result<unit, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
     match activeState.EliminateSquadState with
     | Some eliminateSquadState ->
@@ -199,6 +218,7 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
             AddPlayersState = None
             ChangePlayerNameState = None
             ChangePlayerTypeState = None
+            WithdrawPlayerState = None
             EliminateSquadState = None }
         { state with ProjectionState = Active activeState }, Cmd.none
     | InitializeSquadsProjectionUnauthQryResult (Error (OtherError errorText)), Initializing _ ->
@@ -211,6 +231,7 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
             AddPlayersState = None
             ChangePlayerNameState = None
             ChangePlayerTypeState = None
+            WithdrawPlayerState = None
             EliminateSquadState = None }
         { state with ProjectionState = Active activeState }, Cmd.none
     | InitializeSquadsProjectionAuthQryResult (Error error), Initializing _ ->
@@ -221,9 +242,8 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
         state |> handleChangePlayerNameCmdResult result activeState
     | ChangePlayerTypeCmdResult result, Active activeState ->
         state |> handleChangePlayerTypeCmdResult result activeState
-
-    // TODO-NEXT: WithdrawPlayerCmdResult...
-
+    | WithdrawPlayerCmdResult result, Active activeState ->
+        state |> handleWithdrawPlayerCmdResult result activeState
     | EliminateSquadCmdResult result, Active activeState ->
         state |> handleEliminateSquadCmdResult result activeState
     | SquadsProjectionMsg (SquadsDeltaMsg (deltaRvn, squadOnlyDtoDelta)), Active activeState ->
@@ -375,6 +395,26 @@ let handleChangePlayerTypeInput changePlayerTypeInput activeState state : State 
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeInput when ChangePlayerTypeState is None -> %A" changePlayerTypeInput), false
 
+let handleWithdrawPlayerInput withdrawPlayer activeState state : State * Cmd<Input> * bool =
+    match withdrawPlayer, activeState.WithdrawPlayerState with
+    | ConfirmWithdrawPlayer, Some withdrawPlayerState ->
+        let withdrawPlayerState = { withdrawPlayerState with WithdrawPlayerStatus = WithdrawPlayerPending |> Some }   
+        let activeState = { activeState with WithdrawPlayerState = withdrawPlayerState |> Some }
+        let squadId, squadDic = withdrawPlayerState.SquadId, activeState.SquadsProjection.SquadDic
+        let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
+        let currentRvn = match squad with | Some squad -> squad.Rvn | None -> initialRvn
+        let cmd = (squadId, currentRvn, withdrawPlayerState.PlayerId) |> WithdrawPlayerCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        { state with ProjectionState = Active activeState }, cmd, true
+    | CancelWithdrawPlayer, Some withdrawPlayerState ->
+        match withdrawPlayerState.WithdrawPlayerStatus with
+        | Some WithdrawPlayerPending ->
+            state, shouldNeverHappenCmd "Unexpected CancelWithdrawPlayer when WithdrawPlayerPending", false
+        | Some (WithdrawPlayerFailed _) | None ->
+            let activeState = { activeState with WithdrawPlayerState = None }
+            { state with ProjectionState = Active activeState }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected WithdrawPlayerInput when WithdrawPlayerState is None -> %A" withdrawPlayer), false
+
 let handleEliminateSquadInput eliminateSquadInput activeState state : State * Cmd<Input> * bool =
     match eliminateSquadInput, activeState.EliminateSquadState with
     | ConfirmEliminateSquad, Some eliminateSquadState ->
@@ -431,12 +471,12 @@ let transition input authUser state =
             { state with ProjectionState = Active activeState }, Cmd.none, true
         | ChangePlayerTypeInput changePlayerTypeInput, Active activeState ->
             state |> handleChangePlayerTypeInput changePlayerTypeInput activeState
-
         | ShowWithdrawPlayerModal (squadId, playerId), Active activeState -> // note: no need to check for unknown SquadId / PlayerId (should never happen)
-            // TODO-NEXT...
-            state, "Not yet implemented" |> warningToastCmd, true
-        //| WithdrawPlayerInput...
-
+            let withdrawPlayerState = { SquadId = squadId ; PlayerId = playerId ; WithdrawPlayerStatus = None }
+            let activeState = { activeState with WithdrawPlayerState = withdrawPlayerState |> Some }
+            { state with ProjectionState = Active activeState }, Cmd.none, true
+        | WithdrawPlayerInput withdrawPlayerInput, Active activeState ->
+            state |> handleWithdrawPlayerInput withdrawPlayerInput activeState
         | ShowEliminateSquadModal squadId, Active activeState -> // note: no need to check for unknown SquadId (should never happen)
             let eliminateSquadState = { SquadId = squadId ; EliminateSquadStatus = None }
             let activeState = { activeState with EliminateSquadState = eliminateSquadState |> Some }

@@ -204,7 +204,7 @@ let private renderNews useDefaultTheme =
 // ...NMB-TEMP
 
 let private renderUnauth (useDefaultTheme, unauthState, ticks) (dispatch:UnauthInput -> unit) =
-    let hasModal = match unauthState.SignInState with | Some _ -> true | None -> false
+    let _hasModal = match unauthState.SignInState with | Some _ -> true | None -> false
     div divDefault [
         match unauthState.SignInState with
         | Some signInState ->

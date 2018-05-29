@@ -34,7 +34,7 @@ type private SquadsInput =
     | OnPlayerAdded of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
     | OnPlayerNameChanged of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * playerName : PlayerName
     | OnPlayerTypeChanged of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * playerType : PlayerType
-    | OnPlayerWithdrawn of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId // TODO-NMB-MEDIUM: dateWithdrawn?...
+    | OnPlayerWithdrawn of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * dateWithdrawn : DateTimeOffset option
     | OnSquadEliminated of squadId : SquadId * squadRvn : Rvn
     | RemoveConnection of connectionId : ConnectionId
     | HandleInitializeSquadsProjectionUnauthQry of connectionId : ConnectionId
@@ -42,7 +42,7 @@ type private SquadsInput =
     | HandleInitializeSquadsProjectionAuthQry of token : SquadsProjectionAuthQryToken * connectionId : ConnectionId * userId : UserId
         * reply : AsyncReplyChannel<Result<SquadsProjectionDto, AuthQryError<string>>>
 
-type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn? draftedBy? pickedBy? score?...
+type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: draftedBy? pickedBy? score?...
 type private PlayerDic = Dictionary<PlayerId, Player>
 
 type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic }
@@ -72,13 +72,15 @@ let private logResult source successText result =
 
 let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
 
-let private playerDto (playerId, player:Player) : PlayerDto = { PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; Withdrawn = player.Withdrawn }
+let private playerDto (playerId, player:Player) =
+    match player.PlayerStatus with
+    | Active | Withdrawn (Some _) -> { PlayerDto.PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; PlayerStatus = player.PlayerStatus } |> Some
+    | Withdrawn None -> None
 
 let private playerDtoDic (playerDic:PlayerDic) =
     let playerDtoDic = PlayerDtoDic ()
     playerDic |> List.ofSeq |> List.iter (fun (KeyValue (playerId, player)) ->
-        let playerDto = (playerId, player) |> playerDto
-        (playerDto.PlayerId, playerDto) |> playerDtoDic.Add)
+        match (playerId, player) |> playerDto with | Some playerDto -> (playerDto.PlayerId, playerDto) |> playerDtoDic.Add | None -> ())
     playerDtoDic
 
 let private squadOnlyDto (squadId, squad:Squad) =
@@ -92,7 +94,7 @@ let private squadOnlyDtoDic (squadDic:SquadDic) =
     squadOnlyDtoDic
 
 let private squadDto (squadId, squad:Squad) =
-    let playerDtos = squad.PlayerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player) |> playerDto)
+    let playerDtos = squad.PlayerDic |> List.ofSeq |> List.choose (fun (KeyValue (playerId, player)) -> (playerId, player) |> playerDto)
     { SquadOnlyDto = (squadId, squad) |> squadOnlyDto ; PlayerDtos = playerDtos }
 
 let private squadsProjectionDto (_userId:UserId option) (state:State) =
@@ -193,7 +195,7 @@ type Squads () =
                 squadsRead |> List.iter (fun squadRead ->
                     let playerDic = PlayerDic ()
                     squadRead.PlayersRead |> List.iter (fun playerRead ->
-                        let player = { PlayerName = playerRead.PlayerName ; PlayerType = playerRead.PlayerType ; Withdrawn = playerRead.Withdrawn }
+                        let player = { PlayerName = playerRead.PlayerName ; PlayerType = playerRead.PlayerType ; PlayerStatus = playerRead.PlayerStatus }
                         (playerRead.PlayerId, player) |> playerDic.Add)
                     let squad = {
                         Rvn = squadRead.Rvn ; SquadName = squadRead.SquadName ; Group = squadRead.Group ; Seeding = squadRead.Seeding ; CoachName = squadRead.CoachName
@@ -223,7 +225,7 @@ type Squads () =
                         let squad = squadDic.[squadId]
                         let playerDic = squad.PlayerDic
                         if playerId |> playerDic.ContainsKey |> not then // note: silently ignore already-known playerId (should never happen)
-                            (playerId, { PlayerName = playerName ; PlayerType = playerType ; Withdrawn = false }) |> playerDic.Add
+                            (playerId, { PlayerName = playerName ; PlayerType = playerType ; PlayerStatus = Active }) |> playerDic.Add
                             (squadId, squadRvn, playerDic, state) |> PlayerChange |> updateState source projecteeDic
                         else state
                     else state
@@ -256,7 +258,7 @@ type Squads () =
                         else state
                     else state
                 return! projectingSquads (state, squadDic, projecteeDic)
-            | OnPlayerWithdrawn (squadId, squadRvn, playerId) ->
+            | OnPlayerWithdrawn (squadId, squadRvn, playerId, dateWithdrawn) ->
                 let source = "OnPlayerWithdrawn"
                 sprintf "%s (%A %A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn playerId squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
@@ -265,7 +267,7 @@ type Squads () =
                         let playerDic = squad.PlayerDic
                         if playerId |> playerDic.ContainsKey then // note: silently ignore unknown playerId (should never happen)
                             let player = playerDic.[playerId]
-                            playerDic.[playerId] <- { player with Withdrawn = false }
+                            playerDic.[playerId] <- { player with PlayerStatus = dateWithdrawn |> Withdrawn }
                             (squadId, squadRvn, playerDic, state) |> PlayerChange |> updateState source projecteeDic
                         else state
                     else state
@@ -322,7 +324,7 @@ type Squads () =
                 | PlayerAdded (squadId, playerId, playerName, playerType) -> (squadId, rvn, playerId, playerName, playerType) |> OnPlayerAdded |> agent.Post
                 | PlayerNameChanged (squadId, playerId, playerName) -> (squadId, rvn, playerId, playerName) |> OnPlayerNameChanged |> agent.Post
                 | PlayerTypeChanged (squadId, playerId, playerType) -> (squadId, rvn, playerId, playerType) |> OnPlayerTypeChanged |> agent.Post
-                | PlayerWithdrawn (squadId, playerId) -> (squadId, rvn, playerId) |> OnPlayerWithdrawn |> agent.Post
+                | PlayerWithdrawn (squadId, playerId, dateWithdrawn) -> (squadId, rvn, playerId, dateWithdrawn) |> OnPlayerWithdrawn |> agent.Post
                 | SquadEliminated squadId -> (squadId, rvn) |> OnSquadEliminated |> agent.Post
                 | _ -> ()
             | Disconnected connectionId -> connectionId |> RemoveConnection |> agent.Post

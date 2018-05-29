@@ -27,6 +27,10 @@ type ChangePlayerTypeInput =
     | ChangePlayerType
     | CancelChangePlayerType
 
+type WithdrawPlayerInput =
+    | ConfirmWithdrawPlayer
+    | CancelWithdrawPlayer
+
 type EliminateSquadInput =
     | ConfirmEliminateSquad
     | CancelEliminateSquad
@@ -45,11 +49,11 @@ type Input =
     | ShowChangePlayerTypeModal of squadId : SquadId * playerId : PlayerId
     | ChangePlayerTypeInput of changePlayerTypeInput : ChangePlayerTypeInput
     | ShowWithdrawPlayerModal of squadId : SquadId * playerId : PlayerId
-    //| WithdrawPlayerInput...
+    | WithdrawPlayerInput of withdrawPlayerInput : WithdrawPlayerInput
     | ShowEliminateSquadModal of squadId : SquadId
     | EliminateSquadInput of eliminateSquadInput : EliminateSquadInput
 
-type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn? draftedBy? pickedBy? score?...
+type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: draftedBy? pickedBy? score?...
 type PlayerDic = Dictionary<PlayerId, Player>
 
 type Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic }
@@ -91,6 +95,15 @@ type ChangePlayerTypeState = {
     PlayerType : PlayerType option
     ChangePlayerTypeStatus : ChangePlayerTypeStatus option }
 
+type WithdrawPlayerStatus =
+    | WithdrawPlayerPending
+    | WithdrawPlayerFailed of errorText : string
+
+type WithdrawPlayerState = {
+    SquadId : SquadId
+    PlayerId : PlayerId
+    WithdrawPlayerStatus : WithdrawPlayerStatus option }
+
 type EliminateSquadStatus =
     | EliminateSquadPending
     | EliminateSquadFailed of errorText : string
@@ -105,6 +118,7 @@ type ActiveState = {
     AddPlayersState : AddPlayersState option
     ChangePlayerNameState : ChangePlayerNameState option
     ChangePlayerTypeState : ChangePlayerTypeState option
+    WithdrawPlayerState : WithdrawPlayerState option
     EliminateSquadState : EliminateSquadState option }
 
 type ProjectionState =

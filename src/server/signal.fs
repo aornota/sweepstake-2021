@@ -13,7 +13,7 @@ open Aornota.Sweepstake2018.Server.Events.UserEvents
 
 type UserRead = { UserId : UserId ; Rvn : Rvn ; UserName : UserName ; UserType : UserType }
 
-type PlayerRead = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; Withdrawn : bool } // TODO-NMB-MEDIUM: dateWithdrawn?...
+type PlayerRead = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
 type SquadRead = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayersRead : PlayerRead list }
 
 type Signal =

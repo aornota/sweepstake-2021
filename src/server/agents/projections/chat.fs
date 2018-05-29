@@ -296,7 +296,7 @@ type Chat () =
                         else sprintf "%s throttled for %A" source userId |> Info |> log
                         throttled |> not
                     else false
-                let state = (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic
+                let state = if updated then (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic else state
                 return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
