@@ -6,6 +6,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Squads
    Subscribes: SquadsRead
                SquadEventWritten (PlayerAdded | TODO:PlayerNameChanged? | TODO:PlayerTypeChanged? | TODO:PlayerWithdrawn? | TODO:SquadEliminated?)
                TODO:DraftEventWritten (...)?
+               TODO:UserEventWritten (...)?
                TODO:ConnectionsSignedOut?
                Disconnected *)
 
