@@ -48,7 +48,7 @@ let private chatProjection (chatProjectionDto:ChatProjectionDto) =
             (chatMessageDto.ChatMessageId, chatMessageDto |> chatMessage) |> chatMessageDic.Add)
     { Rvn = initialRvn ; ChatUserDic = chatUserDic ; ChatMessageDic = chatMessageDic }
 
-let private applyChatUserDelta currentRvn deltaRvn (delta:Delta<UserId, ChatUserDto>) (chatUserDic:ChatUserDic) =
+let private applyChatUsersDelta currentRvn deltaRvn (delta:Delta<UserId, ChatUserDto>) (chatUserDic:ChatUserDic) =
     let chatUserDic = ChatUserDic chatUserDic // note: copy to ensure that passed-in dictionary *not* modified if error
     if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
     |> Result.bind (fun _ ->
@@ -65,7 +65,7 @@ let private applyChatUserDelta currentRvn deltaRvn (delta:Delta<UserId, ChatUser
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> chatUserDic |> Ok)
 
-let private applyChatMessageDelta currentRvn deltaRvn (delta:Delta<ChatMessageId, ChatMessageDto>) (chatMessageDic:ChatMessageDic) =
+let private applyChatMessagesDelta currentRvn deltaRvn (delta:Delta<ChatMessageId, ChatMessageDto>) (chatMessageDic:ChatMessageDic) =
     let chatMessageDic = ChatMessageDic chatMessageDic // note: copy to ensure that passed-in dictionary *not* modified if error
     if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
     |> Result.bind (fun _ ->
@@ -110,7 +110,7 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
             let chatProjection = activeState.ChatProjection
             let addedChatMessageDtos = chatMessageDtos |> List.map (fun chatMessageDto -> chatMessageDto.ChatMessageId, chatMessageDto)
             let chatMessageDtoDelta = { Added = addedChatMessageDtos ; Changed = [] ; Removed = [] }
-            match chatProjection.ChatMessageDic |> applyChatMessageDelta chatProjection.Rvn rvn chatMessageDtoDelta with
+            match chatProjection.ChatMessageDic |> applyChatMessagesDelta chatProjection.Rvn rvn chatMessageDtoDelta with
             | Ok chatMessageDic ->
                 let chatProjection = { chatProjection with Rvn = rvn ; ChatMessageDic = chatMessageDic }
                 let activeState = { activeState with ChatProjection = chatProjection ; HasMoreChatMessages = hasMoreChatMessages ; MoreChatMessagesPending = false }
@@ -134,7 +134,7 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
         state, Cmd.batch [ cmd ; "sending chat message" |> unexpectedErrorWhen |> errorToastCmd ]
     | ChatProjectionMsg (ChatUsersDeltaMsg (deltaRvn, chatUserDtoDelta)), Active activeState ->
         let chatProjection = activeState.ChatProjection
-        match chatProjection.ChatUserDic |> applyChatUserDelta chatProjection.Rvn deltaRvn chatUserDtoDelta with
+        match chatProjection.ChatUserDic |> applyChatUsersDelta chatProjection.Rvn deltaRvn chatUserDtoDelta with
         | Ok chatUserDic ->
             let chatProjection = { chatProjection with Rvn = deltaRvn ; ChatUserDic = chatUserDic }
             let activeState = { activeState with ChatProjection = chatProjection }
@@ -145,7 +145,7 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | ChatProjectionMsg (ChatMessagesDeltaMsg (deltaRvn, chatMessageDtoDelta, hasMoreChatMessages)), Active activeState ->
         let chatProjection = activeState.ChatProjection
-        match chatProjection.ChatMessageDic |> applyChatMessageDelta chatProjection.Rvn deltaRvn chatMessageDtoDelta with
+        match chatProjection.ChatMessageDic |> applyChatMessagesDelta chatProjection.Rvn deltaRvn chatMessageDtoDelta with
         | Ok chatMessageDic ->
             let remove = activeState.UnconfirmedChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, _)) ->
                 if chatMessageId |> chatMessageDic.ContainsKey then chatMessageId |> Some else None)

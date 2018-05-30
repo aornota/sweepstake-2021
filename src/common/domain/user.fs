@@ -92,3 +92,6 @@ let validatePassword (Password password) =
     if String.IsNullOrWhiteSpace password then "Password must not be blank" |> Some
     else if (password.Trim ()).Length < 6 then "Password must be at least 6 characters" |> Some
     else None
+let validateConfirmPassword (Password newPassword) (Password confirmPassword) =
+    if newPassword <> confirmPassword then "Confirmation password must match new password" |> Some
+    else validatePassword (Password confirmPassword)

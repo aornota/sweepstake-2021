@@ -373,11 +373,92 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
-                (* TODO-NEXT:
-                    - UiAuthUserAdminMsg InitializeUserAdminProjectionQry...
-                    - UiAuthUserAdminMsg CreateUserCmd...
-                    - UiAuthUserAdminMsg ResetPasswordCmd [remember to autoSignOut PasswordReset [any SessionId / any ConnectionId], cf. SignOutCmd]...
-                    - UiAuthUserAdminMsg ChangeUserTypeCmd [remember to autoSignOut PermissionsChanged [any SessionId / any ConnectionId], cf. SignOutCmd]... *)
+                | UiAuthMsg (jwt, UiAuthUserAdminMsg InitializeUserAdminProjectionQry) ->
+                    let source = "InitializeUserAdminProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthQryError |> Error
+                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.UserAdminProjectionQryToken with
+                                | Some userAdminProjectionQryToken ->
+                                    (userAdminProjectionQryToken, connectionId) |> Projections.UserAdmin.userAdmin.HandleInitializeUserAdminProjectionQry
+                                | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeUserAdminProjectionQryResult |> ServerUserAdminMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun userAdminProjectionDto -> sprintf "%i user/s" userAdminProjectionDto.User4AdminDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthUserAdminMsg (CreateUserCmd (userId, userName, password, userType))) ->
+                    let source = "CreateUserCmd"
+                    sprintf "%s (%A %A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId userName userType connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.CreateUserToken with
+                                | Some createUserToken ->
+                                    (createUserToken, auditUserId, userId, userName, password, userType) |> Entities.Users.users.HandleCreateUserCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> CreateUserCmdResult |> ServerUserAdminMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthUserAdminMsg (ResetPasswordCmd (userId, currentRvn, password))) ->
+                    let source = "ResetPasswordCmd"
+                    sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.ResetPasswordToken with
+                                | Some resetPasswordToken ->
+                                    (resetPasswordToken, auditUserId, userId, currentRvn, password) |> Entities.Users.users.HandleResetPasswordCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ResetPasswordCmdResult |> ServerUserAdminMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        match result with
+                        | Ok _ -> do! (connectionDic, signedInUserDic) |> autoSignOut (PasswordReset |> Some) userId None None
+                        | Error _ -> () })
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthUserAdminMsg (ChangeUserTypeCmd (userId, currentRvn, userType))) ->
+                    let source = "ChangeUserTypeCmd"
+                    sprintf "%s (%A) for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userType userId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.ChangeUserTypeToken with
+                                | Some changeUserTypeToken ->
+                                    (changeUserTypeToken, auditUserId, userId, currentRvn, userType) |> Entities.Users.users.HandleChangeUserTypeCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ChangeUserTypeCmdResult |> ServerUserAdminMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        match result with
+                        | Ok _ -> do! (connectionDic, signedInUserDic) |> autoSignOut (userType = PersonaNonGrata |> PermissionsChanged |> Some) userId None None
+                        | Error _ -> () })
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 | UiAuthMsg (jwt, UiAuthSquadsMsg InitializeSquadsProjectionAuthQry) ->
                     let source = "InitializeSquadsProjectionAuthQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -401,16 +482,16 @@ type Connections () =
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (AddPlayerCmd (squadId, currentRvn, playerId, playerName, playerType))) ->
                     let source = "AddPlayerCmd"
                     sprintf "%s (%A %A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.AddOrEditPlayerToken with
                                 | Some addOrEditPlayerToken ->
-                                    (addOrEditPlayerToken, userId, squadId, currentRvn, playerId, playerName, playerType) |> Entities.Squads.squads.HandleAddPlayerCmdAsync
+                                    (addOrEditPlayerToken, auditUserId, squadId, currentRvn, playerId, playerName, playerType) |> Entities.Squads.squads.HandleAddPlayerCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> AddPlayerCmdResult |> ServerSquadsMsg
@@ -421,16 +502,16 @@ type Connections () =
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (ChangePlayerNameCmd (squadId, currentRvn, playerId, playerName))) ->
                     let source = "ChangePlayerNameCmd"
                     sprintf "%s (%A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.AddOrEditPlayerToken with
                                 | Some addOrEditPlayerToken ->
-                                    (addOrEditPlayerToken, userId, squadId, currentRvn, playerId, playerName) |> Entities.Squads.squads.HandleChangePlayerNameCmdAsync
+                                    (addOrEditPlayerToken, auditUserId, squadId, currentRvn, playerId, playerName) |> Entities.Squads.squads.HandleChangePlayerNameCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> ChangePlayerNameCmdResult |> ServerSquadsMsg
@@ -441,16 +522,16 @@ type Connections () =
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (ChangePlayerTypeCmd (squadId, currentRvn, playerId, playerType))) ->
                     let source = "ChangePlayerTypeCmd"
                     sprintf "%s (%A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.AddOrEditPlayerToken with
                                 | Some addOrEditPlayerToken ->
-                                    (addOrEditPlayerToken, userId, squadId, currentRvn, playerId, playerType) |> Entities.Squads.squads.HandleChangePlayerTypeCmdAsync
+                                    (addOrEditPlayerToken, auditUserId, squadId, currentRvn, playerId, playerType) |> Entities.Squads.squads.HandleChangePlayerTypeCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> ChangePlayerTypeCmdResult |> ServerSquadsMsg
@@ -461,16 +542,16 @@ type Connections () =
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (WithdrawPlayerCmd (squadId, currentRvn, playerId))) ->
                     let source = "WithdrawPlayerCmd"
                     sprintf "%s (%A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.WithdrawPlayerToken with
                                 | Some withdrawPlayerToken ->
-                                    (withdrawPlayerToken, userId, squadId, currentRvn, playerId) |> Entities.Squads.squads.HandleWithdrawPlayerCmdAsync
+                                    (withdrawPlayerToken, auditUserId, squadId, currentRvn, playerId) |> Entities.Squads.squads.HandleWithdrawPlayerCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> WithdrawPlayerCmdResult |> ServerSquadsMsg
@@ -481,16 +562,16 @@ type Connections () =
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (EliminateSquadCmd (squadId, currentRvn))) ->
                     let source = "EliminateSquadCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
-                            else signedInUserDic |> tokensForAuthCmdApi source true userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
                         let! result =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.EliminateSquadToken with
                                 | Some eliminateSquadToken ->
-                                    (eliminateSquadToken, userId, squadId, currentRvn) |> Entities.Squads.squads.HandleEliminateSquadCmdAsync
+                                    (eliminateSquadToken, auditUserId, squadId, currentRvn) |> Entities.Squads.squads.HandleEliminateSquadCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> EliminateSquadCmdResult |> ServerSquadsMsg

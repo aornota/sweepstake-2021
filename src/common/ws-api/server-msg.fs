@@ -7,6 +7,7 @@ open Aornota.Common.Revision
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2018.Common.Domain.UserAdmin
 
 open System
 
@@ -56,15 +57,15 @@ type ServerAppMsg =
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
 
-(*type UserAdminProjectionMsg =
-    | UserAdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, UserAdminDto>*)
+type UserAdminProjectionMsg =
+    | Users4AdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, User4AdminDto>
 
-(*type ServerUserAdminMsg =
+type ServerUserAdminMsg =
     | InitializeUserAdminProjectionQryResult of result : Result<UserAdminProjectionDto, AuthQryError<string>>
+    | CreateUserCmdResult of result : Result<UserName, AuthCmdError<string>>
+    | ResetPasswordCmdResult of result : Result<UserName, AuthCmdError<string>>
+    | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
-    | CreateUserCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    | ResetPasswordCmdResult of result : Result<unit, AuthCmdError<string>>
-    | ChangeUserTypeCmdResult of result : Result<unit, AuthCmdError<string>>*)
 
 type SquadsProjectionMsg =
     | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
@@ -73,11 +74,11 @@ type SquadsProjectionMsg =
 type ServerSquadsMsg =
     | InitializeSquadsProjectionUnauthQryResult of result : Result<SquadsProjectionDto, OtherError<string>>
     | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
-    | AddPlayerCmdResult of result : Result<Rvn, AuthCmdError<string>>
-    | ChangePlayerNameCmdResult of result : Result<unit, AuthCmdError<string>>
-    | ChangePlayerTypeCmdResult of result : Result<unit, AuthCmdError<string>>
-    | WithdrawPlayerCmdResult of result : Result<unit, AuthCmdError<string>>
-    | EliminateSquadCmdResult of result : Result<unit, AuthCmdError<string>>
+    | AddPlayerCmdResult of result : Result<Rvn * PlayerName, AuthCmdError<string>>
+    | ChangePlayerNameCmdResult of result : Result<PlayerName * PlayerName, AuthCmdError<string>>
+    | ChangePlayerTypeCmdResult of result : Result<PlayerName, AuthCmdError<string>>
+    | WithdrawPlayerCmdResult of result : Result<PlayerName, AuthCmdError<string>>
+    | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
 type ChatProjectionMsg =
@@ -95,7 +96,7 @@ type ServerChatMsg =
 type ServerMsg =
     | Waff
     | ServerAppMsg of serverAppMsg : ServerAppMsg
-    (*| ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg*)
+    | ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg
     | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 

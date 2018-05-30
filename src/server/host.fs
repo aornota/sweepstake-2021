@@ -64,7 +64,7 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 () |> Entities.Squads.squads.Start
 
 "starting Projections agents" |> Info |> log
-// TODO-NMB-HIGH...() |> Projections.UserAdministration.userAdministration.Start
+() |> Projections.UserAdmin.userAdmin.Start
 () |> Projections.Squads.squads.Start
 () |> Projections.Chat.chat.Start
 
@@ -75,7 +75,7 @@ readPersistedEvents ()
 serverStarted |> connections.Start
 
 (* TEMP-NMB: Finesse logging for development/debugging purposes... *)
-("development/debugging", function | Entity Entity.Squads | Projection Projection.Squads -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
+("development/debugging", function | Entity Entity.Users | Projection Projection.UserAdmin -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
 
 "ready" |> Info |> log
 

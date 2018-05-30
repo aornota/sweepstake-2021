@@ -23,11 +23,11 @@ type UiAuthAppMsg =
     | SignOutCmd
     | ChangePasswordCmd of currentRvn : Rvn * password : Password
 
-(*type UiAuthUserAdminMsg =
+type UiAuthUserAdminMsg =
     | InitializeUserAdminProjectionQry
     | CreateUserCmd of userId : UserId * userName : UserName * password : Password * userType : UserType
     | ResetPasswordCmd of userId : UserId * currentRvn : Rvn * password : Password
-    | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType*)
+    | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType
 
 type UiAuthSquadsMsg =
     | InitializeSquadsProjectionAuthQry
@@ -45,7 +45,7 @@ type UiAuthChatMsg =
 type UiAuthMsg =
     | UserNonApiActivity
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg
-    (*| UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg*)
+    | UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 

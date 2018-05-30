@@ -67,8 +67,8 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
         | Some AddPlayerPending -> true, Loading, ignore
         | Some (AddPlayerFailed _) | None ->
             match validatePlayerName playerNames (PlayerName addPlayersState.NewPlayerNameText), squadIsFull with
-            | Some _, _ | None, true  -> false, NotEnabled None, ignore
             | None, false -> false, Clickable (addPlayer, None), addPlayer
+            | _ -> false, NotEnabled None, ignore
     let errorText = match addPlayersState.AddPlayerStatus with | Some (AddPlayerFailed errorText) -> errorText |> Some | Some AddPlayerPending | None -> None
     let (PlayerId newPlayerKey) = addPlayersState.NewPlayerId
     let body = [
@@ -80,7 +80,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
             yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
             yield br
         | None -> ()
-        yield [ str "Please enter the name and position of the new player" ] |> para theme paraCentredSmaller
+        yield [ str "Please enter the name and position for the new player" ] |> para theme paraCentredSmaller
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
@@ -112,8 +112,8 @@ let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, cha
         | Some (ChangePlayerNameFailed _) | None ->
             let isSame = match currentPlayerName with | Some playerName -> playerName = (PlayerName changePlayerNameState.PlayerNameText) | None -> false
             match validatePlayerName playerNames (PlayerName changePlayerNameState.PlayerNameText), isSame with
-            | Some _, _ | None, true  -> false, NotEnabled None, ignore
             | None, false -> false, Clickable (changePlayerName, None), changePlayerName
+            | _ -> false, NotEnabled None, ignore
     let errorText = match changePlayerNameState.ChangePlayerNameStatus with | Some (ChangePlayerNameFailed errorText) -> errorText |> Some | Some ChangePlayerNamePending | None -> None
     let (PlayerId playerKey) = changePlayerNameState.PlayerId
     let body = [
@@ -159,7 +159,7 @@ let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, cha
             yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
             yield br
         | None -> ()
-        yield [ str "Please enter the new position for the player" ] |> para theme paraCentredSmaller
+        yield [ str "Please choose the new position for the player" ] |> para theme paraCentredSmaller
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
@@ -348,7 +348,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
                 tbody [ yield! playerRows ] ]
         else yield [ str "Player details coming soon" ] |> para theme paraCentredSmaller ]    
 
-let addPlayers theme squadId squad authUser dispatch =
+let private addPlayers theme squadId squad authUser dispatch =
     let nonWithdrawnCount = squad |> Some |> nonWithdrawnCount
     let paraAddPlayers = { paraDefaultSmallest with ParaAlignment = RightAligned }
     match squad.Eliminated, authUser with

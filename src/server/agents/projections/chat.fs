@@ -94,7 +94,7 @@ let private chatUserDtoDic (chatUserDic:ChatUserDic) =
 let private chatMessageDto (chatMessageId, chatMessage:ChatMessage) =
     { ChatMessageId = chatMessageId ; UserId = chatMessage.UserId ; MessageText = chatMessage.MessageText ; Timestamp = chatMessage.Timestamp }
 
-let private chatProjectionDto (state:State) =
+let private chatProjectionDto state =
     let chatUserDtos = state.ChatUserDic |> List.ofSeq |> List.choose (fun (KeyValue (userId, chatUser)) -> (userId, chatUser) |> chatUserDto)
     let chatMessageDtos = state.ChatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (chatMessageId, chatMessage)) -> (chatMessageId, chatMessage) |> chatMessageDto)
     { ChatUserDtos = chatUserDtos ; ChatMessageDtos = chatMessageDtos }
@@ -247,7 +247,7 @@ type Chat () =
                 sprintf "%s (%A %A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId userName userType chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 if userId |> chatUserDic.ContainsKey |> not then // note: silently ignore already-known userId (should never happen)
                     (userId, { UserName = userName ; UserType = userType ; LastActivity = None }) |> chatUserDic.Add
-                sprintf "%s when projectingChat -> %i chat users/s)" source chatUserDic.Count |> Info |> log
+                sprintf "%s when projectingChat -> %i chat user/s)" source chatUserDic.Count |> Info |> log
                 let state = (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic
                 return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
             | OnUserTypeChanged (userId, userType) ->

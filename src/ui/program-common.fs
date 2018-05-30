@@ -21,9 +21,9 @@ type UnauthPage =
     | SquadsPage
 
 type AuthPage =
+    | UserAdminPage
     | DraftsPage
     | ChatPage
-    | UserAdministrationPage
 
 type Page =
     | UnauthPage of unauthPage : UnauthPage
@@ -63,9 +63,9 @@ type UnauthInput =
     | SignInInput of signInInput : SignInInput
 
 type AuthPageInput =
+    | UserAdminInput of userAdminInput : UserAdmin.Common.Input
     | DraftsInput
     | ChatInput of chatInput : Chat.Common.Input
-    | UserAdministrationInput
 
 type PageInput =
     | UPageInput of unauthPageInput : UnauthPageInput
@@ -152,9 +152,9 @@ type ChangePasswordState = {
     ChangePasswordStatus : ChangePasswordStatus option }
 
 type AuthPageStates = {
+    UserAdminState : UserAdmin.Common.State option
     DraftsState : ToDo
-    ChatState : Chat.Common.State
-    UserAdministrationState : ToDo }
+    ChatState : Chat.Common.State }
 
 type AuthState = {
     AuthUser : AuthUser
@@ -185,7 +185,3 @@ type State = {
     AppState : AppState }
 
 let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (β)"
-
-let validateConfirmPassword (Password newPassword) (Password confirmPassword) = // TODO-NMB-MEDIUM: Move in order to share with, e.g., UserAdministrationPage
-    if newPassword <> confirmPassword then "Confirmation password must match new password" |> Some
-    else validatePassword (Password confirmPassword)

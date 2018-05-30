@@ -22,6 +22,7 @@ open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
+open Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
 open Aornota.Sweepstake2018.UI.Program.Common
 
 open System
@@ -133,7 +134,10 @@ let defaultSignInState userName signInStatus = {
     FocusPassword = match userName with | Some _ -> true | None -> false
     SignInStatus = signInStatus }
 
-let private currentSquadId (squadsState:Squads.Common.State) = match squadsState.ProjectionState with | Active activeState -> activeState.CurrentSquadId | _ -> None
+let private currentSquadId (squadsState:Squads.Common.State) =
+    match squadsState.ProjectionState with
+    | Squads.Common.ProjectionState.Active activeState -> activeState.CurrentSquadId
+    | _ -> None
 
 let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) signInState state =
     let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
@@ -186,21 +190,28 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
             let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
             squadsState |> Some, squadsCmd
         else None, Cmd.none
+    let initializeUserAdminState = currentPage = AuthPage UserAdminPage
+    let userAdminState, userAdminCmd =
+        if initializeUserAdminState then
+            let userAdminState, userAdminCmd = UserAdmin.State.initialize authUser
+            userAdminState |> Some, userAdminCmd
+        else None, Cmd.none
     let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
     let authState = {
         AuthUser = authUser
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
         UnauthPageStates = { NewsState = () ; SquadsState = squadsState }
-        AuthPageStates = { DraftsState = () ; ChatState = chatState ; UserAdministrationState = () }
+        AuthPageStates = { UserAdminState = userAdminState ; DraftsState = () ; ChatState = chatState }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
             | Some mustChangePasswordReason -> defaultChangePasswordState (mustChangePasswordReason |> Some) None |> Some
             | None -> None
         SigningOut = false }
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+    let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-    { state with AppState = Auth authState }, Cmd.batch [ squadsCmd ; chatCmd ]
+    { state with AppState = Auth authState }, Cmd.batch [ squadsCmd ; userAdminCmd ; chatCmd ]
 
 let initialize () =
     let state = {
@@ -375,6 +386,10 @@ let private handleServerMsg serverMsg state =
         state, Cmd.none
     | ServerSquadsMsg serverSquadsMsg, Auth _ ->
         state, serverSquadsMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerUserAdminMsg serverUserAdminMsg, Auth _ ->
+        state, serverUserAdminMsg |> ReceiveServerUserAdminMsg |> UserAdminInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerUserAdminMsg _, Unauth _ -> // note: silently ignore ServerUserAdminMsg if Unauth
+        state, Cmd.none
     | ServerChatMsg serverChatMsg, Auth _ ->
         state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | ServerChatMsg _, Unauth _ -> // note: silently ignore ServerChatMsg if Unauth
@@ -463,7 +478,7 @@ let private handleAuthInput authInput authState state =
     | ShowPage page, None, false ->
         if authState.CurrentPage <> page then
             match page, authState.AuthUser.Permissions.UserAdminPermissions with
-            | AuthPage UserAdministrationPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
+            | AuthPage UserAdminPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
                 let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None"
                 state, cmd, false
             | _, _ ->
@@ -474,16 +489,24 @@ let private handleAuthInput authInput authState state =
                         let squadsState, squadsCmd = Squads.State.initialize (authState.AuthUser |> Some) None
                         squadsState |> Some, squadsCmd
                     | _, _ -> authState.UnauthPageStates.SquadsState, Cmd.none
+                let userAdminState, userAdminCmd =
+                    match page, authState.AuthPageStates.UserAdminState with
+                    | AuthPage UserAdminPage, None ->
+                        let userAdminState, userAdminCmd = UserAdmin.State.initialize authState.AuthUser
+                        userAdminState |> Some, userAdminCmd
+                    | _, _ -> authState.AuthPageStates.UserAdminState, Cmd.none
                 let chatCmd =
                     if page <> AuthPage ChatPage && authState.CurrentPage = AuthPage ChatPage then false |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else if page = AuthPage ChatPage && authState.CurrentPage <> AuthPage ChatPage then true |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else Cmd.none
                 let unauthPageStates = { authState.UnauthPageStates with SquadsState = squadsState }
-                let authState = { authState with CurrentPage = page ; UnauthPageStates = unauthPageStates }
+                let authPageStates = { authState.AuthPageStates with UserAdminState = userAdminState }
+                let authState = { authState with CurrentPage = page ; UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates }
                 let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+                let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let state = { state with AppState = Auth authState }
-                state, Cmd.batch [ squadsCmd ; chatCmd ; state |> writePreferencesCmd ], true
+                state, Cmd.batch [ squadsCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
         else state, Cmd.none, true
     | PageInput (UPageInput NewsInput), None, false ->
         let state, cmd = state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
@@ -509,6 +532,21 @@ let private handleAuthInput authInput authState state =
     | PageInput (APageInput DraftsInput), None, false ->
         let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
         state, cmd, false
+    | PageInput (APageInput (UserAdminInput (UserAdmin.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (APageInput (UserAdminInput (UserAdmin.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
+        let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
+    | PageInput (APageInput (UserAdminInput userAdminInput)), _, _ ->
+        match authState.AuthPageStates.UserAdminState with
+        | Some userAdminState ->
+            let userAdminState, userAdminCmd, isUserNonApiActivity = userAdminState |> UserAdmin.State.transition userAdminInput
+            let authPageStates = { authState.AuthPageStates with UserAdminState = userAdminState |> Some }
+            let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+            { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, userAdminCmd, isUserNonApiActivity
+        | None ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected UserAdminInput when AuthPageStates.UserAdminState is None"
+            state, cmd, false
     | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false ->
@@ -521,9 +559,6 @@ let private handleAuthInput authInput authState state =
         let authPageStates = { authState.AuthPageStates with ChatState = chatState }
         let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
         { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, chatCmd, isUserNonApiActivity
-    | PageInput (APageInput UserAdministrationInput), None, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected UserAdministrationInput -> NYI"
-        state, cmd, false
     | ShowChangePasswordModal, None, false ->
         let authState = { authState with ChangePasswordState = defaultChangePasswordState None None |> Some }
         { state with AppState = Auth authState }, Cmd.none, true

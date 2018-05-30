@@ -23,7 +23,7 @@ let [<Literal>] private RECENTLY_ACTIVE = 5.<minute>
 
 let private cutoff (after:int<second>) = float (after * -1) |> DateTimeOffset.UtcNow.AddSeconds
 
-let private (|Self|RecentlyActive|SignedIn|NotSignedIn|) (authUserId:UserId, (userId:UserId, chatUser:ChatUser)) =
+let private (|Self|RecentlyActive|SignedIn|NotSignedIn|) (authUserId:UserId, (userId:UserId, chatUser)) =
     if userId = authUserId then Self
     else
         match chatUser.LastActivity with

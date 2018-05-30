@@ -4,7 +4,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Squads
 
 (* Broadcasts: SendMsg
    Subscribes: SquadsRead
-               SquadEventWritten (PlayerAdded | TODO:PlayerNameChanged? | TODO:PlayerTypeChanged? | TODO:PlayerWithdrawn? | TODO:SquadEliminated?)
+               SquadEventWritten (PlayerAdded | PlayerNameChanged | PlayerTypeChanged | PlayerWithdrawn | SquadEliminated)
                TODO:DraftEventWritten (...)?
                TODO:UserEventWritten (...)?
                TODO:ConnectionsSignedOut?
@@ -70,8 +70,6 @@ let private logResult source successText result =
         sprintf "%s Ok%s" source successText |> Info |> log
     | Error error -> sprintf "%s Error -> %A" source error |> Danger |> log
 
-let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
-
 let private playerDto (playerId, player:Player) =
     match player.PlayerStatus with
     | Active | Withdrawn (Some _) -> { PlayerDto.PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; PlayerStatus = player.PlayerStatus } |> Some
@@ -97,9 +95,11 @@ let private squadDto (squadId, squad:Squad) =
     let playerDtos = squad.PlayerDic |> List.ofSeq |> List.choose (fun (KeyValue (playerId, player)) -> (playerId, player) |> playerDto)
     { SquadOnlyDto = (squadId, squad) |> squadOnlyDto ; PlayerDtos = playerDtos }
 
-let private squadsProjectionDto (_userId:UserId option) (state:State) =
+let private squadsProjectionDto (_userId:UserId option) state =
     let squadDtos = state.SquadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> (squadId, squad) |> squadDto)
     { SquadDtos = squadDtos }
+
+let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
 
 let private sendPlayerDtoDelta squadId squadRvn (projecteeDic:ProjecteeDic) playerDtoDelta =
     let updatedProjecteeDic = ProjecteeDic ()
@@ -321,12 +321,12 @@ type Squads () =
             | SquadsRead squadsRead -> squadsRead |> OnSquadsRead |> agent.Post
             | SquadEventWritten (rvn, userEvent) ->
                 match userEvent with
+                | SquadCreated _ -> () // note: no need to handle since cannot happen once SquadsRead
                 | PlayerAdded (squadId, playerId, playerName, playerType) -> (squadId, rvn, playerId, playerName, playerType) |> OnPlayerAdded |> agent.Post
                 | PlayerNameChanged (squadId, playerId, playerName) -> (squadId, rvn, playerId, playerName) |> OnPlayerNameChanged |> agent.Post
                 | PlayerTypeChanged (squadId, playerId, playerType) -> (squadId, rvn, playerId, playerType) |> OnPlayerTypeChanged |> agent.Post
                 | PlayerWithdrawn (squadId, playerId, dateWithdrawn) -> (squadId, rvn, playerId, dateWithdrawn) |> OnPlayerWithdrawn |> agent.Post
                 | SquadEliminated squadId -> (squadId, rvn) |> OnSquadEliminated |> agent.Post
-                | _ -> ()
             | Disconnected connectionId -> connectionId |> RemoveConnection |> agent.Post
             | _ -> ())
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously

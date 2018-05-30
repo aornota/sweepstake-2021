@@ -54,14 +54,14 @@ let private headerPages (appState:AppState) =
         [
             "News", authState.CurrentPage = UnauthPage NewsPage, UnauthPage NewsPage, NewsPage |> UnauthPage |> ShowPage |> AuthInput
             "Squads", authState.CurrentPage = UnauthPage SquadsPage, UnauthPage SquadsPage, SquadsPage |> UnauthPage |> ShowPage |> AuthInput
+            "User administration", authState.CurrentPage = AuthPage UserAdminPage, AuthPage UserAdminPage, UserAdminPage |> AuthPage |> ShowPage |> AuthInput
             "Drafts", authState.CurrentPage = AuthPage DraftsPage, AuthPage DraftsPage, DraftsPage |> AuthPage |> ShowPage |> AuthInput
             chatText, authState.CurrentPage = AuthPage ChatPage, AuthPage ChatPage, ChatPage |> AuthPage |> ShowPage |> AuthInput
-            "User administration", authState.CurrentPage = AuthPage UserAdministrationPage, AuthPage UserAdministrationPage, UserAdministrationPage |> AuthPage |> ShowPage |> AuthInput
         ]
     | ReadingPreferences | Connecting _ | ServiceUnavailable | AutomaticallySigningIn _ -> []
 
 let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:DateTimeOffset option, headerStatus, headerPages, _:int<tick>) dispatch =
-    let isUserAdministrationPage page = match page with | AuthPage UserAdministrationPage -> true | _ -> false
+    let isUserAdminPage page = match page with | AuthPage UserAdminPage -> true | _ -> false
     let theme = getTheme useDefaultTheme
     let serverStarted =
         match headerStatus, serverStarted with
@@ -105,7 +105,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
         | ReadingPreferencesHS | ConnectingHS | ServiceUnavailableHS | SigningIn | SigningOut | NotSignedIn -> None
     let pageTabs =
         headerPages
-        |> List.filter (fun (_, _, page, _) -> isUserAdministrationPage page |> not)
+        |> List.filter (fun (_, _, page, _) -> isUserAdminPage page |> not)
         |> List.map (fun (text, isActive, _, appInput) -> { IsActive = isActive ; TabText = text ; TabLinkType = ClickableLink (fun _ -> appInput |> AppInput |> dispatch) })
     let additionalDropDown =
         match headerStatus with
@@ -113,9 +113,9 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
             match authUser.Permissions.UserAdminPermissions with
             | Some _ ->
                 let text, isActive, appInput =
-                    match headerPages |> List.tryFind (fun (_, _, page, _) -> isUserAdministrationPage page) with
+                    match headerPages |> List.tryFind (fun (_, _, page, _) -> isUserAdminPage page) with
                     | Some (text, isActive, _, appInput) -> text, isActive, appInput
-                    | None -> "User administration", false, UserAdministrationPage |> AuthPage |> ShowPage |> AuthInput // note: should never happen
+                    | None -> "User administration", false, UserAdminPage |> AuthPage |> ShowPage |> AuthInput // note: should never happen
                 let userAdministration = [ str text ] |> link theme (ClickableLink (fun _ -> appInput |> AppInput |> dispatch))
                 navbarDropDown theme (icon iconAdminSmall) [ navbarDropDownItem theme isActive [ [ userAdministration ] |> para theme paraDefaultSmallest ] ] |> Some
             | None -> None
@@ -176,8 +176,8 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         | Some SignInPending -> true, Loading, ignore, None
         | Some (SignInFailed _) | None ->
             match validateUserName [] (UserName signInState.UserNameText), validatePassword (Password signInState.PasswordText) with
-            | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore, onDismiss |> Some
             | None, None -> false, Clickable (signIn, None), signIn, onDismiss |> Some
+            | _ -> false, NotEnabled None, ignore, onDismiss |> Some
     let errorText = match signInState.SignInStatus with | Some (SignInFailed errorText) -> errorText |> Some | Some SignInPending | None -> None
     let body = [ 
         match errorText with
@@ -212,7 +212,7 @@ let private renderUnauth (useDefaultTheme, unauthState, ticks) (dispatch:UnauthI
         | None -> ()
         match unauthState.CurrentUnauthPage with
         | NewsPage ->
-            yield renderNews useDefaultTheme
+            yield renderNews useDefaultTheme // TODO-NMB-MEDIUM: Switch to using lazyViewOrHMR[n]...
         | SquadsPage ->
             match unauthState.UnauthPageStates.SquadsState with
             | Some squadsState ->
@@ -232,9 +232,11 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
         match changePasswordState.ChangePasswordStatus with
         | Some ChangePasswordPending -> true, Loading, ignore
         | Some (ChangePasswordFailed _) | None ->
-            match validatePassword (Password changePasswordState.NewPasswordText), validateConfirmPassword (Password changePasswordState.NewPasswordText) (Password changePasswordState.ConfirmPasswordText) with
-            | Some _, Some _ | Some _, None | None, Some _ -> false, NotEnabled None, ignore
+            let validPassword = validatePassword (Password changePasswordState.NewPasswordText)
+            let validConfirmPassword = validateConfirmPassword (Password changePasswordState.NewPasswordText) (Password changePasswordState.ConfirmPasswordText)
+            match validPassword, validConfirmPassword with
             | None, None -> false, Clickable (changePassword, None), changePassword
+            | _ -> false, NotEnabled None, ignore
     let errorText = match changePasswordState.ChangePasswordStatus with | Some (ChangePasswordFailed errorText) -> errorText |> Some | Some ChangePasswordPending | None -> None
     let body = [
         match changePasswordState.MustChangePasswordReason with
@@ -252,7 +254,7 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
             yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
             yield br
         | None -> ()
-        yield [ str "Please enter and confirm your new password" ] |> para theme paraCentredSmaller
+        yield [ str "Please enter your new password (twice)" ] |> para theme paraCentredSmaller
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
@@ -272,9 +274,6 @@ let private renderSigningOutModal useDefaultTheme =
 let private renderDrafts useDefaultTheme =
     let theme = getTheme useDefaultTheme
     columnContent [ [ str "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-let private renderUserAdministration useDefaultTheme =
-    let theme = getTheme useDefaultTheme
-    columnContent [ [ str "User administration" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 // ...NMB-TEMP
 
 let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
@@ -289,9 +288,8 @@ let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
             yield lazyViewOrHMR renderSigningOutModal useDefaultTheme
         | false -> ()
         match authState.CurrentPage with
-        // TEMP-NMB: No lazyViewOrHMR[n] since renderNews | renderDrafts will return "much the same" until implemented properly [so may not re-render as expected]...
         | UnauthPage NewsPage ->
-            yield renderNews useDefaultTheme
+            yield renderNews useDefaultTheme // TODO-NMB-MEDIUM: Switch to using lazyViewOrHMR[n]...
         | UnauthPage SquadsPage ->
             match authState.UnauthPageStates.SquadsState with
             | Some squadsState ->
@@ -299,12 +297,17 @@ let private renderAuth (useDefaultTheme, authState, ticks) dispatch =
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+        | AuthPage UserAdminPage ->
+            match authState.AuthPageStates.UserAdminState with
+            | Some userAdminState ->
+                yield lazyViewOrHMR2 UserAdmin.Render.render (useDefaultTheme, userAdminState) (UserAdminInput >> APageInput >> PageInput >> dispatch)
+            | None ->
+                let message = debugMessage "CurrentPage is AuthPage UserAdminPage when AuthPageStates.UserAdminState is None" false
+                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
-            yield renderDrafts useDefaultTheme
+            yield renderDrafts useDefaultTheme // TODO-NMB-MEDIUM: Switch to using lazyViewOrHMR[n]...
         | AuthPage ChatPage ->
-            yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, authState.AuthPageStates.ChatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch)
-        | AuthPage UserAdministrationPage ->
-            yield renderUserAdministration useDefaultTheme ]
+            yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, authState.AuthPageStates.ChatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]
 
 let private renderContent state dispatch =
     let renderSpinner () = div divCentred [ icon iconSpinnerPulseLarge ]
