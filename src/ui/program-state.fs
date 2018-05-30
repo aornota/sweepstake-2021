@@ -277,8 +277,9 @@ let private handleSignInResult (result:Result<AuthUser,SignInCmdError<string>>) 
     | Some _, Ok authUser ->
         let currentPage = UnauthPage unauthState.CurrentUnauthPage |> Some
         let state, cmd = state |> defaultAuthState authUser currentPage (unauthState.UnauthPageStates |> Some)
+        let writePreferencesCmd = match authUser.MustChangePasswordReason with | Some _ -> Cmd.none | None -> state |> writePreferencesCmd
         let (UserName userName) = authUser.UserName
-        state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; sprintf "You have signed in as <strong>%s</strong>" userName |> successToastCmd ]
+        state, Cmd.batch [ cmd ; writePreferencesCmd ; sprintf "You have signed in as <strong>%s</strong>" userName |> successToastCmd ]
     | Some signInState, Error error ->
         let errorText =
             match error with
@@ -584,8 +585,8 @@ let private handleAuthInput authInput authState state =
     | ChangePasswordInput CancelChangePassword, Some changePasswordState, false ->
         match changePasswordState.MustChangePasswordReason, changePasswordState.ChangePasswordStatus with
         | Some _, _ ->
-            let state, cmd = state |> shouldNeverHappen "Unexpected CancelChangePassword when MustChangePasswordReason is Some"
-            state, cmd, false
+            let authState = { authState with ChangePasswordState = None }
+            { state with AppState = Auth authState }, SignOut |> AuthInput |> AppInput |> Cmd.ofMsg, true
         | None, Some ChangePasswordPending ->
             let state, cmd = state |> shouldNeverHappen "Unexpected CancelChangePassword when ChangePasswordPending"
             state, cmd, false

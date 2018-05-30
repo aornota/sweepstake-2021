@@ -223,10 +223,7 @@ let private renderUnauth (useDefaultTheme, unauthState, ticks) (dispatch:UnauthI
 
 let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dispatch =
     let theme = getTheme useDefaultTheme
-    let onDismiss =
-        match changePasswordState.MustChangePasswordReason, changePasswordState.ChangePasswordStatus with
-        | Some _, _ | None, Some ChangePasswordPending -> None
-        | None, Some _ | None, None -> (fun _ -> CancelChangePassword |> dispatch) |> Some
+    let onDismiss = match changePasswordState.ChangePasswordStatus with | Some ChangePasswordPending -> None | Some _ | None -> (fun _ -> CancelChangePassword |> dispatch) |> Some
     let isChangingPassword, changePasswordInteraction, onEnter =
         let changePassword = (fun _ -> ChangePassword |> dispatch)
         match changePasswordState.ChangePasswordStatus with
