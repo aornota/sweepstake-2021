@@ -45,7 +45,7 @@ let private builder = WebHost.CreateDefaultBuilder ()
 builder.UseWebRoot uiPath |> ignore
 builder.UseContentRoot uiPath |> ignore
 builder.Configure (Action<IApplicationBuilder> configureApp) |> ignore
-// TODO-NMB-MEDIUM: Suppress ASP.Net Core logging (since can get mixed up with ConsoleLogger output, i.e. since Console not thread-safe)?... builder.ConfigureLogging (...) |> ignore
+// TODO-NMB-LOW: Suppress ASP.Net Core logging (since can get mixed up with ConsoleLogger output, i.e. since Console not thread-safe)?... builder.ConfigureLogging (...) |> ignore
 builder.ConfigureServices configureServices |> ignore
 builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 
@@ -74,8 +74,8 @@ readPersistedEvents ()
 "starting Connections agent" |> Info |> log
 serverStarted |> connections.Start
 
-(* TEMP-NMB: Finesse logging for development/debugging purposes... *)
-("development/debugging", function | Entity Entity.Users | Projection Projection.UserAdmin -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
+(* TEMP-NMB: Finesse logging for development/debugging purposes...
+("development/debugging", function | Entity Entity.Users | Projection Projection.UserAdmin -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
 
 "ready" |> Info |> log
 

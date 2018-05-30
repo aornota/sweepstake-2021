@@ -383,7 +383,9 @@ let private handleServerMsg serverMsg state =
         state |> handleServerAppMsg serverAppMsg
     | ServerSquadsMsg (InitializeSquadsProjectionUnauthQryResult result), Unauth _ ->
         state, result |> InitializeSquadsProjectionUnauthQryResult |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
-    | ServerSquadsMsg _, Unauth _ -> // note: silently ignore other ServerSquadsMsg if Unauth
+    | ServerSquadsMsg (SquadsProjectionMsg squadsProjectionMsg), Unauth _ ->
+        state, squadsProjectionMsg |> SquadsProjectionMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerSquadsMsg _, Unauth _ -> // note: silently ignore other ServerUserAdminMsg/s if Unauth
         state, Cmd.none
     | ServerSquadsMsg serverSquadsMsg, Auth _ ->
         state, serverSquadsMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
