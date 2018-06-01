@@ -21,6 +21,7 @@ open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
+open Aornota.Sweepstake2018.UI.Pages.News.Common
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
 open Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
 open Aornota.Sweepstake2018.UI.Program.Common
@@ -141,6 +142,7 @@ let private currentSquadId (squadsState:Squads.Common.State) =
 
 let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) signInState state =
     let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
+    let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = NewsPage)
     // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
     let initializeSquadsState, currentSquadId =
         match unauthPageStates, currentPage with
@@ -151,17 +153,24 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
             | None, _ -> false, None
         | None, SquadsPage -> true, None
         | None, _ -> false, None
+
+    let tempScoresState = () |> Some
+
     let squadsState, squadsCmd =
         if initializeSquadsState then
             let squadsState, squadsCmd = Squads.State.initialize None currentSquadId
             squadsState |> Some, squadsCmd
         else None, Cmd.none
+
+    let tempFixturesState = () |> Some
+
     let unauthState = {
         CurrentUnauthPage = currentPage
-        UnauthPageStates = { NewsState = () ; SquadsState = squadsState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = tempFixturesState }
         SignInState = signInState }
+    let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
-    { state with AppState = Unauth unauthState }, squadsCmd
+    { state with AppState = Unauth unauthState }, Cmd.batch [ newsCmd ; squadsCmd ]
 
 let private defaultChangePasswordState mustChangePasswordReason changePasswordStatus = {
     MustChangePasswordReason = mustChangePasswordReason
@@ -176,6 +185,7 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
 let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageStates option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
     // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
+    let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = UnauthPage NewsPage)
     let initializeSquadsState, currentSquadId =
         match unauthPageStates, currentPage with
         | Some unauthPageStates, _ ->
@@ -185,33 +195,46 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
             | None, _ -> false, None
         | None, UnauthPage SquadsPage -> true, None
         | None, _ -> false, None
+
+    let tempScoresState = () |> Some
+
     let squadsState, squadsCmd =
         if initializeSquadsState then
             let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
             squadsState |> Some, squadsCmd
         else None, Cmd.none
+
+    let tempFixturesState = () |> Some
+
     let initializeUserAdminState = currentPage = AuthPage UserAdminPage
     let userAdminState, userAdminCmd =
         if initializeUserAdminState then
             let userAdminState, userAdminCmd = UserAdmin.State.initialize authUser
             userAdminState |> Some, userAdminCmd
         else None, Cmd.none
+
+    let tempDraftAdminState = () |> Some
+
     let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
+
+    let tempDraftsState = () |> Some
+
     let authState = {
         AuthUser = authUser
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
-        UnauthPageStates = { NewsState = () ; SquadsState = squadsState }
-        AuthPageStates = { UserAdminState = userAdminState ; DraftsState = () ; ChatState = chatState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = tempFixturesState }
+        AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = tempDraftAdminState ; DraftsState = tempDraftsState ; ChatState = chatState }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
             | Some mustChangePasswordReason -> defaultChangePasswordState (mustChangePasswordReason |> Some) None |> Some
             | None -> None
         SigningOut = false }
+    let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-    { state with AppState = Auth authState }, Cmd.batch [ squadsCmd ; userAdminCmd ; chatCmd ]
+    { state with AppState = Auth authState }, Cmd.batch [ newsCmd ; squadsCmd ; userAdminCmd ; chatCmd ]
 
 let initialize () =
     let state = {
@@ -381,6 +404,16 @@ let private handleServerMsg serverMsg state =
         state, Cmd.none
     | ServerAppMsg serverAppMsg, _ ->
         state |> handleServerAppMsg serverAppMsg
+    | ServerNewsMsg (InitializeNewsProjectionQryResult result), Unauth _ ->
+        state, result |> InitializeNewsProjectionQryResult |> ReceiveServerNewsMsg |> NewsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerNewsMsg (MorePostsQryResult result), Unauth _ ->
+        state, result |> MorePostsQryResult |> ReceiveServerNewsMsg |> NewsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerNewsMsg (NewsProjectionMsg newsProjectionMsg), Unauth _ ->
+        state, newsProjectionMsg |> NewsProjectionMsg |> ReceiveServerNewsMsg |> NewsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerNewsMsg _, Unauth _ -> // note: silently ignore other ServerNewsMsg/s if Unauth
+        state, Cmd.none
+    | ServerNewsMsg serverNewsMsg, Auth _ ->
+        state, serverNewsMsg |> ReceiveServerNewsMsg |> NewsInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | ServerSquadsMsg (InitializeSquadsProjectionUnauthQryResult result), Unauth _ ->
         state, result |> InitializeSquadsProjectionUnauthQryResult |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
     | ServerSquadsMsg (SquadsProjectionMsg squadsProjectionMsg), Unauth _ ->
@@ -418,7 +451,11 @@ let private handleUnauthInput unauthInput unauthState state =
     match unauthInput, unauthState.SignInState with
     | ShowUnauthPage unauthPage, _ ->
         if unauthState.CurrentUnauthPage <> unauthPage then
-            // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required) - and toggle "IsCurrent" for other relevant pages...
+            // TODO-ONGOING: Initialize other "optional" pages (if required) - and toggle "IsCurrent" for other relevant pages...
+            let newsCmd =
+                if unauthPage <> NewsPage && unauthState.CurrentUnauthPage = NewsPage then false |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
+                else if unauthPage = NewsPage && unauthState.CurrentUnauthPage <> NewsPage then true |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
+                else Cmd.none
             let squadsState, squadsCmd =
                 match unauthPage, unauthState.UnauthPageStates.SquadsState with
                 | SquadsPage, None ->
@@ -427,12 +464,29 @@ let private handleUnauthInput unauthInput unauthState state =
                 | _, _ -> unauthState.UnauthPageStates.SquadsState, Cmd.none
             let unauthPageStates = { unauthState.UnauthPageStates with SquadsState = squadsState }
             let unauthState = { unauthState with CurrentUnauthPage = unauthPage ; UnauthPageStates = unauthPageStates }
+            let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
             let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
             let state = { state with AppState = Unauth unauthState }
-            state, Cmd.batch [ squadsCmd ; state |> writePreferencesCmd ]
+            state, Cmd.batch [ newsCmd ; squadsCmd ; state |> writePreferencesCmd ]
         else state, Cmd.none
-    | UnauthPageInput NewsInput, None ->
-        state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
+    | UnauthPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage)), _ ->
+        state |> addNotificationMessage notificationMessage, Cmd.none
+    | UnauthPageInput (NewsInput News.Common.ShowMarkdownSyntaxModal), _ ->
+        state |> shouldNeverHappen "Unexpected NewsInput ShowMarkdownSyntaxModal when Unauth"
+    | UnauthPageInput (NewsInput (News.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
+        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
+        state, cmd
+    | UnauthPageInput (NewsInput (News.Common.SendUiAuthMsg _)), _ ->
+        state |> shouldNeverHappen "Unexpected NewsInput SendUiAuthMsg when Unauth"
+    | UnauthPageInput (NewsInput newsInput), _ ->
+        let newsState = unauthState.UnauthPageStates.NewsState
+        let newsState, newsCmd, _ = newsState |> News.State.transition newsInput
+        let unauthPageStates = { unauthState.UnauthPageStates with NewsState = newsState }
+        let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+        { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, newsCmd
+    | UnauthPageInput (ScoresInput _), _ ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
+        state, cmd
     | UnauthPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
     | UnauthPageInput (SquadsInput (Squads.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
@@ -450,6 +504,9 @@ let private handleUnauthInput unauthInput unauthState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected SquadsInput when UnauthPageStates.SquadsState is None"
             state, cmd
+    | UnauthPageInput (FixturesInput _), _ ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput -> NYI"
+        state, cmd
     | ShowSignInModal, None ->
         let unauthState = { unauthState with SignInState = defaultSignInState None None |> Some }
         { state with AppState = Unauth unauthState }, Cmd.none
@@ -485,7 +542,11 @@ let private handleAuthInput authInput authState state =
                 let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None"
                 state, cmd, false
             | _, _ ->
-                // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required) - and toggle "IsCurrent" for other relevant pages...
+                // TODO-ONGOING: Initialize other "optional" pages (if required) - and toggle "IsCurrent" for other relevant pages...
+                let newsCmd =
+                    if page <> UnauthPage NewsPage && authState.CurrentPage = UnauthPage NewsPage then false |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
+                    else if page = UnauthPage NewsPage && authState.CurrentPage <> UnauthPage NewsPage then true |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
+                    else Cmd.none
                 let squadsState, squadsCmd =
                     match page, authState.UnauthPageStates.SquadsState with
                     | UnauthPage SquadsPage, None ->
@@ -505,14 +566,31 @@ let private handleAuthInput authInput authState state =
                 let unauthPageStates = { authState.UnauthPageStates with SquadsState = squadsState }
                 let authPageStates = { authState.AuthPageStates with UserAdminState = userAdminState }
                 let authState = { authState with CurrentPage = page ; UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates }
+                let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
                 let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
                 let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let state = { state with AppState = Auth authState }
-                state, Cmd.batch [ squadsCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
+                state, Cmd.batch [ newsCmd ; squadsCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
         else state, Cmd.none, true
-    | PageInput (UPageInput NewsInput), None, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected NewsInput -> NYI"
+    | PageInput (UPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (UPageInput (NewsInput News.Common.ShowMarkdownSyntaxModal)), None, false ->
+        { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none, true
+    | PageInput (UPageInput (NewsInput (News.Common.SendUiUnauthMsg uiUnauthMsg))), _, false ->
+        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
+        state, cmd, false
+    | PageInput (UPageInput (NewsInput (News.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
+        let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
+    | PageInput (UPageInput (NewsInput newsInput)), _, _ ->
+        let newsState = authState.UnauthPageStates.NewsState
+        let newsState, newsCmd, isUserNonApiActivity = newsState |> News.State.transition newsInput
+        let unauthPageStates = { authState.UnauthPageStates with NewsState = newsState }
+        let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+        { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, newsCmd, isUserNonApiActivity
+    | PageInput (UPageInput (ScoresInput _)), _, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
         state, cmd, false
     | PageInput (UPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
@@ -532,8 +610,8 @@ let private handleAuthInput authInput authState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected SquadsInput when UnauthPageStates.SquadsState is None"
             state, cmd, false
-    | PageInput (APageInput DraftsInput), None, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
+    | PageInput (UPageInput (FixturesInput _)), _, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput -> NYI"
         state, cmd, false
     | PageInput (APageInput (UserAdminInput (UserAdmin.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
@@ -550,9 +628,15 @@ let private handleAuthInput authInput authState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected UserAdminInput when AuthPageStates.UserAdminState is None"
             state, cmd, false
+    | PageInput (APageInput (DraftAdminInput _)), _, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected DraftAdminInput -> NYI"
+        state, cmd, false
+    | PageInput (APageInput (DraftsInput _)), _, false ->
+        let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
+        state, cmd, false
     | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
-    | PageInput (APageInput (ChatInput ShowMarkdownSyntaxModal)), None, false ->
+    | PageInput (APageInput (ChatInput Chat.Common.ShowMarkdownSyntaxModal)), None, false ->
         { state with StaticModal = MarkdownSyntax |> Some }, Cmd.none, true
     | PageInput (APageInput (ChatInput (Chat.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
         let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState

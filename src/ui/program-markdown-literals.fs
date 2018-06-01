@@ -6,10 +6,10 @@ let [<Literal>] SCORING_SYSTEM_MARKDOWN = """Each sweepstake team will consist o
 midfielders - the no-longer-fashionable [except in Northern Ireland] 8-2-0 formation - please do.)
 
 The **team/coach** will score (or lose) points for:
-+ **winning** a match: **20** or **16** or **12** (see below)
-+ **drawing** a match: **8** or **6** or **4** (see below)
-+ a team player receiving a **yellow card**: **-1**
-+ a team player receiving a **red card**: **-3**
++ **winning** a match: _**20**_ or _**16**_ or _**12**_ (see below)
++ **drawing** a match: _**8**_ or _**6**_ or _**4**_ (see below)
++ a team player receiving a **yellow card**: _**-1**_
++ a team player receiving a **red card**: _**-3**_
 
 (If a player receives a second yellow card in a match, the two yellow cards will be scored as a red card instead; however, if a player receives a yellow card followed by a "straight"
 red card, both cards will be scored.)
@@ -26,21 +26,21 @@ The remaining teams are: Denmark; Iceland; Costa Rica; Sweden; Tunisia; Egypt; S
 (Note that Russia are only in the top 16 seeds because they are hosting the tournament; based on the October 2017 world rankings, they are the worst team participating.)
 
 **All players** will score (or lose) points for:
-+ being named **man-of-the-match**: **15**
-+ _**scoring**_ a **goal** or a **penalty**: **12**
-+ _**assisting**_ a **goal**: **3** (note that a goal cannot be assisted by the same player who scored the goal - unless they win a free kick and then score directly from it)
-+ _**winning**_ a **penalty**: **3** (note that a penalty can be won by the same player who took the penalty)
-+ _**missing**_ a **penalty**: **-6**
-+ _**scoring**_ an **own goal**: **-6**
-+ receiving a **yellow card**: **-2**
-+ receiving a **red card**: **-6**
++ being named **man-of-the-match**: _**15**_
++ _**scoring**_ a **goal** or a **penalty**: _**12**_
++ _**assisting**_ a **goal**: _**3**_ (note that a goal cannot be assisted by the same player who scored the goal - unless they win a free kick and then score directly from it)
++ _**winning**_ a **penalty**: _**3**_ (note that a penalty can be won by the same player who took the penalty)
++ _**missing**_ a **penalty**: _**-6**_
++ _**scoring**_ an **own goal**: _**-6**_
++ receiving a **yellow card**: _**-2**_
++ receiving a **red card**: _**-6**_
 
 (A penalty will be considered as "missed" irrespective of whether the goalkeeper touched the ball. And again, if a player receives a second yellow card in a match, the two yellow cards
 will be scored as a red card instead; however, if a player receives a yellow card followed by a "straight" red card, both cards will be scored.)
 
 In addition, **goalkeepers** will score points for:
-+ keeping a **clean sheet**: **12**
-+ _**saving**_ a **penalty**: **12**
++ keeping a **clean sheet**: _**12**_
++ _**saving**_ a **penalty**: _**12**_
 
 Note that outfield players can also score "goalkeeper" points if they end up playing in goal. (It probably won't happen - but you never know...)
 
@@ -51,6 +51,45 @@ Information about assists and such will be nicked from <https://www.whoscored.co
 
 As always, points can only be scored for goals / penalties / assists / &c. during normal time and extra time. **Penalty shootouts do not contribute to the scoring** [except to the extent 
 that they determine who wins the match] - well, unless a player manages to get booked or sent-off during the shootout. Stranger things have happened..."""
+
+let [<Literal>] DRAFT_ALGORITHM_MARKDOWN = """This is not the easiest thing to explain - so let's try a simplified example:
+
+**neph**, **rosie** and **hugh** submit the following selections for the first draft:
+
++ **neph**: _1._ Dante; _2._ Goethe; _3._ Saki
++ **rosie**: _1._ Cervantes; _2._ St. Augustine; _3._ Milton
++ **hugh**: _1._ Cervantes; _2._ Dante; _3._ St. Augustine
+
+For the first round, we look at the top selection for each participant. Only **neph** has put Dante first and he gets an uncontested pick. However, both **rosie** and **hugh** fancy Cervantes, so we toss a (metaphorical) coin to resolve this contested pick: **rosie** wins on this occasion; **hugh** has his "pick priority" increased by way of compensation.
+
+So after the first round: **neph** has picked Dante; **rosie** has picked Cervantes; **hugh** remains empty-handed.
+
+Before the second round, we update each participant's list to remove teams / players that have now been picked. (As we're about to find out, this can have some slightly counter-intuitive consequences.)
+
+The updated (and renumbered) selections are:
+
++ **neph**: _1._ Goethe; _2._ Saki
++ **rosie**: _1._ St. Augustine; _2._ Milton
++ **hugh**: _1._ St. Augustine
+
+**neph** again has a unique selection for the second round and gets Goethe; **rosie** and **hugh** both want St. Augustine - and as **hugh** has the higher "pick priority" (having already lost one coin-toss), he wins automatically.
+
+(Note that **hugh** ends up with St. Augustine even though this was third on his original list yet second on **rosie**'s. What can I say? Shit happens.)
+
+After the second round: **neph** has picked Dante and Goethe; **rosie** has picked Cervantes; **hugh** has picked St. Augustine.
+
+And for the third round, **neph** and **rosie** have uncontested picks (Saki and Milton respectively) and **hugh** has no selections left - so we end up with:
+
++ **neph** gets Dante, Goethe and Saki
++ **rosie** gets Cervantes and Milton
++ **hugh** gets St. Augustine
+
+(Unfortunately for **neph**, Goethe gives Dante a "wet willy" in a group stage match and is sent home in disgrace; Dante is subsequently sidelined with a nasty ear infection; and Saki claims to have no interest whatsoever in playing football. **rosie**'s hopes are shattered when Cervantes misses a crucial penalty after a Zaza-esque run-up and Milton scores a hat-trick of own goals in the opening match. In the end, **hugh** emerges triumphant as St. Augustine wins the Golden Boot and cryptically claims: _And when by chance prosperity smiled in my direction, I lacked the spirit to seize it, for it fled away almost before I could get my hand upon it_. What a tosser.)
+
+---
+It's not a perfect algorithm by any means. But it's the best I've been able to come up with...
+
+For a more detailed example, here are the [first and second draft details](https://aornota.github.io/sweepstake.2016/draft.html) for the world-famous Euro 2016 sweepstake."""
 
 let [<Literal>] PAYOUTS_MARKDOWN = """**To be confirmed** - but based on the [world-famous Euro 2016 sweepstake](https://aornota.github.io/sweepstake.2016/), probably something like:
 + £60 for first place

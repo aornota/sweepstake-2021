@@ -5,6 +5,7 @@ open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 
@@ -12,11 +13,16 @@ type UiUnauthAppMsg =
     | SignInCmd of sessionId : SessionId * userName : UserName * password : Password
     | AutoSignInCmd of sessionId : SessionId * jwt : Jwt
 
+type UiUnauthNewsMsg =
+    | InitializeNewsProjectionQry
+    | MorePostsQry
+
 type UiUnauthSquadsMsg =
     | InitializeSquadsProjectionUnauthQry
 
 type UiUnauthMsg =
     | UiUnauthAppMsg of uiUnauthAppMsg : UiUnauthAppMsg
+    | UiUnauthNewsMsg of uiUnauthNewsMsg : UiUnauthNewsMsg
     | UiUnauthSquadsMsg of uiUnauthSquadsMsg : UiUnauthSquadsMsg
 
 type UiAuthAppMsg =
@@ -28,6 +34,11 @@ type UiAuthUserAdminMsg =
     | CreateUserCmd of userId : UserId * userName : UserName * password : Password * userType : UserType
     | ResetPasswordCmd of userId : UserId * currentRvn : Rvn * password : Password
     | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType
+
+type UiAuthNewsMsg =
+    | CreatePostCmd of postId : PostId * postType : PostType * messageText : Markdown
+    | ChangePostCmd of postId : PostId * currentRvn : Rvn * messageText : Markdown
+    | RemovePostCmd of postId : PostId * currentRvn : Rvn
 
 type UiAuthSquadsMsg =
     | InitializeSquadsProjectionAuthQry
@@ -46,6 +57,7 @@ type UiAuthMsg =
     | UserNonApiActivity
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg
     | UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg
+    | UiAuthNewsMsg of uiAuthNewsMsg : UiAuthNewsMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 

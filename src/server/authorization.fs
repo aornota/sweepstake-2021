@@ -21,6 +21,18 @@ type ChangeUserTypeToken private (userTarget, userTypes) =
     member __.UserTarget = userTarget
     member __.UserTypes = userTypes
 
+type DraftAdminToken private () =
+    new (_:MetaToken) = DraftAdminToken ()   
+
+type ResultsAdminToken private () =
+    new (_:MetaToken) = ResultsAdminToken ()   
+
+type CreatePostToken private () =
+    new (_:MetaToken) = CreatePostToken ()
+type EditOrRemovePostToken private (userId) =
+    new (_:MetaToken, userId:UserId) = EditOrRemovePostToken userId
+    member __.UserId = userId
+
 type SquadsProjectionAuthQryToken private () =
     new (_:MetaToken) = SquadsProjectionAuthQryToken ()
 type CreateSquadToken private () =
@@ -32,24 +44,37 @@ type WithdrawPlayerToken private () =
 type EliminateSquadToken private () =
     new (_:MetaToken) = EliminateSquadToken ()
     
-type ChatProjectionQryToken private () =
-    new (_:MetaToken) = ChatProjectionQryToken ()   
-type SendChatMessageToken private () =
-    new (_:MetaToken) = SendChatMessageToken ()
-    
+type CreateFixtureToken private () =
+    new (_:MetaToken) = CreateFixtureToken ()
+type ConfirmFixtureToken private () =
+    new (_:MetaToken) = ConfirmFixtureToken ()
+
+type DraftToken private (userId) =
+    new (_:MetaToken, userId:UserId) = DraftToken userId
+    member __.UserId = userId
+
+type ChatToken private () =
+    new (_:MetaToken) = ChatToken ()
+
 type private ValidatedUserTokens = {
     ChangePasswordToken : ChangePasswordToken option
     UserAdminProjectionQryToken : UserAdminProjectionQryToken option
     CreateUserToken : CreateUserToken option
     ResetPasswordToken : ResetPasswordToken option
     ChangeUserTypeToken : ChangeUserTypeToken option
+    DraftAdminToken : DraftAdminToken option
+    ResultsAdminToken : ResultsAdminToken option
+    CreatePostToken : CreatePostToken option
+    EditOrRemovePostToken : EditOrRemovePostToken option
     SquadsProjectionAuthQryToken : SquadsProjectionAuthQryToken option
     CreateSquadToken : CreateSquadToken option
     AddOrEditPlayerToken : AddOrEditPlayerToken option
     WithdrawPlayerToken : WithdrawPlayerToken option
     EliminateSquadToken : EliminateSquadToken option
-    ChatProjectionQryToken : ChatProjectionQryToken option
-    SendChatMessageToken : SendChatMessageToken option }
+    CreateFixtureToken : CreateFixtureToken option
+    ConfirmFixtureToken : ConfirmFixtureToken option
+    DraftToken : DraftToken option
+    ChatToken : ChatToken option }
 
 type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
@@ -69,6 +94,15 @@ type UserTokens private (vut:ValidatedUserTokens) =
                     | None -> None
                 userAdminProjectionQryToken, createUserToken, resetPasswordToken, changeUserTypeToken
             | None -> None, None, None, None
+        let draftAdminToken = if permissions.DraftAdminPermission then MetaToken |> DraftAdminToken |> Some else None
+        let resultsAdminToken = if permissions.ResultsAdminPermission then MetaToken |> ResultsAdminToken |> Some else None
+        let createPostToken, editOrRemovePostToken =
+            match permissions.NewsPermissions with
+            | Some newsPermissions ->
+                let createPostToken = if newsPermissions.CreatePostPermission then MetaToken |> CreatePostToken |> Some else None
+                let editOrRemovePostToken = match newsPermissions.EditOrRemovePostPermission with | Some userId -> (MetaToken, userId) |> EditOrRemovePostToken |> Some | None -> None
+                createPostToken, editOrRemovePostToken
+            | None -> None, None
         let squadsProjectionAuthQryToken, createSquadToken, addOrEditPlayerToken, withdrawPlayerToken, eliminateSquadToken =
             match permissions.SquadPermissions with
             | Some squadPermissions ->
@@ -79,35 +113,49 @@ type UserTokens private (vut:ValidatedUserTokens) =
                 let eliminateSquadToken = if squadPermissions.EliminateSquadPermission then MetaToken |> EliminateSquadToken |> Some else None
                 squadsProjectionAuthQryToken, createSquadToken, addOrEditPlayerToken, withdrawPlayerToken, eliminateSquadToken
             | None -> None, None, None, None, None
-        let chatProjectionQryToken, sendChatMessageToken =
-            match permissions.ChatPermissions with
-            | Some chatPermissions ->
-                let chatProjectionQryToken = MetaToken |> ChatProjectionQryToken |> Some
-                let sendChatMessageToken = if chatPermissions.SendChatMessagePermission then MetaToken |> SendChatMessageToken |> Some else None
-                chatProjectionQryToken, sendChatMessageToken
-            | None -> None, None
+        let createFixtureToken, confirmFixtureToken =
+            match permissions.FixturePermissions with
+            | Some fixturePermissions ->
+                let createFixtureToken = if fixturePermissions.CreateFixturePermission then MetaToken |> CreateFixtureToken |> Some else None
+                let confirmFixtureToken = if fixturePermissions.ConfirmFixturePermission then MetaToken |> ConfirmFixtureToken |> Some else None
+                createFixtureToken, confirmFixtureToken
+            | None -> None, None        
+        let draftToken = match permissions.DraftPermission with | Some userId -> (MetaToken, userId) |> DraftToken |> Some | None -> None
+        let chatToken = if permissions.ChatPermission then MetaToken |> ChatToken |> Some else None
         UserTokens {
             ChangePasswordToken = changePasswordToken
             UserAdminProjectionQryToken = userAdminProjectionQryToken
             CreateUserToken = createUserToken
             ResetPasswordToken = resetPasswordToken
             ChangeUserTypeToken = changeUserTypeToken
+            DraftAdminToken = draftAdminToken
+            ResultsAdminToken = resultsAdminToken
+            CreatePostToken = createPostToken
+            EditOrRemovePostToken = editOrRemovePostToken
             SquadsProjectionAuthQryToken = squadsProjectionAuthQryToken
             CreateSquadToken = createSquadToken
             AddOrEditPlayerToken = addOrEditPlayerToken
             WithdrawPlayerToken = withdrawPlayerToken
             EliminateSquadToken = eliminateSquadToken
-            ChatProjectionQryToken = chatProjectionQryToken
-            SendChatMessageToken = sendChatMessageToken }
+            CreateFixtureToken = createFixtureToken
+            ConfirmFixtureToken = confirmFixtureToken
+            DraftToken = draftToken
+            ChatToken = chatToken }
     member __.ChangePasswordToken = vut.ChangePasswordToken
     member __.UserAdminProjectionQryToken = vut.UserAdminProjectionQryToken
     member __.CreateUserToken = vut.CreateUserToken
     member __.ResetPasswordToken = vut.ResetPasswordToken
     member __.ChangeUserTypeToken = vut.ChangeUserTypeToken
+    member __.DraftAdminToken = vut.DraftAdminToken
+    member __.ResultsAdminToken = vut.ResultsAdminToken
+    member __.CreatePostToken = vut.CreatePostToken
+    member __.EditOrRemovePostToken = vut.EditOrRemovePostToken
     member __.SquadsProjectionAuthQryToken = vut.SquadsProjectionAuthQryToken
     member __.CreateSquadToken = vut.CreateSquadToken
     member __.AddOrEditPlayerToken = vut.AddOrEditPlayerToken
     member __.WithdrawPlayerToken = vut.WithdrawPlayerToken
     member __.EliminateSquadToken = vut.EliminateSquadToken
-    member __.ChatProjectionQryToken = vut.ChatProjectionQryToken
-    member __.SendChatMessageToken = vut.SendChatMessageToken
+    member __.CreateFixtureToken = vut.CreateFixtureToken
+    member __.ConfirmFixtureToken = vut.ConfirmFixtureToken
+    member __.DraftToken = vut.DraftToken
+    member __.ChatToken = vut.ChatToken

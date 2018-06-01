@@ -19,6 +19,10 @@ type UserAdminPermissions = {
     ResetPasswordPermission : UserTarget option
     ChangeUserTypePermission : (UserTarget * UserType list) option }
 
+type NewsPermissions = {
+    CreatePostPermission : bool
+    EditOrRemovePostPermission : UserId option }
+
 type SquadPermissions = {
     SquadProjectionAuthQryPermission : bool
     CreateSquadPermission : bool
@@ -26,13 +30,20 @@ type SquadPermissions = {
     WithdrawPlayerPermission : bool
     EliminateSquadPermission : bool }
 
-type ChatPermissions = { SendChatMessagePermission : bool }
+type FixturePermissions = {
+    CreateFixturePermission : bool
+    ConfirmFixturePermission : bool }
 
 type Permissions = {
     ChangePasswordPermission : UserId option
     UserAdminPermissions : UserAdminPermissions option
+    DraftAdminPermission : bool
+    ResultsAdminPermission: bool
+    NewsPermissions : NewsPermissions option
     SquadPermissions : SquadPermissions option
-    ChatPermissions : ChatPermissions option }
+    FixturePermissions : FixturePermissions option
+    DraftPermission : UserId option
+    ChatPermission : bool }
 
 type MustChangePasswordReason =
     | FirstSignIn
@@ -64,6 +75,13 @@ let permissions userId userType =
         match createUserPermission, resetPasswordPermission, changeUserTypePermission with
         | [], None, None -> None
         | _ -> { CreateUserPermission = createUserPermission ; ResetPasswordPermission = resetPasswordPermission ; ChangeUserTypePermission = changeUserTypePermission } |> Some
+    let draftAdminPermission = match userType with | SuperUser -> true | Administrator | Pleb | PersonaNonGrata -> false
+    let resultsAdminPermission = match userType with | SuperUser | Administrator -> true | Pleb | PersonaNonGrata -> false
+    let createPostPermission, editOrRemovePostPermission = match userType with | SuperUser | Administrator -> true, userId |> Some | Pleb | PersonaNonGrata -> false, None    
+    let newsPermissions =
+        match createPostPermission, editOrRemovePostPermission with
+        | false, None -> None
+        | _ -> { CreatePostPermission = createPostPermission ; EditOrRemovePostPermission = editOrRemovePostPermission } |> Some
     let squadProjectionAuthQryPermission, createSquadPermission, addOrEditPlayerPermission, withdrawPlayerPermission, eliminateSquadPermission =
         match userType with
         | SuperUser -> true, true, true, true, true
@@ -75,12 +93,23 @@ let permissions userId userType =
         | false, false, false, false, false -> None
         | _ -> { SquadProjectionAuthQryPermission = squadProjectionAuthQryPermission ; CreateSquadPermission = createSquadPermission ; AddOrEditPlayerPermission = addOrEditPlayerPermission
                  WithdrawPlayerPermission = withdrawPlayerPermission ; EliminateSquadPermission = eliminateSquadPermission } |> Some
-    let chatPermissions = match userType with | SuperUser | Administrator | Pleb -> { SendChatMessagePermission = true } |> Some | PersonaNonGrata -> None
+    let createFixturePermission, confirmFixturePermission = match userType with | SuperUser -> true, true | Administrator -> false, true | Pleb | PersonaNonGrata -> false, false
+    let fixturePermissions =
+        match createFixturePermission, confirmFixturePermission with
+        | false, false -> None
+        | _ -> { CreateFixturePermission = createFixturePermission ; ConfirmFixturePermission = confirmFixturePermission } |> Some
+    let draftPermission = match userType with | SuperUser | Administrator | Pleb -> userId |> Some | PersonaNonGrata -> None
+    let chatPermission = match userType with | SuperUser | Administrator | Pleb -> true | PersonaNonGrata -> false
     {
         ChangePasswordPermission = changePasswordPermission
         UserAdminPermissions = userAdminPermissions
+        DraftAdminPermission = draftAdminPermission
+        ResultsAdminPermission = resultsAdminPermission
+        NewsPermissions = newsPermissions
         SquadPermissions = squadPermissions
-        ChatPermissions = chatPermissions
+        FixturePermissions  = fixturePermissions
+        DraftPermission = draftPermission
+        ChatPermission = chatPermission
     }
 
 let validateUserName (userNames:UserName list) (UserName userName) =

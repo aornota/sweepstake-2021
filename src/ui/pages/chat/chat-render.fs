@@ -84,17 +84,21 @@ let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
             yield div divCentred [ icon iconSpinnerPulseLarge ]
         | InitializationFailed _ -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Active activeState ->
-            let newChatMessage = activeState.NewChatMessage
-            let (ChatMessageId newChatMessageId), newMessageText = newChatMessage.NewChatMessageId, newChatMessage.NewMessageText
+        | Active activeState -> // note: no need to check ChatPermission (since this also controls projection)
+            let newChatMessageState = activeState.NewChatMessageState
+            let (ChatMessageId newChatMessageKey), newMessageText = newChatMessageState.NewChatMessageId, newChatMessageState.NewMessageText
             let helpInfo = [
                 str "Chat messages are not persisted and will only be received by signed-in users. You can use "
                 [ str "Markdown syntax" ] |> link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
                 str " to format your message. A preview of your message will appear below." ; br; br ]
-            let sendButtonInteraction =
-                match Markdown newMessageText |> validateChatMessageText with
-                | Some _ -> NotEnabled None
-                | None -> Clickable ((fun _ -> SendChatMessage |> dispatch), None)
+            let isSending, sendChatMessageInteraction =
+                match newChatMessageState.SendChatMessageStatus with
+                | Some SendChatMessagePending -> true, Loading
+                | Some (SendChatMessageFailed _) | None ->
+                    match Markdown newMessageText |> validateChatMessageText with
+                    | Some _ -> false, NotEnabled None
+                    | None -> false, Clickable ((fun _ -> SendChatMessage |> dispatch), None)
+            let errorText = match newChatMessageState.SendChatMessageStatus with | Some (SendChatMessageFailed errorText) -> errorText |> Some | Some SendChatMessagePending | None -> None
             let authUserId = state.AuthUser.UserId
             let chatUserDic = activeState.ChatProjection.ChatUserDic
             let chatUserTags =
@@ -106,9 +110,7 @@ let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
                 |> List.sortBy (fun (chatUser, _, sortOrder) -> sortOrder, chatUser.UserName)
                 |> List.map (fun (chatUser, semantic, _) -> chatUser |> renderChatUser theme semantic)
             // Note: Silently ignore chat messages for unknown chat user (should never happen).
-            let unconfirmedChatMessages = activeState.UnconfirmedChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
-                match chatUserDic |> tryFindChatUser chatMessage.UserId with | Some chatUser -> (chatMessageId, chatMessage, true, chatMessage.UserId, chatUser) |> Some | None -> None)
-            let confirmedChatMessages = activeState.ChatProjection.ChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
+            let chatMessages = activeState.ChatProjection.ChatMessageDic |> List.ofSeq |> List.choose (fun (KeyValue (chatMessageId, chatMessage)) ->
                 match chatUserDic |> tryFindChatUser chatMessage.UserId with | Some chatUser -> (chatMessageId, chatMessage, false, chatMessage.UserId, chatUser) |> Some | None -> None)
             let moreChatMessages =
                 let paraMore = { paraDefaultSmallest with ParaAlignment = RightAligned }
@@ -117,15 +119,20 @@ let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
                 else if activeState.HasMoreChatMessages then
                     [ br ; [ [ str "More chat messages" ] |> link theme (ClickableLink (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
                 else []
+            match errorText with
+            | Some errorText ->
+                yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+                yield br
+            | None -> ()
             yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
-                yield textArea theme newChatMessageId newMessageText newChatMessage.NewMessageErrorText helpInfo (hasModal |> not) false (NewMessageTextChanged >> dispatch)
+                yield textArea theme newChatMessageKey newMessageText newChatMessageState.NewMessageErrorText helpInfo (hasModal |> not) isSending (NewMessageTextChanged >> dispatch)
                 if String.IsNullOrWhiteSpace newMessageText |> not then
                     yield notification theme notificationInfo [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
-            yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Send chat message" ] |> button theme { buttonLinkSmall with Interaction = sendButtonInteraction } ]
+            yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Send chat message" ] |> button theme { buttonLinkSmall with Interaction = sendChatMessageInteraction } ]
             yield hr theme false
             yield div divDefault [ divTags chatUserTags ]
             yield divVerticalSpace 5
-            yield! unconfirmedChatMessages @ confirmedChatMessages
+            yield! chatMessages
                 |> List.sortBy (fun (_, chatMessage, _, _, _) -> chatMessage.Timestamp)
                 |> List.rev
                 |> List.map (renderChatMessage theme authUserId dispatch)

@@ -5,6 +5,7 @@ open Aornota.Common.IfDebug
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
+open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.Domain.UserAdmin
@@ -67,6 +68,17 @@ type ServerUserAdminMsg =
     | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
 
+type NewsProjectionMsg =
+    | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
+
+type ServerNewsMsg =
+    | InitializeNewsProjectionQryResult of result : Result<NewsProjectionDto * bool, OtherError<string>>
+    | MorePostsQryResult of result : Result<Rvn * PostDto list * bool, OtherError<string>>
+    | CreatePostCmdResult of result : Result<unit, AuthCmdError<string>>
+    | ChangePostCmdResult of result : Result<unit, AuthCmdError<string>>
+    | RemovePostCmdResult of result : Result<unit, AuthCmdError<string>>
+    | NewsProjectionMsg of newsProjectionMsg : NewsProjectionMsg
+
 type SquadsProjectionMsg =
     | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
     | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
@@ -90,13 +102,14 @@ type ChatProjectionMsg =
 type ServerChatMsg =
     | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto * bool, AuthQryError<string>>
     | MoreChatMessagesQryResult of result : Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>
-    | SendChatMessageCmdResult of result : Result<unit, ChatMessageId * AuthCmdError<string>>
+    | SendChatMessageCmdResult of result : Result<unit, AuthCmdError<string>>
     | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg
 
 type ServerMsg =
     | Waff
     | ServerAppMsg of serverAppMsg : ServerAppMsg
     | ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg
+    | ServerNewsMsg of serverNewsMsg : ServerNewsMsg
     | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 

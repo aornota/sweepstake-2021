@@ -31,9 +31,13 @@ type SquadDto = { SquadOnlyDto : SquadOnlyDto ; PlayerDtos : PlayerDto list }
 
 type SquadsProjectionDto = { SquadDtos : SquadDto list }
 
-let [<Literal>] MAX_PLAYERS_PER_SQUAD = 23
+let [<Literal>] private MAX_PLAYERS_PER_SQUAD = 23
+let [<Literal>] PERU_ID = "00000034-0000-0000-0000-000000000000" // note: not private since used in default-data.fs
 
-let squadIsFullText = sprintf "Squad contains the maximum of %i non-withdrawn players" MAX_PLAYERS_PER_SQUAD
+let private isPeru (SquadId squadId) = squadId.ToString () = PERU_ID
+
+let maxPlayers squadId = if squadId |> isPeru |> not then MAX_PLAYERS_PER_SQUAD else MAX_PLAYERS_PER_SQUAD + 1 // note: due to temporary revocation of drug ban (or something like that)
+let squadIsFullText squadId = sprintf "Squad contains the maximum of %i non-withdrawn players" (squadId |> maxPlayers)
 
 let validateSquadName (squadNames:SquadName list) (SquadName squadName) =
     if String.IsNullOrWhiteSpace squadName then "Squad name must not be blank" |> Some

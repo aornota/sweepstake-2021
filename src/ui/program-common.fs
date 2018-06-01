@@ -18,10 +18,13 @@ type ToDo = unit // TODO-REMOVE: Once no longer used...
 
 type UnauthPage =
     | NewsPage
+    | ScoresPage
     | SquadsPage
+    | FixturesPage
 
 type AuthPage =
     | UserAdminPage
+    | DraftAdminPage
     | DraftsPage
     | ChatPage
 
@@ -37,6 +40,7 @@ type Preferences = {
 
 type StaticModal =
     | ScoringSystem
+    | DraftAlgorithm
     | Payouts
     | MarkdownSyntax
 
@@ -47,8 +51,10 @@ type WsError =
     | DeserializeServerMsgError of errorText : string
 
 type UnauthPageInput =
-    | NewsInput
+    | NewsInput of newsInput : News.Common.Input
+    | ScoresInput of scoresInput: ToDo
     | SquadsInput of squadsInput : Squads.Common.Input
+    | FixturesInput of fixturesInput : ToDo
 
 type SignInInput =
     | UserNameTextChanged of userNameText : string
@@ -64,7 +70,8 @@ type UnauthInput =
 
 type AuthPageInput =
     | UserAdminInput of userAdminInput : UserAdmin.Common.Input
-    | DraftsInput
+    | DraftAdminInput of draftAdminInput : ToDo
+    | DraftsInput of draftsInput : ToDo
     | ChatInput of chatInput : Chat.Common.Input
 
 type PageInput =
@@ -129,8 +136,10 @@ type SignInState = {
     SignInStatus : SignInStatus option }
 
 type UnauthPageStates = {
-    NewsState : ToDo
-    SquadsState : Squads.Common.State option }
+    NewsState : News.Common.State
+    ScoresState : ToDo option
+    SquadsState : Squads.Common.State option
+    FixturesState : ToDo option }
 
 type UnauthState = {
     CurrentUnauthPage : UnauthPage
@@ -153,7 +162,8 @@ type ChangePasswordState = {
 
 type AuthPageStates = {
     UserAdminState : UserAdmin.Common.State option
-    DraftsState : ToDo
+    DraftAdminState : ToDo option
+    DraftsState : ToDo option
     ChatState : Chat.Common.State }
 
 type AuthState = {
@@ -184,4 +194,4 @@ type State = {
     ConnectionState : ConnectionState
     AppState : AppState }
 
-let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (β)"
+let [<Literal>] SWEEPSTAKE_2018 = "sweepstake 2018 (γ)"

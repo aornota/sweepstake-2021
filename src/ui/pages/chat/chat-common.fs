@@ -24,10 +24,15 @@ type Input =
     | MoreChatMessages
     | SendChatMessage
 
-type NewChatMessage = {
+type SendChatMessageStatus =
+    | SendChatMessagePending
+    | SendChatMessageFailed of errorText : string
+
+type NewChatMessageState = {
     NewChatMessageId : ChatMessageId
     NewMessageText : string
-    NewMessageErrorText : string option }
+    NewMessageErrorText : string option
+    SendChatMessageStatus : SendChatMessageStatus option }
 
 type ChatUser = { UserName : UserName ; LastActivity : DateTimeOffset option }
 type ChatUserDic = Dictionary<UserId, ChatUser>
@@ -41,8 +46,7 @@ type ActiveState = {
     ChatProjection : ChatProjection
     HasMoreChatMessages : bool
     MoreChatMessagesPending : bool
-    UnconfirmedChatMessageDic : ChatMessageDic
-    NewChatMessage : NewChatMessage }
+    NewChatMessageState : NewChatMessageState }
 
 type ProjectionState =
     | Initializing

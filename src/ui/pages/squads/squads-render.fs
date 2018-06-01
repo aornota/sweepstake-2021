@@ -60,7 +60,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
     let onDismiss = match addPlayersState.AddPlayerStatus with | Some AddPlayerPending -> None | Some _ | None -> (fun _ -> CancelAddPlayers |> dispatch) |> Some
     let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
     let nonWithdrawnCount = squad |> nonWithdrawnCount
-    let squadIsFull = nonWithdrawnCount >= MAX_PLAYERS_PER_SQUAD
+    let squadIsFull = nonWithdrawnCount >= (squadId |> maxPlayers)
     let isAddingPlayer, addPlayerInteraction, onEnter =
         let addPlayer = (fun _ -> AddPlayer |> dispatch)
         match addPlayersState.AddPlayerStatus with
@@ -73,7 +73,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
     let (PlayerId newPlayerKey) = addPlayersState.NewPlayerId
     let body = [
         if squadIsFull then
-            yield notification theme notificationWarning [ [ str squadIsFullText ] |> para theme paraCentredSmallest ]
+            yield notification theme notificationWarning [ [ str (squadId |> squadIsFullText) ] |> para theme paraCentredSmallest ]
             yield br
         match errorText with
         | Some errorText ->
@@ -356,15 +356,15 @@ let private addPlayers theme squadId squad authUser dispatch =
         match authUser.Permissions.SquadPermissions with
         | Some squadPermissions ->
             if squadPermissions.AddOrEditPlayerPermission then
-                if nonWithdrawnCount < MAX_PLAYERS_PER_SQUAD then
+                if nonWithdrawnCount < (squadId |> maxPlayers)  then
                     [ [ str "Add player/s" ] |> para theme paraAddPlayers ] |> link theme (ClickableLink (fun _ -> squadId |> ShowAddPlayersModal |> dispatch)) |> Some
                 else
-                    [ italic squadIsFullText ] |> para theme paraAddPlayers |> Some
+                    [ italic (squadId |> squadIsFullText) ] |> para theme paraAddPlayers |> Some
             else None
         | None -> None
     | _, _ -> None
 
-let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ str "Squads" ] |> para theme paraCentredSmall
@@ -379,26 +379,26 @@ let render (useDefaultTheme, state, authUser:AuthUser option) dispatch =
             let currentGroup = squadDic |> group currentSquadId
             let groupTabs = groups |> List.map (groupTab currentGroup dispatch)
             let squadTabs = squadDic |> squadTabs currentSquadId dispatch
-            match activeState.AddPlayersState with
-            | Some addPlayersState ->
+            match hasModal, activeState.AddPlayersState with
+            | false, Some addPlayersState ->
                 yield div divDefault [ lazyViewOrHMR2 renderAddPlayersModal (useDefaultTheme, squadDic, addPlayersState) (AddPlayersInput >> dispatch) ]
-            | None -> ()
-            match activeState.ChangePlayerNameState with
-            | Some changePlayerNameState ->
+            | _ -> ()
+            match hasModal, activeState.ChangePlayerNameState with
+            | false, Some changePlayerNameState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangePlayerNameModal (useDefaultTheme, squadDic, changePlayerNameState) (ChangePlayerNameInput >> dispatch) ]
-            | None -> ()
-            match activeState.ChangePlayerTypeState with
-            | Some changePlayerTypeState ->
+            | _ -> ()
+            match hasModal, activeState.ChangePlayerTypeState with
+            | false, Some changePlayerTypeState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangePlayerTypeModal (useDefaultTheme, squadDic, changePlayerTypeState) (ChangePlayerTypeInput >> dispatch) ]
-            | None -> ()
-            match activeState.WithdrawPlayerState with
-            | Some withdrawPlayerState ->
+            | _ -> ()
+            match hasModal, activeState.WithdrawPlayerState with
+            | false, Some withdrawPlayerState ->
                 yield div divDefault [ lazyViewOrHMR2 renderWithdrawPlayerModal (useDefaultTheme, squadDic, withdrawPlayerState) (WithdrawPlayerInput >> dispatch) ]
-            | None -> ()           
-            match activeState.EliminateSquadState with
-            | Some eliminateSquadState ->
+            | _ -> ()           
+            match hasModal, activeState.EliminateSquadState with
+            | false, Some eliminateSquadState ->
                 yield div divDefault [ lazyViewOrHMR2 renderEliminateSquadModal (useDefaultTheme, squadDic, eliminateSquadState) (EliminateSquadInput >> dispatch) ]
-            | None -> ()
+            | _ -> ()
             // TODO-NMB-MEDIUM: Search box (e.g. for drafting)?...
             yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             match squadTabs with

@@ -7,13 +7,15 @@ open System
 
 type Entity =
     | Users
+    | News
     | Squads
 
 type Projection =
-    | Chat
-    | Squads
     | UserAdmin
-
+    | News
+    | Squads
+    | Chat
+  
 type Source =
     | ConsoleLogger
     | Broadcaster
@@ -56,10 +58,19 @@ let private sourceTextAndColour source =
     | Ticker -> "Ticker", ConsoleColor.DarkYellow
     | Persistence -> "Persistence", ConsoleColor.Cyan
     | Entity entity ->
-        let text = match entity with | Users -> "Users" | Entity.Squads -> "Squads"
+        let text =
+            match entity with
+            | Users -> "Users"
+            | Entity.News -> "News"
+            | Entity.Squads -> "Squads"
         sprintf "%s [entity]" text, ConsoleColor.Blue
     | Projection projection ->
-        let text = match projection with | Chat -> "Chat" | Projection.Squads -> "Squads" | UserAdmin -> "UserAdmin"
+        let text =
+            match projection with
+            | UserAdmin -> "UserAdmin"
+            | Projection.News -> "News"
+            | Projection.Squads -> "Squads"
+            | Chat -> "Chat"
         sprintf "%s [projection]" text, ConsoleColor.DarkBlue
     | Connections -> "Connections", ConsoleColor.Magenta
     | WsMiddleware -> "WsMiddleware", ConsoleColor.DarkMagenta

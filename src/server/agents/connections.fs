@@ -313,6 +313,38 @@ type Connections () =
                         result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiUnauthMsg (UiUnauthNewsMsg InitializeNewsProjectionQry) ->
+                    let source = "InitializeNewsProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.News.news.HandleInitializeNewsProjectionQry
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeNewsProjectionQryResult |> ServerNewsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun (newsProjectionDto, _) -> sprintf "%i post/s" newsProjectionDto.PostDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiUnauthMsg (UiUnauthNewsMsg MorePostsQry) ->
+                    let source = "MorePostsQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.News.news.HandleMorePostsQry
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> MorePostsQryResult |> ServerNewsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun (_, postDtos, _) -> sprintf "%i post/s" postDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 | UiUnauthMsg (UiUnauthSquadsMsg InitializeSquadsProjectionUnauthQry) ->
                     let source = "InitializeSquadsProjectionUnauthQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -459,6 +491,66 @@ type Connections () =
                         | Error _ -> () })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthNewsMsg (CreatePostCmd (postId, postType, messageText))) ->
+                    let source = "CreatePostCmd"
+                    sprintf "%s (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId postType connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.CreatePostToken with
+                                | Some createPostToken ->
+                                    (createPostToken, auditUserId, postId, postType, messageText) |> Entities.News.news.HandleCreatePostCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> CreatePostCmdResult |> ServerNewsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthNewsMsg (ChangePostCmd (postId, currentRvn, messageText))) ->
+                    let source = "ChangePostCmd"
+                    sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.EditOrRemovePostToken with
+                                | Some editOrRemovePostToken ->
+                                    (editOrRemovePostToken, auditUserId, postId, currentRvn, messageText) |> Entities.News.news.HandleChangePostCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ChangePostCmdResult |> ServerNewsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthNewsMsg (RemovePostCmd (postId, currentRvn))) ->
+                    let source = "CreatePostCmd"
+                    sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.EditOrRemovePostToken with
+                                | Some editOrRemovePostToken ->
+                                    (editOrRemovePostToken, auditUserId, postId, currentRvn) |> Entities.News.news.HandleRemovePostCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> RemovePostCmdResult |> ServerNewsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 | UiAuthMsg (jwt, UiAuthSquadsMsg InitializeSquadsProjectionAuthQry) ->
                     let source = "InitializeSquadsProjectionAuthQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -589,7 +681,7 @@ type Connections () =
                         let! result =
                             match result with
                             | Ok userTokens ->
-                                match userTokens.ChatProjectionQryToken with
+                                match userTokens.ChatToken with
                                 | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleInitializeChatProjectionQry
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
@@ -608,7 +700,7 @@ type Connections () =
                         let! result =
                             match result with
                             | Ok userTokens ->
-                                match userTokens.ChatProjectionQryToken with
+                                match userTokens.ChatToken with
                                 | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleMoreChatMessagesQry
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
@@ -627,11 +719,11 @@ type Connections () =
                         let! result =
                             match result with
                             | Ok userTokens ->
-                                match userTokens.SendChatMessageToken with
+                                match userTokens.ChatToken with
                                 | Some sendChatMessageToken -> (sendChatMessageToken, userId, chatMessageId, messageText) |> chat.HandleSendChatMessageCmd
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> tupleError chatMessageId |> SendChatMessageCmdResult |> ServerChatMsg
+                        let serverMsg = result |> SendChatMessageCmdResult |> ServerChatMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection

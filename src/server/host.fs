@@ -52,7 +52,7 @@ builder.UseUrls (sprintf "http://0.0.0.0:%i/" WS_PORT) |> ignore
 "starting ConsoleLogger agent" |> Info |> log // note: will be logged as IgnoredInput (since ConsoleLogger agent not yet started) - but this is fine since consoleLogger.Log is not blocking
 ifDebug logEverythingExceptVerboseAndTicker logWarningsAndWorseOnly |> consoleLogger.Start
 "starting core agents" |> Info |> log
-logAllSignalsExceptTick |> broadcaster.Start
+logNoSignals |> broadcaster.Start
 SECONDS_PER_TICK |> ticker.Start
 () |> persistence.Start
 
@@ -61,10 +61,12 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 // Note: If entity agents were started by createInitialPersistedEventsIfNecessary [then "reset"], they will "bypass" subsequent Start calls (i.e. no new subscription) and *not* block the caller.
 "starting Entities agents" |> Info |> log
 () |> Entities.Users.users.Start
+() |> Entities.News.news.Start
 () |> Entities.Squads.squads.Start
 
 "starting Projections agents" |> Info |> log
 () |> Projections.UserAdmin.userAdmin.Start
+() |> Projections.News.news.Start
 () |> Projections.Squads.squads.Start
 () |> Projections.Chat.chat.Start
 
@@ -75,7 +77,7 @@ readPersistedEvents ()
 serverStarted |> connections.Start
 
 (* TEMP-NMB: Finesse logging for development/debugging purposes...
-("development/debugging", function | Entity Entity.Users | Projection Projection.UserAdmin -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+("development/debugging", function | Entity Entity.News | Projection Projection.News -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
 
 "ready" |> Info |> log
 

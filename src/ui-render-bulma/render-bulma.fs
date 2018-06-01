@@ -16,7 +16,7 @@ type ContainerWidth = | Fluid | Widescreen | FullHD
 
 type Size = | Large | Medium | Normal | Small
 
-type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Notes | File | Find | User | Password | Admin | Male
+type Icon = | SpinnerPulse | Theme | Checked | Unchecked | ExpandDown | CollapseUp | Forward | Back | Ascending | Descending | Notes | File | Find | User | Password | Admin | Male | Info
 
 type IconData = {
     IconSize : Size
@@ -73,6 +73,7 @@ let icon iconData =
         | Password -> "fa-key"
         | Admin -> "fa-cog"
         | Male -> "fa-male"
+        | Info -> "fa-info-circle"
     Icon.icon [
         match size with Some size -> yield size | None -> ()
         match alignment with Some alignment -> yield alignment | None -> ()
@@ -167,3 +168,5 @@ let iconAdmin = { iconDefault with Icon = Admin }
 let iconAdminSmall = { iconAdmin with IconSize = Small }
 let iconMale = { iconDefault with Icon = Male }
 let iconMaleSmall = { iconMale with IconSize = Small }
+let iconInfo = { iconDefault with Icon = Info }
+let iconInfoSmall = { iconInfo with IconSize = Small }

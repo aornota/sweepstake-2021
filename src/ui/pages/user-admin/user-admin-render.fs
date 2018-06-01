@@ -237,7 +237,7 @@ let private createUsers theme authUser dispatch =
         | [] -> None
     | None -> None // note: should never happen
 
-let render (useDefaultTheme, state) dispatch =
+let render (useDefaultTheme, state, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ str "User administration" ] |> para theme paraCentredSmall
@@ -249,17 +249,17 @@ let render (useDefaultTheme, state) dispatch =
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState ->
             let user4AdminDic = activeState.UserAdminProjection.User4AdminDic
-            match activeState.CreateUsersState with
-            | Some createUsersState ->
+            match hasModal, activeState.CreateUsersState with
+            | false, Some createUsersState ->
                 yield div divDefault [ lazyViewOrHMR2 renderCreateUsersModal (useDefaultTheme, user4AdminDic, createUsersState) (CreateUsersInput >> dispatch) ]
-            | None -> ()
-            match activeState.ResetPasswordState with
-            | Some resetPasswordState ->
+            | _ -> ()
+            match hasModal, activeState.ResetPasswordState with
+            | false, Some resetPasswordState ->
                 yield div divDefault [ lazyViewOrHMR2 renderResetPasswordModal (useDefaultTheme, user4AdminDic, resetPasswordState) (ResetPasswordInput >> dispatch) ]
-            | None -> ()
-            match activeState.ChangeUserTypeState with
-            | Some changeUserTypeState ->
+            | _ -> ()
+            match hasModal, activeState.ChangeUserTypeState with
+            | false, Some changeUserTypeState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangeUserTypeModal (useDefaultTheme, user4AdminDic, changeUserTypeState) (ChangeUserTypeInput >> dispatch) ]
-            | None -> ()
+            | _ -> ()
             yield lazyViewOrHMR2 renderUsers4Admin (useDefaultTheme, activeState.UserAdminProjection.User4AdminDic, state.AuthUser) dispatch
             yield Rct.ofOption (createUsers theme state.AuthUser dispatch) ]

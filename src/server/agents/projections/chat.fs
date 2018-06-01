@@ -39,11 +39,11 @@ type private ChatInput =
     | OnUserSignedInOrOut of userId : UserId * signedIn : bool
     | OnUserActivity of userId : UserId
     | RemoveConnections of connectionIds : ConnectionId list
-    | HandleInitializeChatProjectionQry of token : ChatProjectionQryToken * connectionId : ConnectionId
+    | HandleInitializeChatProjectionQry of token : ChatToken * connectionId : ConnectionId
         * reply : AsyncReplyChannel<Result<ChatProjectionDto * bool, AuthQryError<string>>>
-    | HandleMoreChatMessagesQry of token : ChatProjectionQryToken * connectionId : ConnectionId
+    | HandleMoreChatMessagesQry of token : ChatToken * connectionId : ConnectionId
         * reply : AsyncReplyChannel<Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>>
-    | HandleSendChatMessageCmd of token : SendChatMessageToken * userId : UserId * chatMessageId : ChatMessageId * messageText : Markdown
+    | HandleSendChatMessageCmd of token : ChatToken * userId : UserId * chatMessageId : ChatMessageId * messageText : Markdown
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     
 type private ChatUser = { UserName : UserName ; UserType : UserType ; LastActivity : DateTimeOffset option }
@@ -167,7 +167,7 @@ let private updateState source (projecteeDic:ProjecteeDic) stateChangeType =
             let chatMessageDelta = chatMessageDic |> delta state.ChatMessageDic
             if chatMessageDelta |> isEmpty |> not then
                 let removedOrdinals = chatMessageDelta.Removed |> List.choose (fun chatMessageId ->
-                    if chatMessageId |> state.ChatMessageDic.ContainsKey |> not then None // note: ignore unknown ChatMessageId (should never happen)
+                    if chatMessageId |> state.ChatMessageDic.ContainsKey |> not then None // note: ignore unknown chatMessageId (should never happen)
                     else
                         let chatMessage = state.ChatMessageDic.[chatMessageId]
                         (chatMessageId, chatMessage.Ordinal) |> Some)
@@ -366,9 +366,11 @@ type Chat () =
                 sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId chatMessageId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 let result =
                     if chatMessageId |> chatMessageDic.ContainsKey then ifDebug (sprintf "%A already exists" chatMessageId) UNEXPECTED_ERROR |> OtherError |> OtherAuthCmdError |> Error
+                    else if userId |> chatUserDic.ContainsKey |> not then ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> OtherError |> OtherAuthCmdError |> Error
                     else
-                        if userId |> chatUserDic.ContainsKey |> not then ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> OtherError |> OtherAuthCmdError |> Error
-                        else
+                        match messageText |> validateChatMessageText with
+                        | Some errorText -> errorText |> OtherError |> OtherAuthCmdError |> Error
+                        | None ->
                             let nextOrdinal =
                                 if chatMessageDic.Count = 0 then 1
                                 else (chatMessageDic |> List.ofSeq |> List.map (fun (KeyValue (_, chatMessage)) -> chatMessage.Ordinal) |> List.max) + 1
