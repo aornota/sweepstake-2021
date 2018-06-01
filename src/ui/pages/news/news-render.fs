@@ -49,7 +49,7 @@ let private renderAddPostModal (useDefaultTheme, addPostState:AddPostState) disp
         yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
             yield textArea theme newPostKey newMessageText addPostState.NewMessageErrorText helpInfo true isAddingPost (NewMessageTextChanged >> AddPostInput >> dispatch)
             if String.IsNullOrWhiteSpace newMessageText |> not then
-                yield notification theme notificationInfo [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
+                yield notification theme notificationBlack [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
         yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Add post" ] |> button theme { buttonLinkSmall with Interaction = addPostInteraction } ] ]
     cardModal theme [ [ str "Add post" ] |> para theme paraCentredSmall ] onDismiss body
 
@@ -147,7 +147,7 @@ let private renderPost theme authUser dispatch (postId, post) =
         | Some (editPost, removePost) ->
         yield level true [ levelLeft [ levelItem [ editPost ] ] ; levelRight [ levelItem [ removePost ] ] ]
         | None -> () ]
-    let semantic = if post.Removed then Light else Info
+    let semantic = if post.Removed then Light else Black
     let children = renderChildren post
     let onDismissNotification = if post.Removed then (fun _ -> postId |> DismissPost |> dispatch) |> Some else None
     [
