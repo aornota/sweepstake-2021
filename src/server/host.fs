@@ -81,7 +81,7 @@ serverStarted |> connections.Start
 (* TEMP-NMB: Finesse logging for development/debugging purposes...
 ("development/debugging", function | Entity Entity.Fixtures | Projection Projection.Fixtures -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
 
-"ready" |> Info |> log
+"server ready" |> Info |> log
 
 let private host = builder.Build ()
 
