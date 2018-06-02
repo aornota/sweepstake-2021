@@ -54,7 +54,7 @@ type UnauthPageInput =
     | NewsInput of newsInput : News.Common.Input
     | ScoresInput of scoresInput: ToDo
     | SquadsInput of squadsInput : Squads.Common.Input
-    | FixturesInput of fixturesInput : ToDo
+    | FixturesInput of fixturesInput : Fixtures.Common.Input
 
 type SignInInput =
     | UserNameTextChanged of userNameText : string
@@ -139,7 +139,7 @@ type UnauthPageStates = {
     NewsState : News.Common.State
     ScoresState : ToDo option
     SquadsState : Squads.Common.State option
-    FixturesState : ToDo option }
+    FixturesState : Fixtures.Common.State option }
 
 type UnauthState = {
     CurrentUnauthPage : UnauthPage

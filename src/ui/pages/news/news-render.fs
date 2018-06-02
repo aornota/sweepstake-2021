@@ -51,7 +51,7 @@ let private renderAddPostModal (useDefaultTheme, addPostState:AddPostState) disp
             if String.IsNullOrWhiteSpace newMessageText |> not then
                 yield notification theme notificationBlack [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
         yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Add post" ] |> button theme { buttonLinkSmall with Interaction = addPostInteraction } ] ]
-    cardModal theme [ [ str "Add post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Add post" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderEditPostModal (useDefaultTheme, editPostState:EditPostState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -78,9 +78,9 @@ let private renderEditPostModal (useDefaultTheme, editPostState:EditPostState) d
         yield field theme { fieldDefault with Grouped = FullWidth |> Some } [
             yield textArea theme postKey messageText editPostState.MessageErrorText helpInfo true isEditingPost (MessageTextChanged >> EditPostInput >> dispatch)
             if String.IsNullOrWhiteSpace messageText |> not then
-                yield notification theme notificationInfo [ Markdown messageText |> notificationContentFromMarkdown theme ] ]
+                yield notification theme notificationBlack [ Markdown messageText |> notificationContentFromMarkdown theme ] ]
         yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Edit post" ] |> button theme { buttonLinkSmall with Interaction = editPostInteraction } ] ]
-    cardModal theme [ [ str "Edit post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Edit post" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostState:RemovePostState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -112,7 +112,7 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Remove post" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ str "Remove post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Remove post" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderPost theme authUser dispatch (postId, post) =
     let editOrRemovePost =
@@ -169,12 +169,12 @@ let private addPost theme authUser dispatch =
 let render (useDefaultTheme, state, authUser:AuthUser option, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ str "News" ] |> para theme paraCentredSmall
+        yield [ bold "News" ] |> para theme paraCentredSmall
         yield hr theme false
         match state.ProjectionState with
         | Initializing ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed _ -> // note: should never happen
+        | InitializationFailed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState ->
             let postDic = activeState.NewsProjection.PostDic

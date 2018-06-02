@@ -23,7 +23,7 @@ open Aornota.Sweepstake2018.Server.Signal
 open System
 open System.Collections.Generic
 
-type private UsersInput =
+type private SquadsInput =
     | IsAwaitingStart of reply : AsyncReplyChannel<bool>
     | Start of reply : AsyncReplyChannel<unit>
     | Reset of reply : AsyncReplyChannel<unit>

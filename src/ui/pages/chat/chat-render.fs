@@ -77,12 +77,12 @@ let private renderChatUser theme semantic chatUser =
 let render (useDefaultTheme, state, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ str "Chat" ] |> para theme paraCentredSmall
+        yield [ bold "Chat" ] |> para theme paraCentredSmall
         yield hr theme false
         match state.ProjectionState with
         | Initializing ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed _ -> // note: should never happen
+        | InitializationFailed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState -> // note: no need to check ChatPermission (since this also controls projection)
             let newChatMessageState = activeState.NewChatMessageState

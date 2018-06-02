@@ -3,7 +3,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.News
 (* Broadcasts: SendMsg
    Subscribes: UsersRead
                NewsRead
-               UserEventWritten (UserCreated)
+               UserEventWritten (UserCreated only)
                NewsEventWritten (PostCreated | PostChanged | PostRemoved)
                Disconnected *)
 

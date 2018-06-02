@@ -5,6 +5,7 @@ open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -17,13 +18,15 @@ type UiUnauthNewsMsg =
     | InitializeNewsProjectionQry
     | MorePostsQry
 
-type UiUnauthSquadsMsg =
-    | InitializeSquadsProjectionUnauthQry
+type UiUnauthSquadsMsg = | InitializeSquadsProjectionUnauthQry
+
+type UiUnauthFixturesMsg = | InitializeFixturesProjectionQry
 
 type UiUnauthMsg =
     | UiUnauthAppMsg of uiUnauthAppMsg : UiUnauthAppMsg
     | UiUnauthNewsMsg of uiUnauthNewsMsg : UiUnauthNewsMsg
     | UiUnauthSquadsMsg of uiUnauthSquadsMsg : UiUnauthSquadsMsg
+    | UiUnauthFixturesMsg of uiUnauthFixturesMsg : UiUnauthFixturesMsg
 
 type UiAuthAppMsg =
     | SignOutCmd
@@ -48,6 +51,8 @@ type UiAuthSquadsMsg =
     | WithdrawPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
     | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn
 
+type UiAuthFixturesMsg = | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
+
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
     | MoreChatMessagesQry
@@ -59,6 +64,7 @@ type UiAuthMsg =
     | UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg
     | UiAuthNewsMsg of uiAuthNewsMsg : UiAuthNewsMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
+    | UiAuthFixturesMsg of uiAuthFixturesMsg : UiAuthFixturesMsg
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 
 type UiMsg =

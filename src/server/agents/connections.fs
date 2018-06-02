@@ -361,6 +361,22 @@ type Connections () =
                         result |> logResult source (fun squadsProjectionDto -> sprintf "%i squad/s" squadsProjectionDto.SquadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
                     return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiUnauthMsg (UiUnauthFixturesMsg InitializeFixturesProjectionQry) ->
+                    let source = "InitializeFixturesProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.Fixtures.fixtures.HandleInitializeFixturesProjectionQry
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeFixturesProjectionQryResult |> ServerFixturesMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun fixturesProjectionDto -> sprintf "%i fixtures/s" fixturesProjectionDto.FixtureDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
                 | UiAuthMsg (jwt, UserNonApiActivity) ->
                     let source = "UserNonApiActivity"
                     sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -667,6 +683,26 @@ type Connections () =
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> EliminateSquadCmdResult |> ServerSquadsMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                | UiAuthMsg (jwt, UiAuthFixturesMsg (ConfirmParticipantCmd (fixtureId, currentRvn, role, squadId))) ->
+                    let source = "ConfirmParticipantCmd"
+                    sprintf "%s for %A (%A %A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source fixtureId currentRvn role squadId connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.ConfirmFixtureToken with
+                                | Some confirmFixtureToken ->
+                                    (confirmFixtureToken, auditUserId, fixtureId, currentRvn, role, squadId) |> Entities.Fixtures.fixtures.HandleConfirmParticipantCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ConfirmParticipantCmdResult |> ServerFixturesMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection

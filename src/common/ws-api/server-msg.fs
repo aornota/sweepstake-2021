@@ -5,6 +5,7 @@ open Aornota.Common.IfDebug
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -58,8 +59,7 @@ type ServerAppMsg =
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
 
-type UserAdminProjectionMsg =
-    | Users4AdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, User4AdminDto>
+type UserAdminProjectionMsg = | Users4AdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, User4AdminDto>
 
 type ServerUserAdminMsg =
     | InitializeUserAdminProjectionQryResult of result : Result<UserAdminProjectionDto, AuthQryError<string>>
@@ -68,8 +68,7 @@ type ServerUserAdminMsg =
     | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
 
-type NewsProjectionMsg =
-    | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
+type NewsProjectionMsg = | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
 
 type ServerNewsMsg =
     | InitializeNewsProjectionQryResult of result : Result<NewsProjectionDto * bool, OtherError<string>>
@@ -93,6 +92,13 @@ type ServerSquadsMsg =
     | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
+type FixturesProjectionMsg = | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
+
+type ServerFixturesMsg =
+    | InitializeFixturesProjectionQryResult of result : Result<FixturesProjectionDto, OtherError<string>>
+    | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>
+    | FixturesProjectionMsg of fixturesProjectionMsg : FixturesProjectionMsg
+
 type ChatProjectionMsg =
     | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>
     | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto> * hasMoreChatMessages : bool
@@ -111,6 +117,7 @@ type ServerMsg =
     | ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg
     | ServerNewsMsg of serverNewsMsg : ServerNewsMsg
     | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
+    | ServerFixturesMsg of serverFixturesMsg : ServerFixturesMsg
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError source errorText = ifDebugSource source errorText |> OtherError |> Error

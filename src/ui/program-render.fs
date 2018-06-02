@@ -178,7 +178,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
 
 let private renderStaticModal (useDefaultTheme, titleText, markdown) dispatch =
     let theme = getTheme useDefaultTheme
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] ((fun _ -> HideStaticModal |> dispatch) |> Some) [ markdown |> contentFromMarkdown theme ]
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] ((fun _ -> HideStaticModal |> dispatch) |> Some) [ markdown |> contentFromMarkdown theme ]
 
 let private markdownSyntaxKey = Guid.NewGuid ()
 
@@ -189,7 +189,7 @@ let private renderMarkdownSyntaxModal useDefaultTheme dispatch =
         textArea theme markdownSyntaxKey MARKDOWN_SYNTAX_MARKDOWN None [] false true ignore
         br ; [ str "will appear as:" ] |> para theme paraCentredSmaller ; br
         Markdown MARKDOWN_SYNTAX_MARKDOWN |> contentFromMarkdown theme ]
-    cardModal theme [ [ str "Markdown syntax" ] |> para theme paraCentredSmall ] ((fun _ -> HideStaticModal |> dispatch) |> Some) body
+    cardModal theme [ [ bold "Markdown syntax" ] |> para theme paraCentredSmall ] ((fun _ -> HideStaticModal |> dispatch) |> Some) body
 
 let private renderSignInModal (useDefaultTheme, signInState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -218,15 +218,12 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
             textBox theme signInState.PasswordKey signInState.PasswordText (iconPasswordSmall |> Some) true signInState.PasswordErrorText [] signInState.FocusPassword isSigningIn
                 (PasswordTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Sign in" ] |> button theme { buttonLinkSmall with Interaction = signInInteraction } ] ]
-    cardModal theme [ [ str "Sign in" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Sign in" ] |> para theme paraCentredSmall ] onDismiss body
 
 // TEMP-NMB...
 let private renderScores useDefaultTheme =
     let theme = getTheme useDefaultTheme
-    columnContent [ [ str "Scores" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-let private renderFixtures useDefaultTheme =
-    let theme = getTheme useDefaultTheme
-    columnContent [ [ str "Fixtures" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
+    columnContent [ [ bold "Scores" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 // ...NMB-TEMP
 
 let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (dispatch:UnauthInput -> unit) =
@@ -240,6 +237,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
         | NewsPage ->
             let newsState = unauthState.UnauthPageStates.NewsState
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
+
         | ScoresPage ->
             match unauthState.UnauthPageStates.ScoresState with
             | Some _scoresState ->
@@ -248,6 +246,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage ScoresPage when UnauthPageStates.ScoresState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | SquadsPage ->
             match unauthState.UnauthPageStates.SquadsState with
             | Some squadsState ->
@@ -257,9 +256,8 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | FixturesPage ->
             match unauthState.UnauthPageStates.FixturesState with
-            | Some _fixturesState ->
-                yield renderFixtures useDefaultTheme
-                // TODO-SOON... yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, hasModal) (FixturesInput >> UnauthPageInput >> dispatch)
+            | Some fixturesState ->
+                yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage FixturesPage when UnauthPageStates.FixturesState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks) ]
@@ -304,19 +302,19 @@ let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dis
              textBox theme changePasswordState.ConfirmPasswordKey changePasswordState.ConfirmPasswordText (iconPasswordSmall |> Some) true changePasswordState.ConfirmPasswordErrorText []
                 false isChangingPassword (ConfirmPasswordTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change password" ] |> button theme { buttonLinkSmall with Interaction = changePasswordInteraction } ]        ]
-    cardModal theme [ [ str "Change password" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Change password" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
-    cardModal theme [ [ str "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
+    cardModal theme [ [ bold "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
 
 // TEMP-NMB...
 let private renderDraftAdmin useDefaultTheme =
     let theme = getTheme useDefaultTheme
-    columnContent [ [ str "Draft administration" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
+    columnContent [ [ bold "Draft administration" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 let private renderDrafts useDefaultTheme =
     let theme = getTheme useDefaultTheme
-    columnContent [ [ str "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
+    columnContent [ [ bold "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 // ...NMB-TEMP
 
 let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispatch =
@@ -334,6 +332,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | UnauthPage NewsPage ->
             let newsState = authState.UnauthPageStates.NewsState
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
+
         | UnauthPage ScoresPage ->
             match authState.UnauthPageStates.ScoresState with
             | Some _scoresState ->
@@ -342,6 +341,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage ScoresPage when UnauthPageStates.ScoresState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | UnauthPage SquadsPage ->
             match authState.UnauthPageStates.SquadsState with
             | Some squadsState ->
@@ -351,12 +351,12 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | UnauthPage FixturesPage ->
             match authState.UnauthPageStates.FixturesState with
-            | Some _fixturesState ->
-                yield renderFixtures useDefaultTheme
-                // TODO-SOON... yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, hasModal) (FixturesInput >> UPageInput >> PageInput >> dispatch)
+            | Some fixturesState ->
+                yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authState.AuthUser |> Some, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is UnauthPage FixturesPage when UnauthPageStates.FixturesState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | AuthPage DraftAdminPage ->
             match authState.AuthPageStates.DraftAdminState with
             | Some _draftAdminState ->
@@ -365,6 +365,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage DraftAdminPage when AuthPageStates.DraftAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | AuthPage UserAdminPage ->
             match authState.AuthPageStates.UserAdminState with
             | Some userAdminState ->
@@ -372,6 +373,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage UserAdminPage when AuthPageStates.UserAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | AuthPage DraftsPage ->
             match authState.AuthPageStates.DraftsState with
             | Some _draftsState ->
@@ -380,6 +382,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage DraftsPage when AuthPageStates.DraftsState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+
         | AuthPage ChatPage ->
             yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, authState.AuthPageStates.ChatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]
 

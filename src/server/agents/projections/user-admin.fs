@@ -71,9 +71,7 @@ let private user4AdminDtoDic (user4AdminDic:User4AdminDic) =
         (user4AdminDto.UserId, user4AdminDto) |> user4AdminDtoDic.Add)
     user4AdminDtoDic
 
-let private userAdminProjectionDto state =
-    let user4AdminDtos = state.User4AdminDic |> List.ofSeq |> List.map (fun (KeyValue (userId, user4Admin)) -> (userId, user4Admin) |> user4AdminDto)
-    { User4AdminDtos = user4AdminDtos }
+let private userAdminProjectionDto state = { User4AdminDtos = state.User4AdminDic |> List.ofSeq |> List.map (fun (KeyValue (userId, user4Admin)) -> (userId, user4Admin) |> user4AdminDto) }
 
 let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
 

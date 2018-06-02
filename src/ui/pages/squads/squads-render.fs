@@ -3,7 +3,9 @@ module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 open Aornota.Common.IfDebug
 
 open Aornota.UI.Common.LazyViewOrHMR
+#if TICK
 open Aornota.UI.Common.TimestampHelper
+#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -18,12 +20,6 @@ open Aornota.Sweepstake2018.UI.Pages.Squads.Common
 open System
 
 module Rct = Fable.Helpers.React
-
-let private groups = [ GroupA ; GroupB ; GroupC ; GroupD ; GroupE ; GroupF ; GroupG ; GroupH ]
-
-let private groupText group =
-    let groupText = match group with | GroupA -> "A" | GroupB -> "B" | GroupC -> "C" | GroupD -> "D" | GroupE -> "E" | GroupF -> "F" | GroupG -> "G" | GroupH -> "H"
-    sprintf "Group %s" groupText
 
 let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ]
 
@@ -89,7 +85,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             yield! playerTypeRadios (addPlayersState.NewPlayerType |> Some) None isAddingPlayer (NewPlayerTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Add player" ] |> button theme { buttonLinkSmall with Interaction = addPlayerInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, changePlayerNameState:ChangePlayerNameState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -129,7 +125,7 @@ let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, cha
             textBox theme playerKey changePlayerNameState.PlayerNameText (iconMaleSmall |> Some) false changePlayerNameState.PlayerNameErrorText [] true isChangingPlayerName
                 (PlayerNameTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Edit name" ] |> button theme { buttonLinkSmall with Interaction = changePlayerNameInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, changePlayerTypeState:ChangePlayerTypeState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -165,7 +161,7 @@ let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, cha
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             yield! playerTypeRadios changePlayerTypeState.PlayerType currentPlayerType isChangingPlayerType (PlayerTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change position" ] |> button theme { buttonLinkSmall with Interaction = changePlayerTypeInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withdrawPlayerState:WithdrawPlayerState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -199,7 +195,7 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Withdraw player" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, eliminateSquadState:EliminateSquadState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -231,7 +227,7 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Eliminate team" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private group squadId (squadDic:SquadDic) = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
 
@@ -290,6 +286,13 @@ let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = /
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
+let private ago (timestamp:DateTime) =
+#if TICK
+    timestamp |> ago
+#else
+    timestamp.ToString ("HH:mm:ss")
+#endif
+
 let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, authUser) dispatch = // TODO-SOON: Enable ShowWithdrawPlayerModal link in release builds...
     let theme = getTheme useDefaultTheme
     let canEdit, canWithdraw =
@@ -330,9 +333,9 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
             td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
             td [ Rct.ofOption (withdraw playerId player) ] ]
-    let sortedPlayers = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
+    let players = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
         player.PlayerType |> playerTypeSortOrder, player.PlayerName)
-    let playerRows = sortedPlayers |> List.map (fun (playerId, player) -> (playerId, player) |> playerRow)
+    let playerRows = players |> List.map (fun (playerId, player) -> (playerId, player) |> playerRow)
     div divCentred [
         if playerDic.Count > 0 then
             yield table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
@@ -367,12 +370,12 @@ let private addPlayers theme squadId squad authUser dispatch =
 let render (useDefaultTheme, state, authUser:AuthUser option, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ str "Squads" ] |> para theme paraCentredSmall
+        yield [ bold "Squads" ] |> para theme paraCentredSmall
         yield hr theme false
         match state.ProjectionState with
         | Initializing _ ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed _ -> // note: should never happen
+        | InitializationFailed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState ->
             let squadDic, currentSquadId = activeState.SquadsProjection.SquadDic, activeState.CurrentSquadId

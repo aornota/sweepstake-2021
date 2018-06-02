@@ -252,27 +252,27 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
     | EliminateSquadCmdResult result, Active activeState ->
         state |> handleEliminateSquadCmdResult result activeState
     | SquadsProjectionMsg (SquadsDeltaMsg (deltaRvn, squadOnlyDtoDelta)), Active activeState ->
-        let squadProjection = activeState.SquadsProjection
-        match squadProjection.SquadDic |> applySquadsDelta squadProjection.Rvn deltaRvn squadOnlyDtoDelta with
+        let squadsProjection = activeState.SquadsProjection
+        match squadsProjection.SquadDic |> applySquadsDelta squadsProjection.Rvn deltaRvn squadOnlyDtoDelta with
         | Ok squadDic ->
-            let squadProjection = { squadProjection with Rvn = deltaRvn ; SquadDic = squadDic }
-            let activeState = { activeState with SquadsProjection = squadProjection }
+            let squadsProjection = { squadsProjection with Rvn = deltaRvn ; SquadDic = squadDic }
+            let activeState = { activeState with SquadsProjection = squadsProjection }
             { state with ProjectionState = Active activeState }, Cmd.none
         | Error error ->
-            let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" squadOnlyDtoDelta squadProjection.SquadDic error)
+            let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" squadOnlyDtoDelta squadsProjection.SquadDic error)
             let state, cmd = initialize authUser activeState.CurrentSquadId
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | SquadsProjectionMsg (PlayersDeltaMsg (deltaRvn, squadId, squadRvn, playerDtoDelta)), Active activeState ->
-        let squadProjection = activeState.SquadsProjection
-        let squadDic = squadProjection.SquadDic
+        let squadsProjection = activeState.SquadsProjection
+        let squadDic = squadsProjection.SquadDic
         let squad = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
         match squad with
         | Some squad ->
-            match squad.PlayerDic |> applyPlayersDelta squadProjection.Rvn deltaRvn playerDtoDelta with
+            match squad.PlayerDic |> applyPlayersDelta squadsProjection.Rvn deltaRvn playerDtoDelta with
             | Ok playerDic ->
                 let squad = { squad with Rvn = squadRvn ; PlayerDic = playerDic }
                 squadDic.[squadId] <- squad
-                let squadsProjection = { squadProjection with Rvn = deltaRvn }
+                let squadsProjection = { squadsProjection with Rvn = deltaRvn }
                 let addPlayersState =
                     match activeState.AddPlayersState with
                     | Some addPlayersState when addPlayersState.SquadId = squadId ->

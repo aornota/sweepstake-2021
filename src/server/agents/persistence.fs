@@ -12,12 +12,14 @@ open Aornota.Common.UnexpectedError
 open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2018.Server.Events.FixtureEvents
 open Aornota.Sweepstake2018.Server.Events.NewsEvents
 open Aornota.Sweepstake2018.Server.Events.SquadEvents
 open Aornota.Sweepstake2018.Server.Events.UserEvents
@@ -34,6 +36,7 @@ type EntityType = // note: not private since used in default-data.fs
     | Users
     | News
     | Squads
+    | Fixtures
 
 type private PersistenceInput =
     | Start of reply : AsyncReplyChannel<unit>
@@ -45,6 +48,8 @@ type private PersistenceInput =
     | WriteNewsEvent of auditUserId : UserId * rvn : Rvn * userEvent : NewsEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
     | ReadSquadsEvents of readLockId : ReadLockId * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
     | WriteSquadEvent of auditUserId : UserId * rvn : Rvn * squadEvent : SquadEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | ReadFixturesEvents of readLockId : ReadLockId * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | WriteFixtureEvent of auditUserId : UserId * rvn : Rvn * fixtureEvent : FixtureEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
 
 type PersistedEvent = { Rvn : Rvn ; TimestampUtc : DateTime ; EventJson : Json ; AuditUserId : UserId } // note: *not* private because this breaks deserialization
 
@@ -66,6 +71,7 @@ let directory entityType = // note: not private since used in default-data.fs
         | Users -> "users"
         | News -> "news"
         | Squads -> "squads"
+        | Fixtures -> "fixtures"
     sprintf "%s/%s" PERSISTENCE_ROOT entityTypeDir
 
 let private encoding = Encoding.UTF8
@@ -137,7 +143,9 @@ type Persistence () =
             | ReadNewsEvents _ -> "ReadNewsEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | WriteNewsEvent _ -> "WriteNewsEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | ReadSquadsEvents _ -> "ReadSquadsEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
-            | WriteSquadEvent _ -> "WriteSquadEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+            | WriteSquadEvent _ -> "WriteSquadEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | ReadFixturesEvents _ -> "ReadFixturesEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | WriteFixtureEvent _ -> "WriteFixtureEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
         and notLockedForReading () = async {
             let! input = inbox.Receive ()
             match input with
@@ -201,6 +209,24 @@ type Persistence () =
                         () |> Ok
                     | Error error -> error |> Error
                 result |> logResult source (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn squadEvent)) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> reply.Reply
+                return! notLockedForReading ()
+            | ReadFixturesEvents (readLockId, reply) ->
+                let errorText = sprintf "ReadFixturesEvents (%A) when notLockedForReading" readLockId
+                errorText |> formatIgnoredInput |> Danger |> log
+                errorText |> PersistenceError |> Error |> reply.Reply
+                return! notLockedForReading ()
+            | WriteFixtureEvent (auditUserId, rvn, fixtureEvent, reply) ->
+                let source = "WriteFixtureEvent"
+                sprintf "%s when notLockedForReading -> Audit%A %A %A" source auditUserId rvn fixtureEvent |> Verbose |> log
+                let (FixtureId fixtureId) = fixtureEvent.FixtureId
+                let result =
+                    match writeEvent source Fixtures fixtureId rvn (toJson fixtureEvent) auditUserId with
+                    | Ok _ ->
+                        (rvn, fixtureEvent) |> FixtureEventWritten |> broadcaster.Broadcast
+                        () |> Ok
+                    | Error error -> error |> Error
+                result |> logResult source (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn fixtureEvent)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
                 return! notLockedForReading () }
         and lockedForReading readLocks = async {
@@ -294,7 +320,28 @@ type Persistence () =
                     result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
                     result |> discardOk |> reply.Reply
                     lockedForReading readLocks |> Some
-                | WriteSquadEvent _ -> sprintf "WriteSquadEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None) }
+                | WriteSquadEvent _ -> sprintf "WriteSquadEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None
+                | ReadFixturesEvents (readLockId, reply) ->
+                    let source = "ReadFixturesEvents"
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLocks.Count |> Verbose |> log
+                    let result =
+                        if readLockId |> readLocks.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId
+                            ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
+                        else Ok ()
+                        |> Result.bind (fun _ ->
+                            match readEvents Fixtures with
+                            | Ok fixturesEvents ->
+                                (fixturesEvents |> List.map (fun (id, fixturesEvents) -> FixtureId id, fixturesEvents)) |> FixturesEventsRead |> broadcaster.Broadcast
+                                fixturesEvents |> Ok
+                            | Error error -> error |> Error)
+                    let successText = (fun fixturesEvents ->
+                        let eventsCount = fixturesEvents |> List.sumBy (fun (_, events) -> events |> List.length)
+                        sprintf "%i FixtureEvent/s for %i FixtureId/s" eventsCount fixturesEvents.Length |> Some)
+                    result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
+                    result |> discardOk |> reply.Reply
+                    lockedForReading readLocks |> Some
+                | WriteFixtureEvent _ -> sprintf "WriteFixtureEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None) }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Persistence |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
@@ -309,6 +356,8 @@ type Persistence () =
     member __.WriteNewsEventAsync (auditUserId, rvn, newsEvent) = (fun reply -> (auditUserId, rvn, newsEvent, reply) |> WriteNewsEvent) |> agent.PostAndAsyncReply
     member __.ReadSquadsEventsAsync readLockId = (fun reply -> (readLockId, reply) |> ReadSquadsEvents) |> agent.PostAndAsyncReply
     member __.WriteSquadEventAsync (auditUserId, rvn, squadEvent) = (fun reply -> (auditUserId, rvn, squadEvent, reply) |> WriteSquadEvent) |> agent.PostAndAsyncReply
+    member __.ReadFixturesEventsAsync readLockId = (fun reply -> (readLockId, reply) |> ReadFixturesEvents) |> agent.PostAndAsyncReply
+    member __.WriteFixtureEventAsync (auditUserId, rvn, fixtureEvent) = (fun reply -> (auditUserId, rvn, fixtureEvent, reply) |> WriteFixtureEvent) |> agent.PostAndAsyncReply
 
 let persistence = Persistence ()
 
@@ -326,3 +375,4 @@ let readPersistedEvents () =
     readLockId |> persistence.ReadUsersEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
     readLockId |> persistence.ReadNewsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
     readLockId |> persistence.ReadSquadsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
+    readLockId |> persistence.ReadFixturesEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent

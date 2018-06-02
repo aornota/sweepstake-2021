@@ -92,7 +92,7 @@ let private renderCreateUsersModal (useDefaultTheme, user4AdminDic:User4AdminDic
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             yield! userTypeRadios (createUsersState.NewUserType |> Some) createUsersState.UserTypes None isCreatingUser (NewUserTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Add user" ] |> button theme { buttonLinkSmall with Interaction = createUserInteraction } ] ]
-    cardModal theme [ [ str "Add user/s" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold "Add user/s" ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderResetPasswordModal (useDefaultTheme, user4AdminDic:User4AdminDic, resetPasswordState:ResetPasswordState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -132,7 +132,7 @@ let private renderResetPasswordModal (useDefaultTheme, user4AdminDic:User4AdminD
              textBox theme resetPasswordState.ConfirmPasswordKey resetPasswordState.ConfirmPasswordText (iconPasswordSmall |> Some) true resetPasswordState.ConfirmPasswordErrorText []
                 false isResettingPassword (ResetPasswordInput.ConfirmPasswordTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Reset password" ] |> button theme { buttonLinkSmall with Interaction = resetPasswordInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private renderChangeUserTypeModal (useDefaultTheme, user4AdminDic:User4AdminDic, changeUserTypeState:ChangeUserTypeState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -166,7 +166,7 @@ let private renderChangeUserTypeModal (useDefaultTheme, user4AdminDic:User4Admin
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             yield! userTypeRadios changeUserTypeState.UserType changeUserTypeState.UserTypes currentUserType isChangingUserType (UserTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change type" ] |> button theme { buttonLinkSmall with Interaction = changeUserTypeInteraction } ] ]
-    cardModal theme [ [ str titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
 let private tagUser4Admin = { tagDefault with IsRounded = false }
 
@@ -240,12 +240,12 @@ let private createUsers theme authUser dispatch =
 let render (useDefaultTheme, state, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ str "User administration" ] |> para theme paraCentredSmall
+        yield [ bold "User administration" ] |> para theme paraCentredSmall
         yield hr theme false
         match state.ProjectionState with
         | Initializing ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed _ -> // note: should never happen
+        | InitializationFailed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Active activeState ->
             let user4AdminDic = activeState.UserAdminProjection.User4AdminDic

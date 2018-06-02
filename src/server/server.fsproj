@@ -19,6 +19,7 @@
     <Compile Include="../common/domain/user-admin.fs" />
     <Compile Include="../common/domain/news.fs" />
     <Compile Include="../common/domain/squad.fs" />
+    <Compile Include="../common/domain/fixture.fs" />
     <Compile Include="../common/domain/chat.fs" />
     <Compile Include="../common/ws-api/ui-msg.fs" />
     <Compile Include="../common/ws-api/server-msg.fs" />
@@ -31,6 +32,7 @@
     <Compile Include="events/user-events.fs" />
     <Compile Include="events/news-events.fs" />
     <Compile Include="events/squad-events.fs" />
+    <Compile Include="events/fixture-events.fs" />
     <Compile Include="signal.fs" />
     <Compile Include="agents/console-logger.fs" />
     <Compile Include="agents/broadcaster.fs" />
@@ -39,9 +41,11 @@
     <Compile Include="agents/entities/users.fs" />
     <Compile Include="agents/entities/news.fs" />
     <Compile Include="agents/entities/squads.fs" />
+    <Compile Include="agents/entities/fixtures.fs" />
     <Compile Include="agents/projections/user-admin.fs" />
     <Compile Include="agents/projections/news.fs" />
     <Compile Include="agents/projections/squads.fs" />
+    <Compile Include="agents/projections/fixtures.fs" />
     <Compile Include="agents/projections/chat.fs" />
     <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />

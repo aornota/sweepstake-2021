@@ -18,6 +18,7 @@
     <Compile Include="../common/domain/user-admin.fs" />
     <Compile Include="../common/domain/news.fs" />
     <Compile Include="../common/domain/squad.fs" />
+    <Compile Include="../common/domain/fixture.fs" />
     <Compile Include="../common/domain/chat.fs" />
     <Compile Include="../common/ws-api/ui-msg.fs" />
     <Compile Include="../common/ws-api/server-msg.fs" />
@@ -45,6 +46,9 @@
     <Compile Include="pages/squads/squads-common.fs" />
     <Compile Include="pages/squads/squads-state.fs" />
     <Compile Include="pages/squads/squads-render.fs" />
+    <Compile Include="pages/fixtures/fixtures-common.fs" />
+    <Compile Include="pages/fixtures/fixtures-state.fs" />
+    <Compile Include="pages/fixtures/fixtures-render.fs" />
     <Compile Include="pages/chat/chat-common.fs" />
     <Compile Include="pages/chat/chat-state.fs" />
     <Compile Include="pages/chat/chat-render.fs" />

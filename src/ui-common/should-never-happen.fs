@@ -1,3 +1,5 @@
 module Aornota.UI.Common.ShouldNeverHappen
 
-let shouldNeverHappenText text = sprintf "SHOULD NEVER HAPPEN -> %s" text
+let [<Literal>] SHOULD_NEVER_HAPPEN = "SHOULD NEVER HAPPEN"
+
+let shouldNeverHappenText text = sprintf "%s -> %s" SHOULD_NEVER_HAPPEN text

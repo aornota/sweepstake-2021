@@ -21,6 +21,7 @@ open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
+open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
 open Aornota.Sweepstake2018.UI.Pages.News.Common
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
 open Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
@@ -153,24 +154,36 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
             | None, _ -> false, None
         | None, SquadsPage -> true, None
         | None, _ -> false, None
-
-    let tempScoresState = () |> Some
-
     let squadsState, squadsCmd =
         if initializeSquadsState then
             let squadsState, squadsCmd = Squads.State.initialize None currentSquadId
             squadsState |> Some, squadsCmd
         else None, Cmd.none
 
-    let tempFixturesState = () |> Some
+    let tempScoresState = () |> Some
 
+    let initializeFixturesState, fixturesState =
+        match unauthPageStates, currentPage with
+        | Some unauthPageStates, _ ->
+            match unauthPageStates.FixturesState, currentPage with
+            | Some fixturesState, _ -> false, fixturesState |> Some
+            | None, FixturesPage -> true, None
+            | None, _ -> false, None
+        | None, FixturesPage -> true, None
+        | None, _ -> false, None
+    let fixturesState, fixturesCmd =
+        if initializeFixturesState then
+            let fixturesState, fixturesCmd = Fixtures.State.initialize None
+            fixturesState |> Some, fixturesCmd
+        else fixturesState, Cmd.none
     let unauthState = {
         CurrentUnauthPage = currentPage
-        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = tempFixturesState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
         SignInState = signInState }
     let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
-    { state with AppState = Unauth unauthState }, Cmd.batch [ newsCmd ; squadsCmd ]
+    let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
+    { state with AppState = Unauth unauthState }, Cmd.batch [ newsCmd ; squadsCmd ; fixturesCmd ]
 
 let private defaultChangePasswordState mustChangePasswordReason changePasswordStatus = {
     MustChangePasswordReason = mustChangePasswordReason
@@ -195,17 +208,28 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
             | None, _ -> false, None
         | None, UnauthPage SquadsPage -> true, None
         | None, _ -> false, None
-
-    let tempScoresState = () |> Some
-
     let squadsState, squadsCmd =
         if initializeSquadsState then
             let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
             squadsState |> Some, squadsCmd
         else None, Cmd.none
 
-    let tempFixturesState = () |> Some
+    let tempScoresState = () |> Some
 
+    let initializeFixturesState, fixturesState =
+        match unauthPageStates, currentPage with
+        | Some unauthPageStates, _ ->
+            match unauthPageStates.FixturesState, currentPage with
+            | Some fixturesState, _ -> false, fixturesState |> Some
+            | None, UnauthPage FixturesPage -> true, None
+            | None, _ -> false, None
+        | None, UnauthPage FixturesPage -> true, None
+        | None, _ -> false, None
+    let fixturesState, fixturesCmd =
+        if initializeFixturesState then
+            let fixturesState, fixturesCmd = Fixtures.State.initialize None
+            fixturesState |> Some, fixturesCmd
+        else fixturesState, Cmd.none
     let initializeUserAdminState = currentPage = AuthPage UserAdminPage
     let userAdminState, userAdminCmd =
         if initializeUserAdminState then
@@ -223,7 +247,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         AuthUser = authUser
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
-        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = tempFixturesState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
         AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = tempDraftAdminState ; DraftsState = tempDraftsState ; ChatState = chatState }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
@@ -232,9 +256,10 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         SigningOut = false }
     let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+    let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-    { state with AppState = Auth authState }, Cmd.batch [ newsCmd ; squadsCmd ; userAdminCmd ; chatCmd ]
+    { state with AppState = Auth authState }, Cmd.batch [ newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; chatCmd ]
 
 let initialize () =
     let state = {
@@ -290,7 +315,7 @@ let private handleConnected ws (serverStarted:DateTimeOffset) otherConnectionCou
             state, cmd
         | None ->
             let lastPage = match lastPage with | Some (UnauthPage unauthPage) -> unauthPage |> Some | Some (AuthPage _) | None -> None
-            let showSignInCmd = ShowSignInModal |> UnauthInput |> AppInput |> Cmd.ofMsg
+            let showSignInCmd = ifDebug Cmd.none (ShowSignInModal |> UnauthInput |> AppInput |> Cmd.ofMsg)
             let state, cmd = state |> defaultUnauthState lastPage None None
             state, Cmd.batch [ cmd ; showSignInCmd ]
     state, Cmd.batch [ cmd ; toastCmd ]
@@ -418,10 +443,18 @@ let private handleServerMsg serverMsg state =
         state, result |> InitializeSquadsProjectionUnauthQryResult |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
     | ServerSquadsMsg (SquadsProjectionMsg squadsProjectionMsg), Unauth _ ->
         state, squadsProjectionMsg |> SquadsProjectionMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
-    | ServerSquadsMsg _, Unauth _ -> // note: silently ignore other ServerUserAdminMsg/s if Unauth
+    | ServerSquadsMsg _, Unauth _ -> // note: silently ignore other ServerSquadsMsg/s if Unauth
         state, Cmd.none
     | ServerSquadsMsg serverSquadsMsg, Auth _ ->
         state, serverSquadsMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerFixturesMsg (InitializeFixturesProjectionQryResult result), Unauth _ ->
+        state, result |> InitializeFixturesProjectionQryResult |> ReceiveServerFixturesMsg |> FixturesInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerFixturesMsg (FixturesProjectionMsg fixturesProjectionMsg), Unauth _ ->
+        state, fixturesProjectionMsg |> FixturesProjectionMsg |> ReceiveServerFixturesMsg |> FixturesInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
+    | ServerFixturesMsg _, Unauth _ -> // note: silently ignore other ServerFixturesMsg/s if Unauth
+        state, Cmd.none
+    | ServerFixturesMsg serverFixturesMsg, Auth _ ->
+        state, serverFixturesMsg |> ReceiveServerFixturesMsg |> FixturesInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | ServerUserAdminMsg serverUserAdminMsg, Auth _ ->
         state, serverUserAdminMsg |> ReceiveServerUserAdminMsg |> UserAdminInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
     | ServerUserAdminMsg _, Unauth _ -> // note: silently ignore ServerUserAdminMsg if Unauth
@@ -462,12 +495,19 @@ let private handleUnauthInput unauthInput unauthState state =
                     let squadsState, squadsCmd = Squads.State.initialize None None
                     squadsState |> Some, squadsCmd
                 | _, _ -> unauthState.UnauthPageStates.SquadsState, Cmd.none
-            let unauthPageStates = { unauthState.UnauthPageStates with SquadsState = squadsState }
+            let fixturesState, fixturesCmd =
+                match unauthPage, unauthState.UnauthPageStates.FixturesState with
+                | FixturesPage, None ->
+                    let fixturesState, fixturesCmd = Fixtures.State.initialize None
+                    fixturesState |> Some, fixturesCmd
+                | _, _ -> unauthState.UnauthPageStates.FixturesState, Cmd.none
+            let unauthPageStates = { unauthState.UnauthPageStates with SquadsState = squadsState ; FixturesState = fixturesState }
             let unauthState = { unauthState with CurrentUnauthPage = unauthPage ; UnauthPageStates = unauthPageStates }
             let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
             let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
             let state = { state with AppState = Unauth unauthState }
-            state, Cmd.batch [ newsCmd ; squadsCmd ; state |> writePreferencesCmd ]
+            state, Cmd.batch [ newsCmd ; squadsCmd ; fixturesCmd ; state |> writePreferencesCmd ]
         else state, Cmd.none
     | UnauthPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
@@ -484,9 +524,11 @@ let private handleUnauthInput unauthInput unauthState state =
         let unauthPageStates = { unauthState.UnauthPageStates with NewsState = newsState }
         let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
         { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, newsCmd
+
     | UnauthPageInput (ScoresInput _), _ ->
         let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
         state, cmd
+
     | UnauthPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
     | UnauthPageInput (SquadsInput (Squads.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
@@ -504,9 +546,23 @@ let private handleUnauthInput unauthInput unauthState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected SquadsInput when UnauthPageStates.SquadsState is None"
             state, cmd
-    | UnauthPageInput (FixturesInput _), _ ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput -> NYI"
+    | UnauthPageInput (FixturesInput (Fixtures.Common.AddNotificationMessage notificationMessage)), _ ->
+        state |> addNotificationMessage notificationMessage, Cmd.none
+    | UnauthPageInput (FixturesInput (Fixtures.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
+        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
         state, cmd
+    | UnauthPageInput (FixturesInput (Fixtures.Common.SendUiAuthMsg _)), _ ->
+        state |> shouldNeverHappen "Unexpected FixturesInput SendUiAuthMsg when Unauth"
+    | UnauthPageInput (FixturesInput fixturesInput), _ ->
+        match unauthState.UnauthPageStates.FixturesState with
+        | Some fixturesState ->
+            let fixturesState, fixturesCmd, _ = fixturesState |> Fixtures.State.transition fixturesInput
+            let unauthPageStates = { unauthState.UnauthPageStates with FixturesState = fixturesState |> Some }
+            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
+            { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, fixturesCmd
+        | None ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput when UnauthPageStates.FixturesState is None"
+            state, cmd
     | ShowSignInModal, None ->
         let unauthState = { unauthState with SignInState = defaultSignInState None None |> Some }
         { state with AppState = Unauth unauthState }, Cmd.none
@@ -553,6 +609,12 @@ let private handleAuthInput authInput authState state =
                         let squadsState, squadsCmd = Squads.State.initialize (authState.AuthUser |> Some) None
                         squadsState |> Some, squadsCmd
                     | _, _ -> authState.UnauthPageStates.SquadsState, Cmd.none
+                let fixturesState, fixturesCmd =
+                    match page, authState.UnauthPageStates.FixturesState with
+                    | UnauthPage FixturesPage, None ->
+                        let fixturesState, fixturesCmd = Fixtures.State.initialize None
+                        fixturesState |> Some, fixturesCmd
+                    | _, _ -> authState.UnauthPageStates.FixturesState, Cmd.none
                 let userAdminState, userAdminCmd =
                     match page, authState.AuthPageStates.UserAdminState with
                     | AuthPage UserAdminPage, None ->
@@ -563,15 +625,16 @@ let private handleAuthInput authInput authState state =
                     if page <> AuthPage ChatPage && authState.CurrentPage = AuthPage ChatPage then false |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else if page = AuthPage ChatPage && authState.CurrentPage <> AuthPage ChatPage then true |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else Cmd.none
-                let unauthPageStates = { authState.UnauthPageStates with SquadsState = squadsState }
+                let unauthPageStates = { authState.UnauthPageStates with SquadsState = squadsState ; FixturesState = fixturesState }
                 let authPageStates = { authState.AuthPageStates with UserAdminState = userAdminState }
                 let authState = { authState with CurrentPage = page ; UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates }
                 let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
                 let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+                let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
                 let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let state = { state with AppState = Auth authState }
-                state, Cmd.batch [ newsCmd ; squadsCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
+                state, Cmd.batch [ newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
         else state, Cmd.none, true
     | PageInput (UPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
@@ -589,9 +652,11 @@ let private handleAuthInput authInput authState state =
         let unauthPageStates = { authState.UnauthPageStates with NewsState = newsState }
         let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
         { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, newsCmd, isUserNonApiActivity
+
     | PageInput (UPageInput (ScoresInput _)), _, false ->
         let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
         state, cmd, false
+
     | PageInput (UPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (UPageInput (SquadsInput (Squads.Common.SendUiUnauthMsg uiUnauthMsg))), _, false ->
@@ -610,9 +675,24 @@ let private handleAuthInput authInput authState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected SquadsInput when UnauthPageStates.SquadsState is None"
             state, cmd, false
-    | PageInput (UPageInput (FixturesInput _)), _, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput -> NYI"
+    | PageInput (UPageInput (FixturesInput (Fixtures.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (UPageInput (FixturesInput (Fixtures.Common.SendUiUnauthMsg uiUnauthMsg))), _, false ->
+        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
         state, cmd, false
+    | PageInput (UPageInput (FixturesInput (Fixtures.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
+        let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
+    | PageInput (UPageInput (FixturesInput fixturesInput)), _, _ ->
+        match authState.UnauthPageStates.FixturesState with
+        | Some fixturesState ->
+            let fixturesState, fixturesCmd, isUserNonApiActivity = fixturesState |> Fixtures.State.transition fixturesInput
+            let unauthPageStates = { authState.UnauthPageStates with FixturesState = fixturesState |> Some }
+            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+            { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, fixturesCmd, isUserNonApiActivity
+        | None ->
+            let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput when UnauthPageStates.FixturesState is None"
+            state, cmd, false
     | PageInput (APageInput (UserAdminInput (UserAdmin.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (APageInput (UserAdminInput (UserAdmin.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
@@ -628,12 +708,15 @@ let private handleAuthInput authInput authState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected UserAdminInput when AuthPageStates.UserAdminState is None"
             state, cmd, false
+
     | PageInput (APageInput (DraftAdminInput _)), _, false ->
         let state, cmd = state |> shouldNeverHappen "Unexpected DraftAdminInput -> NYI"
         state, cmd, false
+
     | PageInput (APageInput (DraftsInput _)), _, false ->
         let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
         state, cmd, false
+
     | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (APageInput (ChatInput Chat.Common.ShowMarkdownSyntaxModal)), None, false ->

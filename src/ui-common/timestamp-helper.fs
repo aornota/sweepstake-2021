@@ -2,21 +2,23 @@ module Aornota.UI.Common.TimestampHelper
 
 open Aornota.Common.UnitsOfMeasure
 
+open Aornota.UI.Common.ShouldNeverHappen
+
 open System
 
-let [<Literal>] private SHOULD_NEVER_HAPPEN = "SHOULD NEVER HAPPEN"
 let [<Literal>] private MONTHS_PER_YEAR = 12
 
+let dayName dayOfWeek =
+    match dayOfWeek with
+    | DayOfWeek.Monday -> "Monday" | DayOfWeek.Tuesday -> "Tuesday" | DayOfWeek.Wednesday -> "Wednesday" | DayOfWeek.Thursday -> "Thursday"
+    | DayOfWeek.Friday -> "Friday" | DayOfWeek.Saturday -> "Saturday" | DayOfWeek.Sunday -> "Sunday" | _ -> SHOULD_NEVER_HAPPEN
+let suffix day = match day with | 1 | 21 | 31 -> "st" | 2 | 22 -> "nd" | 3 | 23 -> "rd" | _ -> "th"
+let monthName month =
+    match month with
+    | 1 -> "January" | 2 -> "February" | 3 -> "March" | 4 -> "April" | 5 -> "May" | 6 -> "June" | 7 -> "July" | 8 -> "August" | 9 -> "September" | 10 -> "October"
+    | 11 -> "November" | 12 -> "December" | _ -> SHOULD_NEVER_HAPPEN
+
 let ago (timestamp:DateTime) =
-    let dayName dayOfWeek =
-        match dayOfWeek with
-        | DayOfWeek.Monday -> "Monday" | DayOfWeek.Tuesday -> "Tuesday" | DayOfWeek.Wednesday -> "Wednesday" | DayOfWeek.Thursday -> "Thursday"
-        | DayOfWeek.Friday -> "Friday" | DayOfWeek.Saturday -> "Saturday" | DayOfWeek.Sunday -> "Sunday" | _ -> SHOULD_NEVER_HAPPEN
-    let suffix day = match day with | 1 | 21 | 31 -> "st" | 2 | 22 -> "nd" | 3 | 23 -> "rd" | _ -> "th"
-    let monthName month =
-        match month with
-        | 1 -> "January" | 2 -> "February" | 3 -> "March" | 4 -> "April" | 5 -> "May" | 6 -> "June" | 7 -> "July" | 8 -> "August" | 9 -> "September" | 10 -> "October"
-        | 11 -> "November" | 12 -> "December" | _ -> SHOULD_NEVER_HAPPEN
     let now = DateTime.Now
     let elapsed = now - timestamp
     let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)   
@@ -43,15 +45,23 @@ let ago (timestamp:DateTime) =
     | false, (years, _, _, _, _, _) when years > 1 -> sprintf "%i years ago (%i)" years timestamp.Year
     | _ -> SHOULD_NEVER_HAPPEN
 
-let expiresIn (timestamp:DateTime) = // TODO-NMB-LOW: Make more generic?...
+let startsIn (timestamp:DateTime) =
     let now = DateTime.Now
     let elapsed = timestamp - now
+    let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)   
+    let elapsedDays = round (timestamp - sameTimeToday).TotalDays // note: use 'round' function since TotalDays could be something like 0.9999... (i.e. even when use of "same time" means that we'd expect it to be 1.0)
     let isPast = timestamp < now && (now - timestamp).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running slow"
-    match isPast, (elapsed.TotalMinutes, elapsed.TotalSeconds) with
-    | true, _ -> "has expired" // note: timestamp expected to be in the future - but do something sensible if not       
-    | false, (_, seconds) when floor seconds <= 0. -> "is about to expire"
-    | false, (_, seconds) when floor seconds = 1. -> "expires in 1 second"
-    | false, (_, seconds) when floor seconds < float SECONDS_PER_MINUTE -> sprintf "expires in %i seconds" (int seconds)
-    | false, (minutes, _) when floor minutes = 1. -> "expires in 1 minute"
-    | false, (minutes, _) when floor minutes < float MINUTES_PER_HOUR -> sprintf "expires in %i minutes" (int minutes)
-    | _ -> "does not expire for at least 1 hour"
+    match isPast, (timestamp.Year - now.Year, timestamp.Month - now.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes) with
+    | true, _ -> "has started", true // note: timestamp expected to be in the future - but do something sensible if not       
+    | false, (_, _, days, _, _) when floor days = 1. -> "starts tomorrow", true
+    | false, (_, _, _, _, minutes) when floor minutes = 1. -> "starts in 1 minute", true
+    | false, (_, _, _, _, minutes) when floor minutes < float MINUTES_PER_HOUR -> sprintf "starts in %i minutes" (int minutes), true
+    | false, (_, _, _, hours, _) when floor hours = 1. -> "starts in 1 hour", true
+    | false, (_, _, _, hours, _) when floor hours < float HOURS_PER_DAY -> sprintf "starts in %i hours" (int hours), true
+    | false, (_, _, days, _, _) when floor days < 7. -> sprintf "starts in %i days" (int days), false
+    | false, (years, months, days, _, _) when years = 0 && months = 0 -> sprintf "starts in %i days" (int days), false
+    | false, (years, months, _, _, _) when ((years * MONTHS_PER_YEAR) + months) = 1 -> "starts next month", false
+    | false, (years, months, _, _, _) when ((years * MONTHS_PER_YEAR) + months) < MONTHS_PER_YEAR -> sprintf "starts in %i months" months, false
+    | false, (years, _, _, _, _) when years = 1 -> "starts next year", false
+    | false, (years, _, _, _, _) when years > 1 -> sprintf "starts in %i years" years, false
+    | _ -> SHOULD_NEVER_HAPPEN, false
