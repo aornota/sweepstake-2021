@@ -165,9 +165,9 @@ type News () =
             let! input = inbox.Receive ()
             match input with
             | Start reply ->
-                "Start when awaitingStart -> pendingOnUsersAndNewsRead (0 users) (0 posts) (0 projectees)" |> Info |> log
+                "Start when awaitingStart -> pendingAllRead (0 users) (0 posts) (0 projectees)" |> Info |> log
                 () |> reply.Reply
-                return! pendingOnUsersAndNewsRead None None
+                return! pendingAllRead None None
             | OnUsersRead _ -> "OnUsersRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnNewsRead _ -> "OnNewsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnUserCreated _ -> "OnUserCreated when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
@@ -177,46 +177,46 @@ type News () =
             | RemoveConnections _ -> "RemoveConnections when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeNewsProjectionQry _ -> "HandleInitializeNewsProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleMorePostsQry _ -> "HandleMorePostsQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and pendingOnUsersAndNewsRead users news = async {
+        and pendingAllRead usersRead newsRead = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
+            | Start _ -> "Start when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
             | OnUsersRead usersRead ->
                 let source = "OnUsersRead"
-                sprintf "%s (%i user/s) when pendingOnUsersAndNewsRead" source usersRead.Length |> Info |> log
-                let users = usersRead |> Some
-                match (users, news) |> ifAllRead source with
+                sprintf "%s (%i user/s) when pendingAllRead" source usersRead.Length |> Info |> log
+                let usersRead = usersRead |> Some
+                match (usersRead, newsRead) |> ifAllRead source with
                 | Some (state, userDic, postDic, projecteeDic) ->
-                    return! projectingNews (state, userDic, postDic, projecteeDic)
-                | None -> return! pendingOnUsersAndNewsRead users news
+                    return! projectingNews state userDic postDic projecteeDic
+                | None -> return! pendingAllRead usersRead newsRead
             | OnNewsRead newsRead ->
                 let source = "OnNewsRead"
-                sprintf "%s (%i post/s) when pendingOnUsersAndNewsRead" source newsRead.Length |> Info |> log
-                let news = newsRead |> Some
-                match (users, news) |> ifAllRead source with
+                sprintf "%s (%i post/s) when pendingAllRead" source newsRead.Length |> Info |> log
+                let newsRead = newsRead |> Some
+                match (usersRead, newsRead) |> ifAllRead source with
                 | Some (state, userDic, postDic, projecteeDic) ->
-                    return! projectingNews (state, userDic, postDic, projecteeDic)
-                | None -> return! pendingOnUsersAndNewsRead users news
-            | OnUserCreated _ -> "OnUserCreated when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | OnPostCreated _ -> "OnPostCreated when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | OnPostChanged _ -> "OnPostChanged when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | OnPostRemoved _ -> "OnPostRemoved when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | RemoveConnections _ -> "RemoveConnections when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | HandleInitializeNewsProjectionQry _ -> "HandleInitializeNewsProjectionQry when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news
-            | HandleMorePostsQry _ -> "HandleMorePostsQry when pendingOnUsersAndNewsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersAndNewsRead users news }
-        and projectingNews (state, userDic, postDic, projecteeDic) = async {
+                    return! projectingNews state userDic postDic projecteeDic
+                | None -> return! pendingAllRead usersRead newsRead
+            | OnUserCreated _ -> "OnUserCreated when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | OnPostCreated _ -> "OnPostCreated when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | OnPostChanged _ -> "OnPostChanged when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | OnPostRemoved _ -> "OnPostRemoved when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | RemoveConnections _ -> "RemoveConnections when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | HandleInitializeNewsProjectionQry _ -> "HandleInitializeNewsProjectionQry when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead
+            | HandleMorePostsQry _ -> "HandleMorePostsQry when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead usersRead newsRead }
+        and projectingNews state userDic postDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews (state, userDic, postDic, projecteeDic)
-            | OnUsersRead _ -> "OnUsersRead when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews (state, userDic, postDic, projecteeDic)
-            | OnNewsRead _ -> "OnNewsRead when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews (state, userDic, postDic, projecteeDic)
+            | Start _ -> "Start when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews state userDic postDic projecteeDic
+            | OnUsersRead _ -> "OnUsersRead when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews state userDic postDic projecteeDic
+            | OnNewsRead _ -> "OnNewsRead when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews state userDic postDic projecteeDic
             | OnUserCreated (userId, userName) ->
                 let source = "OnUserCreated"
                 sprintf "%s (%A %A) when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source userId userName userDic.Count postDic.Count projecteeDic.Count |> Info |> log
                 if userId |> userDic.ContainsKey |> not then // note: silently ignore already-known userId (should never happen)
                     (userId, userName) |> userDic.Add
                 sprintf "%s when projectingNews -> %i user/s)" source userDic.Count |> Info |> log
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | OnPostCreated (postId, userId, postType, messageText, timestamp) ->
                 let source = "OnPostCreated"
                 sprintf "%s (%A %A) when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source postId userId userDic.Count postDic.Count projecteeDic.Count |> Info |> log
@@ -233,7 +233,7 @@ type News () =
                             (postDic, state) |> PostChange |> updateState source projecteeDic
                         | None -> state
                     else state
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | OnPostChanged (postId, rvn, messageText) ->
                 let source = "OnPostChanged"
                 sprintf "%s (%A %A) when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source postId rvn userDic.Count postDic.Count projecteeDic.Count |> Info |> log
@@ -244,7 +244,7 @@ type News () =
                         postDic.[postId] <- { post with Rvn = rvn ; PostTypeDto = postTypeDto }
                         (postDic, state) |> PostChange |> updateState source projecteeDic
                     else state
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | OnPostRemoved postId ->
                 let source = "OnPostRemoved"
                 sprintf "%s (%A) when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source postId userDic.Count postDic.Count projecteeDic.Count |> Info |> log
@@ -253,13 +253,13 @@ type News () =
                         postId |> postDic.Remove |> ignore
                         (postDic, state) |> PostChange |> updateState source projecteeDic
                     else state
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
                 sprintf "%s (%A) when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source connectionIds userDic.Count postDic.Count projecteeDic.Count |> Info |> log
                 connectionIds |> List.iter (fun connectionId -> if connectionId |> projecteeDic.ContainsKey then connectionId |> projecteeDic.Remove |> ignore) // note: silently ignore unknown connectionIds                
                 sprintf "%s when projectingNews -> %i projectee/s)" source projecteeDic.Count |> Info |> log
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | HandleInitializeNewsProjectionQry (connectionId, reply) ->
                 let source = "HandleInitializeNewsProjectionQry"
                 sprintf "%s for %A when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source connectionId userDic.Count postDic.Count projecteeDic.Count |> Info |> log
@@ -287,7 +287,7 @@ type News () =
                 let result = (initializedState |> newsProjectionDto, hasMorePosts) |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingNews (state, userDic, postDic, projecteeDic)
+                return! projectingNews state userDic postDic projecteeDic
             | HandleMorePostsQry (connectionId, reply) ->
                 let source = "HandleMorePostsQry"
                 sprintf "%s for %A when projectingNews (%i user/s) (%i post/s) (%i projectee/s)" source connectionId userDic.Count postDic.Count projecteeDic.Count |> Info |> log
@@ -316,7 +316,7 @@ type News () =
                         (projectee.LastRvn, postDtos, hasMorePosts) |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingNews (state, userDic, postDic, projecteeDic) }
+                return! projectingNews state userDic postDic projecteeDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Projection Projection.News |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

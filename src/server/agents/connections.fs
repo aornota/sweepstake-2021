@@ -210,22 +210,22 @@ type Connections () =
             | Start (serverStarted, reply) ->
                 "Start when awaitingStart -> managingConnections (0 connections)" |> Info |> log
                 () |> reply.Reply
-                return! managingConnections (serverStarted, ConnectionDic (), SignedInUserDic ())
+                return! managingConnections serverStarted (ConnectionDic ()) (SignedInUserDic ())
             | AddConnection _ -> "AddConnection when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnection _ -> "RemoveConnection when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnReceiveUiMsgError _ -> "OnReceiveUiMsgError when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnDeserializeUiMsgError _ -> "OnDeserializeUiMsgError when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleUiMsg _ -> "HandleUiMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnSendMsg _ -> "SendMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and managingConnections (serverStarted, connectionDic, signedInUserDic) = async {
+        and managingConnections serverStarted connectionDic signedInUserDic = async {
             let! input = inbox.Receive ()
             do! ifDebugSleepAsync 100 500
             match input with
-            | Start _ -> "Start when managingConnections" |> IgnoredInput |> Agent |> log ; return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+            | Start _ -> "Start when managingConnections" |> IgnoredInput |> Agent |> log ; return! managingConnections serverStarted connectionDic signedInUserDic
             | OnSendMsg (serverMsg, connectionIds) ->
                 sprintf "SendMsg %A (%i ConnectionId/s) when managingConnections (%i connection/s) (%i signed-in user/s)" serverMsg connectionIds.Length connectionDic.Count signedInUserDic.Count |> Verbose |> log
                 do! (connectionDic, signedInUserDic) |> sendMsg serverMsg connectionIds
-                return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                return! managingConnections serverStarted connectionDic signedInUserDic
             | AddConnection (connectionId, ws) ->
                 sprintf "AddConnection %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
                 let otherConnectionCount, signedInUserCount = connectionDic.Count, signedInUserDic.Count
@@ -235,7 +235,7 @@ type Connections () =
                     (connectionId, (ws, None)) |> connectionDic.Add
                     let serverMsg = (serverStarted, otherConnectionCount, signedInUserCount) |> ConnectedMsg |> ServerAppMsg
                     do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                return! managingConnections serverStarted connectionDic signedInUserDic
             | RemoveConnection connectionId ->
                 sprintf "RemoveConnection %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
                 match connectionId |> connectionDic.TryGetValue with
@@ -244,22 +244,22 @@ type Connections () =
                     (connectionDic, signedInUserDic) |> removeConnection connectionId
                 | false, _ -> // note: should never happen
                     sprintf "RemoveConnection when managingConnections (%i connection/s) (%i signed-in user/s) -> %A is not valid (not in use)" connectionDic.Count signedInUserDic.Count connectionId |> Danger |> log
-                return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                return! managingConnections serverStarted connectionDic signedInUserDic
             | OnReceiveUiMsgError (connectionId, exn) ->
                 sprintf "OnReceiveUiMsgError for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Danger |> log
                 let serverMsg = exn.Message |> ReceiveUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
                 do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                return! managingConnections serverStarted connectionDic signedInUserDic
             | OnDeserializeUiMsgError (connectionId, exn) ->                
                 sprintf "OnDeserializeUiMsgError for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Danger |> log
                 let serverMsg = exn.Message |> DeserializeUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
                 do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                return! managingConnections serverStarted connectionDic signedInUserDic
             | HandleUiMsg (connectionId, uiMsg) ->
                 match uiMsg with
                 | Wiff -> // note: logged - but otherwise ignored
                     sprintf "Wiff for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthAppMsg (SignInCmd (sessionId, userName, password))) ->
                     let source = "SignInCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userName connectionId connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -278,7 +278,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthAppMsg (AutoSignInCmd (sessionId, jwt))) ->
                     let source = "AutoSignInCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source sessionId jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -312,7 +312,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthNewsMsg InitializeNewsProjectionQry) ->
                     let source = "InitializeNewsProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -328,7 +328,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun (newsProjectionDto, _) -> sprintf "%i post/s" newsProjectionDto.PostDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthNewsMsg MorePostsQry) ->
                     let source = "MorePostsQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -344,7 +344,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun (_, postDtos, _) -> sprintf "%i post/s" postDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthSquadsMsg InitializeSquadsProjectionUnauthQry) ->
                     let source = "InitializeSquadsProjectionUnauthQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -360,7 +360,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun squadsProjectionDto -> sprintf "%i squad/s" squadsProjectionDto.SquadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthFixturesMsg InitializeFixturesProjectionQry) ->
                     let source = "InitializeFixturesProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -376,13 +376,13 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun fixturesProjectionDto -> sprintf "%i fixtures/s" fixturesProjectionDto.FixtureDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UserNonApiActivity) ->
                     let source = "UserNonApiActivity"
                     sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (userId, _)) -> async { userId |> UserActivity |> broadcaster.Broadcast })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthAppMsg SignOutCmd) ->     
                     let source = "SignOutCmd"
                     sprintf "%s for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -401,7 +401,7 @@ type Connections () =
                         | Ok _ -> do! (connectionDic, signedInUserDic) |> autoSignOut None userId (sessionId |> Some) (connectionId |> Some)
                         | Error _ -> () })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthAppMsg (ChangePasswordCmd (currentRvn, password))) ->
                     let source = "ChangePasswordCmd"
                     sprintf "%s (%A) for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source currentRvn jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -420,7 +420,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthUserAdminMsg InitializeUserAdminProjectionQry) ->
                     let source = "InitializeUserAdminProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -440,7 +440,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun userAdminProjectionDto -> sprintf "%i user/s" userAdminProjectionDto.User4AdminDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthUserAdminMsg (CreateUserCmd (userId, userName, password, userType))) ->
                     let source = "CreateUserCmd"
                     sprintf "%s (%A %A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId userName userType connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -460,7 +460,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthUserAdminMsg (ResetPasswordCmd (userId, currentRvn, password))) ->
                     let source = "ResetPasswordCmd"
                     sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -483,7 +483,7 @@ type Connections () =
                         | Ok _ -> do! (connectionDic, signedInUserDic) |> autoSignOut (PasswordReset |> Some) userId None None
                         | Error _ -> () })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthUserAdminMsg (ChangeUserTypeCmd (userId, currentRvn, userType))) ->
                     let source = "ChangeUserTypeCmd"
                     sprintf "%s (%A) for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userType userId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -506,7 +506,27 @@ type Connections () =
                         | Ok _ -> do! (connectionDic, signedInUserDic) |> autoSignOut (userType = PersonaNonGrata |> PermissionsChanged |> Some) userId None None
                         | Error _ -> () })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiAuthMsg (jwt, UiAuthDraftAdminMsg (ProcessDraftCmd (draftId, currentRvn))) ->
+                    let source = "ProcessDraftCmd"
+                    sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.DraftAdminToken with
+                                | Some draftAdminToken ->
+                                    (draftAdminToken, auditUserId, draftId, currentRvn) |> Entities.Drafts.drafts.HandleProcessDraftCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> ProcessDraftCmdResult |> ServerDraftAdminMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthNewsMsg (CreatePostCmd (postId, postType, messageText))) ->
                     let source = "CreatePostCmd"
                     sprintf "%s (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId postType connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -526,7 +546,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthNewsMsg (ChangePostCmd (postId, currentRvn, messageText))) ->
                     let source = "ChangePostCmd"
                     sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -546,7 +566,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthNewsMsg (RemovePostCmd (postId, currentRvn))) ->
                     let source = "CreatePostCmd"
                     sprintf "%s for (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source postId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -566,7 +586,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg InitializeSquadsProjectionAuthQry) ->
                     let source = "InitializeSquadsProjectionAuthQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -584,9 +604,9 @@ type Connections () =
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeSquadsProjectionAuthQryResult |> ServerSquadsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun squadsProjectionDto -> sprintf "%i squad/s" squadsProjectionDto.SquadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        result |> logResult source (fun (squadsProjectionDto, currentDraftDto) -> sprintf "%i squad/s (%A)" squadsProjectionDto.SquadDtos.Length currentDraftDto |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (AddPlayerCmd (squadId, currentRvn, playerId, playerName, playerType))) ->
                     let source = "AddPlayerCmd"
                     sprintf "%s (%A %A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -606,7 +626,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (ChangePlayerNameCmd (squadId, currentRvn, playerId, playerName))) ->
                     let source = "ChangePlayerNameCmd"
                     sprintf "%s (%A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -626,7 +646,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (ChangePlayerTypeCmd (squadId, currentRvn, playerId, playerType))) ->
                     let source = "ChangePlayerTypeCmd"
                     sprintf "%s (%A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -646,7 +666,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (WithdrawPlayerCmd (squadId, currentRvn, playerId))) ->
                     let source = "WithdrawPlayerCmd"
                     sprintf "%s (%A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -666,7 +686,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (EliminateSquadCmd (squadId, currentRvn))) ->
                     let source = "EliminateSquadCmd"
                     sprintf "%s for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -686,7 +706,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthFixturesMsg (ConfirmParticipantCmd (fixtureId, currentRvn, role, squadId))) ->
                     let source = "ConfirmParticipantCmd"
                     sprintf "%s for %A (%A %A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source fixtureId currentRvn role squadId connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -706,7 +726,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthChatMsg InitializeChatProjectionQry) ->
                     let source = "InitializeChatProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -725,7 +745,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthChatMsg MoreChatMessagesQry) ->
                     let source = "MoreChatMessagesQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -744,7 +764,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic)
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthChatMsg (SendChatMessageCmd (chatMessageId, messageText))) ->
                     let source = "SendChatMessageCmd"
                     sprintf "%s %A for %A when managingConnections (%i connection/s) (%i signed-in user/s)" source chatMessageId jwt connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -763,7 +783,7 @@ type Connections () =
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections (serverStarted, connectionDic, signedInUserDic) }
+                    return! managingConnections serverStarted connectionDic signedInUserDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Connections |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

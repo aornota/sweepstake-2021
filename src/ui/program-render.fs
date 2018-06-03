@@ -378,7 +378,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             match authState.AuthPageStates.DraftsState with
             | Some _draftsState ->
                 yield renderDrafts useDefaultTheme
-               // TODO-SOON...  yield lazyViewOrHMR2 UserAdmin.Render.render (useDefaultTheme, draftsState, hasModal) (DraftsInput >> APageInput >> PageInput >> dispatch)
+               // TODO-SOON...  yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, hasModal) (DraftsInput >> APageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage DraftsPage when AuthPageStates.DraftsState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)

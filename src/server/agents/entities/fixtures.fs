@@ -34,6 +34,7 @@ type private FixturesInput =
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
 
 type private Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }
+type private FixtureDic = Dictionary<FixtureId, Fixture>
 
 let private log category = (Entity Entity.Fixtures, category) |> consoleLogger.Log
 
@@ -45,14 +46,14 @@ let private logResult source successText result =
     | Error error -> sprintf "%s Error -> %A" source error |> Danger |> log
 
 let private applyFixtureEvent source idAndFixtureResult (nextRvn, fixtureEvent:FixtureEvent) =
-    let otherError errorText = otherError (sprintf "%s#applyNewsEvent" source) errorText
+    let otherError errorText = otherError (sprintf "%s#applyFixtureEvent" source) errorText
     match idAndFixtureResult, fixtureEvent with
     | Ok (fixtureId, _), _ when fixtureId <> fixtureEvent.FixtureId -> // note: should never happen
         ifDebug (sprintf "FixtureId mismatch for %A -> %A" fixtureId fixtureEvent) UNEXPECTED_ERROR |> otherError
     | Ok (fixtureId, None), _ when validateNextRvn None nextRvn |> not -> // note: should never happen
         ifDebug (sprintf "Invalid initial Rvn for %A -> %A (%A)" fixtureId nextRvn fixtureEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (fixtureId, Some user), _ when validateNextRvn (Some user.Rvn) nextRvn |> not -> // note: should never happen
-        ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" fixtureId user.Rvn nextRvn fixtureEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (fixtureId, Some fixture), _ when validateNextRvn (Some fixture.Rvn) nextRvn |> not -> // note: should never happen
+        ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" fixtureId fixture.Rvn nextRvn fixtureEvent) UNEXPECTED_ERROR |> otherError
     | Ok (fixtureId, None), FixtureCreated (_, stage, homeParticipant, awayParticipant, kickOff) ->
         (fixtureId, { Rvn = nextRvn ; Stage = stage ; HomeParticipant = homeParticipant ; AwayParticipant = awayParticipant ; KickOff = kickOff } |> Some) |> Ok
     | Ok (fixtureId, None), _ -> // note: should never happen
@@ -69,7 +70,7 @@ let private applyFixtureEvent source idAndFixtureResult (nextRvn, fixtureEvent:F
 
 let private initializeFixtures source (fixturesEvents:(FixtureId * (Rvn * FixtureEvent) list) list) =
     let source = sprintf "%s#initializeFixtures" source
-    let fixtures = new Dictionary<FixtureId, Fixture> ()
+    let fixtureDic = FixtureDic ()
     let results =
         fixturesEvents
         |> List.map (fun (fixtureId, events) ->
@@ -78,7 +79,7 @@ let private initializeFixtures source (fixturesEvents:(FixtureId * (Rvn * Fixtur
             | [] -> ifDebug (sprintf "No FixtureEvents for %A" fixtureId) UNEXPECTED_ERROR |> otherError source) // note: should never happen
     results
     |> List.choose (fun idAndFixtureResult -> match idAndFixtureResult with | Ok (fixtureId, Some fixture) -> (fixtureId, fixture) |> Some | Ok (_, None) | Error _ -> None)
-    |> List.iter (fun (fixtureId, fixture) -> fixtures.Add (fixtureId, fixture))
+    |> List.iter (fun (fixtureId, fixture) -> fixtureDic.Add (fixtureId, fixture))
     let errors =
         results
         |> List.choose (fun idAndFixtureResult ->
@@ -86,14 +87,12 @@ let private initializeFixtures source (fixturesEvents:(FixtureId * (Rvn * Fixtur
             | Ok (_, Some _) -> None
             | Ok (_, None) -> ifDebug (sprintf "%s: applyFixtureEvent returned Ok (_, None)" source) UNEXPECTED_ERROR |> OtherError |> Some // note: should never happen
             | Error error -> error |> Some)
-    fixtures, errors
+    fixtureDic, errors
 
-let private updateFixture fixtureId fixture (fixtures:Dictionary<FixtureId, Fixture>) =
-    if fixtureId |> fixtures.ContainsKey then fixtures.[fixtureId] <- fixture
-    fixtures
+let private updateFixture fixtureId fixture (fixtureDic:FixtureDic) = if fixtureId |> fixtureDic.ContainsKey then fixtureDic.[fixtureId] <- fixture
 
-let private tryFindFixture fixtureId onError (fixtures:Dictionary<FixtureId, Fixture>) =
-    if fixtureId |> fixtures.ContainsKey then (fixtureId, fixtures.[fixtureId]) |> Ok else ifDebug (sprintf "%A does not exist" fixtureId) UNEXPECTED_ERROR |> onError
+let private tryFindFixture fixtureId onError (fixtureDic:FixtureDic) =
+    if fixtureId |> fixtureDic.ContainsKey then (fixtureId, fixtureDic.[fixtureId]) |> Ok else ifDebug (sprintf "%A does not exist" fixtureId) UNEXPECTED_ERROR |> onError
 
 let private tryApplyFixtureEvent source fixtureId fixture nextRvn fixtureEvent =
     match applyFixtureEvent source (Ok (fixtureId, fixture)) (nextRvn, fixtureEvent) with
@@ -139,32 +138,32 @@ type Fixtures () =
                 return! managingFixtures fixtures
             | HandleCreateFixtureCmd _ -> "HandleCreateFixtureCmd when pendingOnFixturesEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnFixturesEventsRead ()
             | HandleConfirmParticipantCmd _ -> "HandleConfirmParticipantCmd when pendingOnFixturesEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnFixturesEventsRead () }
-        and managingFixtures fixtures = async {
+        and managingFixtures fixtureDic = async {
             let! input = inbox.Receive ()
             match input with
-            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingFixtures fixtures
-            | Start _ -> sprintf "Start when managingFixtures (%i fixture/s)" fixtures.Count |> IgnoredInput |> Agent |> log ; return! managingFixtures fixtures
+            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingFixtures fixtureDic
+            | Start _ -> sprintf "Start when managingFixtures (%i fixture/s)" fixtureDic.Count |> IgnoredInput |> Agent |> log ; return! managingFixtures fixtureDic
             | Reset reply ->
-                sprintf "Reset when managingFixtures (%i fixture/s) -> pendingOnUsersEventsRead" fixtures.Count |> Info |>log
+                sprintf "Reset when managingFixtures (%i fixture/s) -> pendingOnUsersEventsRead" fixtureDic.Count |> Info |> log
                 () |> reply.Reply
                 return! pendingOnFixturesEventsRead ()
-            | OnFixturesEventsRead _ -> sprintf "OnFixturesEventsRead when managingFixtures (%i fixture/s)" fixtures.Count |> IgnoredInput |> Agent |> log ; return! managingFixtures fixtures
+            | OnFixturesEventsRead _ -> sprintf "OnFixturesEventsRead when managingFixtures (%i fixture/s)" fixtureDic.Count |> IgnoredInput |> Agent |> log ; return! managingFixtures fixtureDic
             | HandleCreateFixtureCmd (_, auditUserId, fixtureId, stage, homeParticipant, awayParticipant, kickOff, reply) ->
                 let source = "HandleCreateFixtureCmd"
-                sprintf "%s for %A (%A %A %A) when managingFixtures (%i fixture/s)" source fixtureId stage homeParticipant awayParticipant fixtures.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A %A) when managingFixtures (%i fixture/s)" source fixtureId stage homeParticipant awayParticipant fixtureDic.Count |> Verbose |> log
                 let result =
-                    if fixtureId |> fixtures.ContainsKey |> not then () |> Ok else ifDebug (sprintf "%A already exists" fixtureId) UNEXPECTED_ERROR |> otherCmdError source
+                    if fixtureId |> fixtureDic.ContainsKey |> not then () |> Ok else ifDebug (sprintf "%A already exists" fixtureId) UNEXPECTED_ERROR |> otherCmdError source
                     |> Result.bind (fun _ -> (fixtureId, stage, homeParticipant, awayParticipant, kickOff) |> FixtureCreated |> tryApplyFixtureEvent source fixtureId None initialRvn)
                 let! result = match result with | Ok (fixture, rvn, fixtureEvent) -> tryWriteFixtureEventAsync auditUserId rvn fixtureEvent fixture | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (fixtureId, fixture) -> sprintf "Audit%A %A %A" auditUserId fixtureId fixture |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                match result with | Ok (fixtureId, fixture) -> (fixtureId, fixture) |> fixtures.Add | Error _ -> ()
-                return! managingFixtures fixtures
+                match result with | Ok (fixtureId, fixture) -> (fixtureId, fixture) |> fixtureDic.Add | Error _ -> ()
+                return! managingFixtures fixtureDic
             | HandleConfirmParticipantCmd (_, auditUserId, fixtureId, currentRvn, role, squadId, reply) ->
                 let source = "HandleConfirmParticipantCmd"
-                sprintf "%s for %A (%A %A %A) when managingFixtures (%i fixture/s)" source fixtureId currentRvn role squadId fixtures.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A %A) when managingFixtures (%i fixture/s)" source fixtureId currentRvn role squadId fixtureDic.Count |> Verbose |> log
                 let result =
-                    fixtures |> tryFindFixture fixtureId (otherCmdError source)
+                    fixtureDic |> tryFindFixture fixtureId (otherCmdError source)
                     |> Result.bind (fun (fixtureId, fixture) ->
                         let errorText =
                             match role with
@@ -181,8 +180,8 @@ type Fixtures () =
                 let! result = match result with | Ok (fixture, rvn, fixtureEvent) -> tryWriteFixtureEventAsync auditUserId rvn fixtureEvent fixture | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (fixtureId, fixture) -> Some (sprintf "Audit%A %A %A" auditUserId fixtureId fixture)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                let fixtures = match result with | Ok (fixtureId, fixture) -> fixtures |> updateFixture fixtureId fixture | Error _ -> fixtures
-                return! managingFixtures fixtures }
+                match result with | Ok (fixtureId, fixture) -> fixtureDic |> updateFixture fixtureId fixture | Error _ -> ()
+                return! managingFixtures fixtureDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Entity Entity.Fixtures |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

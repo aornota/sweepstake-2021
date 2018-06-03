@@ -1,7 +1,11 @@
 module Aornota.Sweepstake2018.Server.Agents.Persistence
 
 (* Broadcasts: UsersEventsRead | UserEventWritten
+               NewsEventsRead | NewsEventWritten
                SquadsEventsRead | SquadEventWritten
+               FixturesEventsRead | FixtureEventWritten
+               DraftsEventsRead | DraftEventWritten
+               UserDraftsEventsRead | UserDraftEventWritten
    Subscribes: N/A *)
 
 open Aornota.Common.IfDebug
@@ -12,6 +16,7 @@ open Aornota.Common.UnexpectedError
 open Aornota.Server.Common.Helpers
 open Aornota.Server.Common.JsonConverter
 
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
@@ -19,9 +24,11 @@ open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2018.Server.Events.DraftEvents
 open Aornota.Sweepstake2018.Server.Events.FixtureEvents
 open Aornota.Sweepstake2018.Server.Events.NewsEvents
 open Aornota.Sweepstake2018.Server.Events.SquadEvents
+open Aornota.Sweepstake2018.Server.Events.UserDraftEvents
 open Aornota.Sweepstake2018.Server.Events.UserEvents
 open Aornota.Sweepstake2018.Server.Signal
 
@@ -37,6 +44,8 @@ type EntityType = // note: not private since used in default-data.fs
     | News
     | Squads
     | Fixtures
+    | Drafts
+    | UserDrafts
 
 type private PersistenceInput =
     | Start of reply : AsyncReplyChannel<unit>
@@ -50,8 +59,14 @@ type private PersistenceInput =
     | WriteSquadEvent of auditUserId : UserId * rvn : Rvn * squadEvent : SquadEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
     | ReadFixturesEvents of readLockId : ReadLockId * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
     | WriteFixtureEvent of auditUserId : UserId * rvn : Rvn * fixtureEvent : FixtureEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | ReadDraftsEvents of readLockId : ReadLockId * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | WriteDraftEvent of auditUserId : UserId * rvn : Rvn * draftEvent : DraftEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | ReadUserDraftsEvents of readLockId : ReadLockId * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
+    | WriteUserDraftEvent of auditUserId : UserId * rvn : Rvn * userDraftEvent : UserDraftEvent * reply : AsyncReplyChannel<Result<unit, PersistenceError>>
 
 type PersistedEvent = { Rvn : Rvn ; TimestampUtc : DateTime ; EventJson : Json ; AuditUserId : UserId } // note: *not* private because this breaks deserialization
+
+type private ReadLockDic = Dictionary<ReadLockId, string>
 
 let [<Literal>] private PERSISTENCE_ROOT = "./persisted"
 let [<Literal>] private EVENTS_EXTENSION = "events"
@@ -72,6 +87,8 @@ let directory entityType = // note: not private since used in default-data.fs
         | News -> "news"
         | Squads -> "squads"
         | Fixtures -> "fixtures"
+        | Drafts -> "drafts"
+        | UserDrafts -> "user-drafts"
     sprintf "%s/%s" PERSISTENCE_ROOT entityTypeDir
 
 let private encoding = Encoding.UTF8
@@ -145,7 +162,11 @@ type Persistence () =
             | ReadSquadsEvents _ -> "ReadSquadsEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | WriteSquadEvent _ -> "WriteSquadEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | ReadFixturesEvents _ -> "ReadFixturesEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
-            | WriteFixtureEvent _ -> "WriteFixtureEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+            | WriteFixtureEvent _ -> "WriteFixtureEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | ReadDraftsEvents _ -> "ReadDraftsEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | WriteDraftEvent _ -> "WriteDraftEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | ReadUserDraftsEvents _ -> "ReadUserDraftsEvents when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | WriteUserDraftEvent _ -> "WriteUserDraftEvent when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
         and notLockedForReading () = async {
             let! input = inbox.Receive ()
             match input with
@@ -153,9 +174,9 @@ type Persistence () =
             | AcquireReadLock (readLockId, acquiredBy, disposable, reply) ->
                 sprintf "AcquireReadLock %A for '%s' when notLockedForReading -> lockedForReading (1 lock)" readLockId acquiredBy |> Info |> log
                 (readLockId, disposable) |> reply.Reply
-                let readLocks = new Dictionary<ReadLockId, string> ()
-                (readLockId, acquiredBy) |> readLocks.Add
-                return! lockedForReading readLocks
+                let readLockDic = ReadLockDic ()
+                (readLockId, acquiredBy) |> readLockDic.Add
+                return! lockedForReading readLockDic
             | ReleaseReadLock _ -> "ReleaseReadLock when notLockedForReading" |> formatIgnoredInput |> Danger |> log ; return! notLockedForReading ()
             | ReadUsersEvents (readLockId, reply) ->
                 let errorText = sprintf "ReadUsersEvents (%A) when notLockedForReading" readLockId
@@ -228,42 +249,78 @@ type Persistence () =
                     | Error error -> error |> Error
                 result |> logResult source (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn fixtureEvent)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
+                return! notLockedForReading ()
+            | ReadDraftsEvents (readLockId, reply) ->
+                let errorText = sprintf "ReadDraftsEvents (%A) when notLockedForReading" readLockId
+                errorText |> formatIgnoredInput |> Danger |> log
+                errorText |> PersistenceError |> Error |> reply.Reply
+                return! notLockedForReading ()
+            | WriteDraftEvent (auditUserId, rvn, draftEvent, reply) ->
+                let source = "WriteDraftEvent"
+                sprintf "%s when notLockedForReading -> Audit%A %A %A" source auditUserId rvn draftEvent |> Verbose |> log
+                let (DraftId draftId) = draftEvent.DraftId
+                let result =
+                    match writeEvent source Drafts draftId rvn (toJson draftEvent) auditUserId with
+                    | Ok _ ->
+                        (rvn, draftEvent) |> DraftEventWritten |> broadcaster.Broadcast
+                        () |> Ok
+                    | Error error -> error |> Error
+                result |> logResult source (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn draftEvent)) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> reply.Reply
+                return! notLockedForReading ()
+            | ReadUserDraftsEvents (readLockId, reply) ->
+                let errorText = sprintf "ReadUserDraftsEvents (%A) when notLockedForReading" readLockId
+                errorText |> formatIgnoredInput |> Danger |> log
+                errorText |> PersistenceError |> Error |> reply.Reply
+                return! notLockedForReading ()
+            | WriteUserDraftEvent (auditUserId, rvn, userDraftEvent, reply) ->
+                let source = "WriteUserDraftEvent"
+                sprintf "%s when notLockedForReading -> Audit%A %A %A" source auditUserId rvn userDraftEvent |> Verbose |> log
+                let (UserDraftId userDraftId) = userDraftEvent.UserDraftId
+                let result =
+                    match writeEvent source UserDrafts userDraftId rvn (toJson userDraftEvent) auditUserId with
+                    | Ok _ ->
+                        (rvn, userDraftEvent) |> UserDraftEventWritten |> broadcaster.Broadcast
+                        () |> Ok
+                    | Error error -> error |> Error
+                result |> logResult source (fun _ -> Some (sprintf "Audit%A %A %A" auditUserId rvn userDraftEvent)) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> reply.Reply
                 return! notLockedForReading () }
-        and lockedForReading readLocks = async {
+        and lockedForReading readLockDic = async {
             // Note: Scan (rather than Receive) in order to leave "skipped" inputs (e.g. WriteUserEvent) on the queue - though also ignore-but-consume some inputs (e.g. Start).
             return! inbox.Scan (fun input ->
                 match input with
-                | Start _ -> sprintf "Start when lockedForReading (%i lock/s)" readLocks.Count |> IgnoredInput |> Agent |> log ; lockedForReading readLocks |> Some
+                | Start _ -> sprintf "Start when lockedForReading (%i lock/s)" readLockDic.Count |> IgnoredInput |> Agent |> log ; lockedForReading readLockDic |> Some
                 | AcquireReadLock (readLockId, acquiredBy, disposable, reply) ->
                     let source = "AcquireReadLock"
-                    if readLockId |> readLocks.ContainsKey |> not then
-                        let previousCount = readLocks.Count
-                        (readLockId, acquiredBy) |> readLocks.Add
-                        sprintf "%s %A for '%s' when lockedForReading (%i lock/s) -> lockedForReading (%i lock/s)" source readLockId acquiredBy previousCount readLocks.Count |> Info |> log
+                    if readLockId |> readLockDic.ContainsKey |> not then
+                        let previousCount = readLockDic.Count
+                        (readLockId, acquiredBy) |> readLockDic.Add
+                        sprintf "%s %A for '%s' when lockedForReading (%i lock/s) -> lockedForReading (%i lock/s)" source readLockId acquiredBy previousCount readLockDic.Count |> Info |> log
                     else // note: should never happen
-                        sprintf "%s for '%s' when lockedForReading (%i lock/s) -> %A is not valid (already in use)" source acquiredBy readLocks.Count readLockId |> Danger |> log
+                        sprintf "%s for '%s' when lockedForReading (%i lock/s) -> %A is not valid (already in use)" source acquiredBy readLockDic.Count readLockId |> Danger |> log
                     (readLockId, disposable) |> reply.Reply
-                    lockedForReading readLocks |> Some
+                    lockedForReading readLockDic |> Some
                 | ReleaseReadLock readLockId ->
                     let source = "ReleaseReadLock"
-                    if readLockId |> readLocks.ContainsKey then
-                        let previousCount = readLocks.Count
-                        readLockId |> readLocks.Remove |> ignore
-                        if readLocks.Count = 0 then
+                    if readLockId |> readLockDic.ContainsKey then
+                        let previousCount = readLockDic.Count
+                        readLockId |> readLockDic.Remove |> ignore
+                        if readLockDic.Count = 0 then
                             sprintf "%s %A when lockedForReading (%i lock/s) -> 0 locks -> notLockedForReading" source readLockId previousCount |> Info |> log
                             notLockedForReading () |> Some
                         else
-                            sprintf "%s %A when lockedForReading (%i lock/s) -> lockedForReading (%i lock/s)" source readLockId previousCount readLocks.Count |> Info |> log
-                            lockedForReading readLocks |> Some
+                            sprintf "%s %A when lockedForReading (%i lock/s) -> lockedForReading (%i lock/s)" source readLockId previousCount readLockDic.Count |> Info |> log
+                            lockedForReading readLockDic |> Some
                     else // note: should never happen
-                        sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId |> Danger |> log
-                        lockedForReading readLocks |> Some
+                        sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId |> Danger |> log
+                        lockedForReading readLockDic |> Some
                 | ReadUsersEvents (readLockId, reply) ->
                     let source = "ReadUsersEvents"
-                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLocks.Count |> Verbose |> log
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
                     let result =
-                        if readLockId |> readLocks.ContainsKey |> not then // note: should never happen
-                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
                             ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
                         else Ok ()
                         |> Result.bind (fun _ ->
@@ -277,14 +334,14 @@ type Persistence () =
                         sprintf "%i UserEvent/s for %i UserId/s" eventsCount usersEvents.Length |> Some)
                     result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
                     result |> discardOk |> reply.Reply
-                    lockedForReading readLocks |> Some
-                | WriteUserEvent _ -> sprintf "WriteUserEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None
+                    lockedForReading readLockDic |> Some
+                | WriteUserEvent _ -> sprintf "WriteUserEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None
                 | ReadNewsEvents (readLockId, reply) ->
                     let source = "ReadNewsEvents"
-                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLocks.Count |> Verbose |> log
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
                     let result =
-                        if readLockId |> readLocks.ContainsKey |> not then // note: should never happen
-                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
                             ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
                         else Ok ()
                         |> Result.bind (fun _ ->
@@ -298,14 +355,14 @@ type Persistence () =
                         sprintf "%i NewsEvent/s for %i PostId/s" eventsCount newsEvents.Length |> Some)
                     result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
                     result |> discardOk |> reply.Reply
-                    lockedForReading readLocks |> Some
-                | WriteNewsEvent _ -> sprintf "WriteNewsEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None
+                    lockedForReading readLockDic |> Some
+                | WriteNewsEvent _ -> sprintf "WriteNewsEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None
                 | ReadSquadsEvents (readLockId, reply) ->
                     let source = "ReadSquadsEvents"
-                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLocks.Count |> Verbose |> log
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
                     let result =
-                        if readLockId |> readLocks.ContainsKey |> not then // note: should never happen
-                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
                             ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
                         else Ok ()
                         |> Result.bind (fun _ ->
@@ -319,14 +376,14 @@ type Persistence () =
                         sprintf "%i SquadEvent/s for %i SquadId/s" eventsCount squadsEvents.Length |> Some)
                     result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
                     result |> discardOk |> reply.Reply
-                    lockedForReading readLocks |> Some
-                | WriteSquadEvent _ -> sprintf "WriteSquadEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None
+                    lockedForReading readLockDic |> Some
+                | WriteSquadEvent _ -> sprintf "WriteSquadEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None
                 | ReadFixturesEvents (readLockId, reply) ->
                     let source = "ReadFixturesEvents"
-                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLocks.Count |> Verbose |> log
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
                     let result =
-                        if readLockId |> readLocks.ContainsKey |> not then // note: should never happen
-                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLocks.Count readLockId
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
                             ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
                         else Ok ()
                         |> Result.bind (fun _ ->
@@ -340,8 +397,50 @@ type Persistence () =
                         sprintf "%i FixtureEvent/s for %i FixtureId/s" eventsCount fixturesEvents.Length |> Some)
                     result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
                     result |> discardOk |> reply.Reply
-                    lockedForReading readLocks |> Some
-                | WriteFixtureEvent _ -> sprintf "WriteFixtureEvent when lockedForReading (%i lock/s)" readLocks.Count |> SkippedInput |> Agent |> log ; None) }
+                    lockedForReading readLockDic |> Some
+                | WriteFixtureEvent _ -> sprintf "WriteFixtureEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None
+                | ReadDraftsEvents (readLockId, reply) ->
+                    let source = "ReadDraftsEvents"
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
+                    let result =
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
+                            ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
+                        else Ok ()
+                        |> Result.bind (fun _ ->
+                            match readEvents Drafts with
+                            | Ok draftsEvents ->
+                                (draftsEvents |> List.map (fun (id, draftsEvents) -> DraftId id, draftsEvents)) |> DraftsEventsRead |> broadcaster.Broadcast
+                                draftsEvents |> Ok
+                            | Error error -> error |> Error)
+                    let successText = (fun draftsEvents ->
+                        let eventsCount = draftsEvents |> List.sumBy (fun (_, events) -> events |> List.length)
+                        sprintf "%i DraftEvent/s for %i DraftId/s" eventsCount draftsEvents.Length |> Some)
+                    result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
+                    result |> discardOk |> reply.Reply
+                    lockedForReading readLockDic |> Some
+                | WriteDraftEvent _ -> sprintf "WriteDraftEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None
+                | ReadUserDraftsEvents (readLockId, reply) ->
+                    let source = "ReadUserDraftsEvents"
+                    sprintf "%s (%A) when lockedForReading (%i lock/s)" source readLockId readLockDic.Count |> Verbose |> log
+                    let result =
+                        if readLockId |> readLockDic.ContainsKey |> not then // note: should never happen
+                            let errorText = sprintf "%s when lockedForReading (%i lock/s) -> %A is not valid (not in use)" source readLockDic.Count readLockId
+                            ifDebug errorText UNEXPECTED_ERROR |> PersistenceError |> Error
+                        else Ok ()
+                        |> Result.bind (fun _ ->
+                            match readEvents UserDrafts with
+                            | Ok userDraftsEvents ->
+                                (userDraftsEvents |> List.map (fun (id, userDraftsEvents) -> UserDraftId id, userDraftsEvents)) |> UserDraftsEventsRead |> broadcaster.Broadcast
+                                userDraftsEvents |> Ok
+                            | Error error -> error |> Error)
+                    let successText = (fun userDraftsEvents ->
+                        let eventsCount = userDraftsEvents |> List.sumBy (fun (_, events) -> events |> List.length)
+                        sprintf "%i UserDraftEvent/s for %i UserDraftId/s" eventsCount userDraftsEvents.Length |> Some)
+                    result |> logResult source successText // note: log success/failure here (rather than assuming that calling code will do so)
+                    result |> discardOk |> reply.Reply
+                    lockedForReading readLockDic |> Some
+                | WriteUserDraftEvent _ -> sprintf "WriteUserDraftEvent when lockedForReading (%i lock/s)" readLockDic.Count |> SkippedInput |> Agent |> log ; None) }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Persistence |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
@@ -358,6 +457,10 @@ type Persistence () =
     member __.WriteSquadEventAsync (auditUserId, rvn, squadEvent) = (fun reply -> (auditUserId, rvn, squadEvent, reply) |> WriteSquadEvent) |> agent.PostAndAsyncReply
     member __.ReadFixturesEventsAsync readLockId = (fun reply -> (readLockId, reply) |> ReadFixturesEvents) |> agent.PostAndAsyncReply
     member __.WriteFixtureEventAsync (auditUserId, rvn, fixtureEvent) = (fun reply -> (auditUserId, rvn, fixtureEvent, reply) |> WriteFixtureEvent) |> agent.PostAndAsyncReply
+    member __.ReadDraftsEventsAsync readLockId = (fun reply -> (readLockId, reply) |> ReadDraftsEvents) |> agent.PostAndAsyncReply
+    member __.WriteDraftEventAsync (auditUserId, rvn, draftEvent) = (fun reply -> (auditUserId, rvn, draftEvent, reply) |> WriteDraftEvent) |> agent.PostAndAsyncReply
+    member __.ReadUserDraftsEventsAsync readLockId = (fun reply -> (readLockId, reply) |> ReadUserDraftsEvents) |> agent.PostAndAsyncReply
+    member __.WriteUserDraftEventAsync (auditUserId, rvn, userDraftEvent) = (fun reply -> (auditUserId, rvn, userDraftEvent, reply) |> WriteUserDraftEvent) |> agent.PostAndAsyncReply
 
 let persistence = Persistence ()
 
@@ -376,3 +479,5 @@ let readPersistedEvents () =
     readLockId |> persistence.ReadNewsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
     readLockId |> persistence.ReadSquadsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
     readLockId |> persistence.ReadFixturesEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
+    readLockId |> persistence.ReadDraftsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent
+    readLockId |> persistence.ReadUserDraftsEventsAsync |> Async.RunSynchronously |> ignore // note: success/failure already logged by agent

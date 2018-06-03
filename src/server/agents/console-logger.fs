@@ -10,6 +10,7 @@ type Entity =
     | News
     | Squads
     | Fixtures
+    | Drafts
 
 type Projection =
     | UserAdmin
@@ -17,6 +18,7 @@ type Projection =
     | Squads
     | Fixtures
     | Chat
+    | Drafts
   
 type Source =
     | ConsoleLogger
@@ -66,6 +68,7 @@ let private sourceTextAndColour source =
             | Entity.News -> "News"
             | Entity.Squads -> "Squads"
             | Entity.Fixtures -> "Fixtures"
+            | Entity.Drafts -> "Drafts"
         sprintf "%s [entity]" text, ConsoleColor.Blue
     | Projection projection ->
         let text =
@@ -74,6 +77,7 @@ let private sourceTextAndColour source =
             | Projection.News -> "News"
             | Projection.Squads -> "Squads"
             | Projection.Fixtures -> "Fixtures"
+            | Projection.Drafts -> "Drafts"
             | Chat -> "Chat"
         sprintf "%s [projection]" text, ConsoleColor.DarkBlue
     | Connections -> "Connections", ConsoleColor.Magenta

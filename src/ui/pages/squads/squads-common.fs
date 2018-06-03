@@ -5,6 +5,7 @@ open Aornota.Common.Revision
 open Aornota.UI.Common.Notifications
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
@@ -37,11 +38,14 @@ type EliminateSquadInput =
 
 type Input =
     | AddNotificationMessage of notificationMessage : NotificationMessage
+    | RemoveNotificationMessage of notificationId : NotificationId
     | SendUiUnauthMsg of uiUnauthMsg : UiUnauthMsg
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
     | ReceiveServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ShowGroup of group : Group
     | ShowSquad of squadId : SquadId
+    | AddToDraft of draftId : DraftId * userDraftPickBasic : UserDraftPickBasic
+    | RemoveFromDraft of draftId : DraftId * userDraftPickBasic : UserDraftPickBasic
     | ShowAddPlayersModal of squadId : SquadId
     | AddPlayersInput of addPlayersInput : AddPlayersInput
     | ShowChangePlayerNameModal of squadId : SquadId * playerId : PlayerId
@@ -53,13 +57,17 @@ type Input =
     | ShowEliminateSquadModal of squadId : SquadId
     | EliminateSquadInput of eliminateSquadInput : EliminateSquadInput
 
-type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: draftedBy? pickedBy? score?...
+type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: pickedBy? score?...
 type PlayerDic = Dictionary<PlayerId, Player>
 
 type Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic }
 type SquadDic = Dictionary<SquadId, Squad>
 
 type SquadsProjection = { Rvn : Rvn ; SquadDic : SquadDic }
+
+type DraftPickStatus = | AddPending | RemovePending
+
+type DraftPick = { UserDraftPickBasic : UserDraftPickBasic ; DraftPickStatus : DraftPickStatus option }
 
 type AddPlayerStatus =
     | AddPlayerPending
@@ -114,6 +122,9 @@ type EliminateSquadState = {
 
 type ActiveState = {
     SquadsProjection : SquadsProjection
+    CurrentDraftDto : CurrentDraftDto option
+    CurrentDraftNotificationId : NotificationId option
+    CurrentDraftPicks : DraftPick list
     CurrentSquadId : SquadId option
     AddPlayersState : AddPlayersState option
     ChangePlayerNameState : ChangePlayerNameState option
@@ -129,3 +140,12 @@ type ProjectionState =
 type State = { ProjectionState : ProjectionState }
 
 let playerNames (playerDic:PlayerDic) = playerDic |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player.PlayerName)
+
+let isAddPending draftPick =
+    match draftPick.DraftPickStatus with
+    | Some draftPickStatus -> match draftPickStatus with | AddPending -> true | RemovePending -> false
+    | None -> false
+let isRemovePending draftPick =
+    match draftPick.DraftPickStatus with
+    | Some draftPickStatus -> match draftPickStatus with | AddPending -> false | RemovePending -> true
+    | None -> false

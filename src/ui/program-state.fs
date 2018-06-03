@@ -113,6 +113,8 @@ let private sendAuthMsgCmd connectionState authState uiAuthMsg =
         authState, shouldNeverHappenText "sendAuthMsgCmd called when ConnectionState is not Connected" |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private addNotificationMessage notificationMessage state = { state with NotificationMessages = notificationMessage :: state.NotificationMessages }
+let private removeNotificationMessage notificationId state = // note: silently ignore unknown notificationId
+    { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }
 
 let private addDebugMessage debugText state = state |> addNotificationMessage (debugText |> debugDismissableMessage)
 let private addInfoMessage infoText state = state |> addNotificationMessage (infoText |> infoDismissableMessage)
@@ -136,6 +138,20 @@ let defaultSignInState userName signInStatus = {
     FocusPassword = match userName with | Some _ -> true | None -> false
     SignInStatus = signInStatus }
 
+let private removeSquadsCurrentDraftNotification (unauthPageStates:UnauthPageStates option) state =
+    match unauthPageStates with
+    | Some unauthPageStates ->
+        match unauthPageStates.SquadsState with
+        | Some squadsState ->
+            match squadsState.ProjectionState with
+            | Squads.Common.Active activeState ->
+                match activeState.CurrentDraftNotificationId with
+                | Some notificationId -> state |> removeNotificationMessage notificationId
+                | None -> state
+            | _ -> state
+        | None -> state
+    | None -> state
+
 let private currentSquadId (squadsState:Squads.Common.State) =
     match squadsState.ProjectionState with
     | Squads.Common.ProjectionState.Active activeState -> activeState.CurrentSquadId
@@ -144,7 +160,8 @@ let private currentSquadId (squadsState:Squads.Common.State) =
 let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) signInState state =
     let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
     let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = NewsPage)
-    // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
+    // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...   
+    let state = state |> removeSquadsCurrentDraftNotification unauthPageStates // note: if currently have Squads state (i.e. previously authenticated), ensure Draft-related notification removed
     let initializeSquadsState, currentSquadId =
         match unauthPageStates, currentPage with
         | Some unauthPageStates, _ ->
@@ -199,20 +216,15 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
     // TODO-NMB-MEDIUM: Initialize other "optional" pages (if required)...
     let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = UnauthPage NewsPage)
-    let initializeSquadsState, currentSquadId =
-        match unauthPageStates, currentPage with
-        | Some unauthPageStates, _ ->
-            match unauthPageStates.SquadsState, currentPage with
-            | Some squadsState, _ -> true, (squadsState |> currentSquadId) // note: re-initialize to get "authenticated projection"
-            | None, UnauthPage SquadsPage -> true, None
-            | None, _ -> false, None
-        | None, UnauthPage SquadsPage -> true, None
-        | None, _ -> false, None
-    let squadsState, squadsCmd =
-        if initializeSquadsState then
-            let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
-            squadsState |> Some, squadsCmd
-        else None, Cmd.none
+    let currentSquadId =
+        match unauthPageStates with
+        | Some unauthPageStates -> match unauthPageStates.SquadsState with | Some squadsState -> (squadsState |> currentSquadId) | None -> None
+        | None -> None
+    // Note: Always initialize Squads state when authenticated, i.e. to get "authenticated projection" - and to ensure Draft-related notification shown.
+    
+    // TODO-SOON: Note that Drafts will likewise always be initialized...
+
+    let squadsState, squadsCmd = Squads.State.initialize (authUser |> Some) currentSquadId
 
     let tempScoresState = () |> Some
 
@@ -247,7 +259,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         AuthUser = authUser
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
-        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState |> Some ; FixturesState = fixturesState }
         AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = tempDraftAdminState ; DraftsState = tempDraftsState ; ChatState = chatState }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
@@ -531,6 +543,8 @@ let private handleUnauthInput unauthInput unauthState state =
 
     | UnauthPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
+    | UnauthPageInput (SquadsInput (Squads.Common.RemoveNotificationMessage notificationId)), _ ->
+        state |> removeNotificationMessage notificationId, Cmd.none
     | UnauthPageInput (SquadsInput (Squads.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
         let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
         state, cmd
@@ -659,6 +673,8 @@ let private handleAuthInput authInput authState state =
 
     | PageInput (UPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (UPageInput (SquadsInput (Squads.Common.RemoveNotificationMessage notificationId))), _, false ->
+        state |> removeNotificationMessage notificationId, Cmd.none, false
     | PageInput (UPageInput (SquadsInput (Squads.Common.SendUiUnauthMsg uiUnauthMsg))), _, false ->
         let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
         state, cmd, false
@@ -808,8 +824,8 @@ let transition input state =
 #endif
         | AddNotificationMessage notificationMessage ->
             state |> addNotificationMessage notificationMessage, Cmd.none, false
-        | DismissNotificationMessage notificationId -> // note: silently ignore unknown notificationId
-            { state with NotificationMessages = state.NotificationMessages |> removeNotificationMessage notificationId }, Cmd.none, true
+        | DismissNotificationMessage notificationId ->
+            state |> removeNotificationMessage notificationId, Cmd.none, true
         | ToggleTheme ->
             let state = { state with UseDefaultTheme = (state.UseDefaultTheme |> not) }
             setBodyClass state.UseDefaultTheme

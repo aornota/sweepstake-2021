@@ -5,6 +5,7 @@ open Aornota.Common.IfDebug
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
@@ -68,6 +69,8 @@ type ServerUserAdminMsg =
     | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
     | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
 
+type ServerDraftAdminMsg = | ProcessDraftCmdResult of result : Result<unit, AuthCmdError<string>>
+
 type NewsProjectionMsg = | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
 
 type ServerNewsMsg =
@@ -81,10 +84,11 @@ type ServerNewsMsg =
 type SquadsProjectionMsg =
     | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
     | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
+    | CurrentDraftChangedMsg of currentDraftDto : CurrentDraftDto option
 
 type ServerSquadsMsg =
     | InitializeSquadsProjectionUnauthQryResult of result : Result<SquadsProjectionDto, OtherError<string>>
-    | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto, AuthQryError<string>>
+    | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto * CurrentDraftDto option, AuthQryError<string>>
     | AddPlayerCmdResult of result : Result<Rvn * PlayerName, AuthCmdError<string>>
     | ChangePlayerNameCmdResult of result : Result<PlayerName * PlayerName, AuthCmdError<string>>
     | ChangePlayerTypeCmdResult of result : Result<PlayerName, AuthCmdError<string>>
@@ -115,6 +119,7 @@ type ServerMsg =
     | Waff
     | ServerAppMsg of serverAppMsg : ServerAppMsg
     | ServerUserAdminMsg of serverUserAdminMsg : ServerUserAdminMsg
+    | ServerDraftAdminMsg of serverDraftAdminMsg : ServerDraftAdminMsg
     | ServerNewsMsg of serverNewsMsg : ServerNewsMsg
     | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ServerFixturesMsg of serverFixturesMsg : ServerFixturesMsg

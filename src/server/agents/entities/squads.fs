@@ -42,8 +42,10 @@ type private SquadsInput =
         * reply : AsyncReplyChannel<Result<SquadName, AuthCmdError<string>>>
 
 type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
+type private PlayerDic = Dictionary<PlayerId, Player>
 
 type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; Players : Dictionary<PlayerId, Player> }
+type private SquadDic = Dictionary<SquadId, Squad>
 
 let private log category = (Entity Entity.Squads, category) |> consoleLogger.Log
 
@@ -107,7 +109,7 @@ let private applySquadEvent source idAndSquadResult (nextRvn, squadEvent:SquadEv
 
 let private initializeSquads source (squadsEvents:(SquadId * (Rvn * SquadEvent) list) list) =
     let source = sprintf "%s#initializeSquads" source
-    let squads = new Dictionary<SquadId, Squad> ()
+    let squadDic = SquadDic ()
     let results =
         squadsEvents
         |> List.map (fun (squadId, events) ->
@@ -116,7 +118,7 @@ let private initializeSquads source (squadsEvents:(SquadId * (Rvn * SquadEvent) 
             | [] -> ifDebug (sprintf "No SquadEvents for %A" squadId) UNEXPECTED_ERROR |> otherError source) // note: should never happen
     results
     |> List.choose (fun idAndSquadResult -> match idAndSquadResult with | Ok (squadId, Some squad) -> (squadId, squad) |> Some | Ok (_, None) | Error _ -> None)
-    |> List.iter (fun (squadId, squad) -> squads.Add (squadId, squad))
+    |> List.iter (fun (squadId, squad) -> squadDic.Add (squadId, squad))
     let errors =
         results
         |> List.choose (fun idAndSquadResult ->
@@ -124,17 +126,13 @@ let private initializeSquads source (squadsEvents:(SquadId * (Rvn * SquadEvent) 
             | Ok (_, Some _) -> None
             | Ok (_, None) -> ifDebug (sprintf "%s: applySquadEvent returned Ok (_, None)" source) UNEXPECTED_ERROR |> OtherError |> Some // note: should never happen
             | Error error -> error |> Some)
-    squads, errors
+    squadDic, errors
 
-let private updateSquad squadId squad (squads:Dictionary<SquadId, Squad>) =
-    if squadId |> squads.ContainsKey then squads.[squadId] <- squad
-    squads
+let private tryFindSquad squadId onError (squadDic:SquadDic) =
+    if squadId |> squadDic.ContainsKey then (squadId, squadDic.[squadId]) |> Ok else ifDebug (sprintf "%A does not exist" squadId) UNEXPECTED_ERROR |> onError
 
-let private tryFindSquad squadId onError (squads:Dictionary<SquadId, Squad>) =
-    if squadId |> squads.ContainsKey then (squadId, squads.[squadId]) |> Ok else ifDebug (sprintf "%A does not exist" squadId) UNEXPECTED_ERROR |> onError
-
-let private tryFindPlayer playerId onError (players:Dictionary<PlayerId, Player>) =
-    if playerId |> players.ContainsKey then (playerId, players.[playerId]) |> Ok else ifDebug (sprintf "%A does not exist" playerId) UNEXPECTED_ERROR |> onError
+let private tryFindPlayer playerId onError (playerDic:PlayerDic) =
+    if playerId |> playerDic.ContainsKey then (playerId, playerDic.[playerId]) |> Ok else ifDebug (sprintf "%A does not exist" playerId) UNEXPECTED_ERROR |> onError
 
 let private tryApplySquadEvent source squadId squad nextRvn thing squadEvent =
     match applySquadEvent source (Ok (squadId, squad)) (nextRvn, squadEvent) with
@@ -193,26 +191,26 @@ type Squads () =
             | HandleChangePlayerTypeCmd _ -> "HandleChangePlayerTypeCmd when pendingOnSquadsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnSquadsEventsRead ()
             | HandleWithdrawPlayerCmd _ -> "HandleWithdrawPlayerCmd when pendingOnSquadsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnSquadsEventsRead ()
             | HandleEliminateSquadCmd _ -> "HandleEliminateSquadCmd when pendingOnSquadsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnSquadsEventsRead () }
-        and managingSquads squads = async {
+        and managingSquads squadDic = async {
             let! input = inbox.Receive ()
             match input with
-            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingSquads squads
-            | Start _ -> sprintf "Start when managingSquads (%i squads/s)" squads.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squads
+            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingSquads squadDic
+            | Start _ -> sprintf "Start when managingSquads (%i squads/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
             | Reset reply ->
-                sprintf "Reset when managingSquads (%i squads/s) -> pendingOnSquadsEventsRead" squads.Count |> Info |>log
+                sprintf "Reset when managingSquads (%i squads/s) -> pendingOnSquadsEventsRead" squadDic.Count |> Info |> log
                 () |> reply.Reply
                 return! pendingOnSquadsEventsRead ()
-            | OnSquadsEventsRead _ -> sprintf "OnSquadsEventsRead when managingSquads (%i squads/s)" squads.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squads
+            | OnSquadsEventsRead _ -> sprintf "OnSquadsEventsRead when managingSquads (%i squads/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
             | HandleCreateSquadCmd (_, auditUserId, squadId, SquadName squadName, group, seeding, CoachName coachName, reply) ->
                 let source = "HandleCreateSquadCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId squadName group squads.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId squadName group squadDic.Count |> Verbose |> log
                 let squadName = SquadName (squadName.Trim ())
                 let coachName = CoachName (coachName.Trim ())
                 let result =
-                    if squadId |> squads.ContainsKey |> not then () |> Ok
+                    if squadId |> squadDic.ContainsKey |> not then () |> Ok
                     else ifDebug (sprintf "%A already exists" squadId) UNEXPECTED_ERROR |> otherCmdError source
                     |> Result.bind (fun _ ->
-                        let squadNames = squads |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad.SquadName)
+                        let squadNames = squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad.SquadName)
                         match validateSquadName squadNames squadName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ -> match validateCoachName coachName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ ->
@@ -220,14 +218,14 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, _) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad () | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, squad, _) -> squad.SquadName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> (squadId, squad) |> squads.Add | Error _ -> ()
-                return! managingSquads squads
+                match result with | Ok (squadId, squad, _) -> (squadId, squad) |> squadDic.Add | Error _ -> ()
+                return! managingSquads squadDic
             | HandleAddPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, PlayerName playerName, playerType, reply) ->
                 let source = "HandleAddPlayerCmd"
-                sprintf "%s for %A (%A %A %A) when managingSquads (%i squads/s)" source squadId playerId playerName playerType squads.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A %A) when managingSquads (%i squads/s)" source squadId playerId playerName playerType squadDic.Count |> Verbose |> log
                 let playerName = PlayerName (playerName.Trim ())
                 let result =
-                    squads |> tryFindSquad squadId (otherCmdError source)
+                    squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
                         if playerId |> squad.Players.ContainsKey |> not then (squadId, squad, playerId) |> Ok
                         else ifDebug (sprintf "%A already exists" playerId) UNEXPECTED_ERROR |> otherCmdError source)
@@ -244,14 +242,14 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, _) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad () | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, squad, _) -> squad.Rvn, playerName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> squads.[squadId] <- squad | Error _ -> ()
-                return! managingSquads squads
+                match result with | Ok (squadId, squad, _) -> squadDic.[squadId] <- squad | Error _ -> ()
+                return! managingSquads squadDic
             | HandleChangePlayerNameCmd (_, auditUserId, squadId, currentRvn, playerId, PlayerName playerName, reply) ->
                 let source = "HandleChangePlayerNameCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerName squads.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerName squadDic.Count |> Verbose |> log
                 let playerName = PlayerName (playerName.Trim ())
                 let result =
-                    squads |> tryFindSquad squadId (otherCmdError source)
+                    squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
                         match squad.Players |> tryFindPlayer playerId (otherCmdError source) with
                         | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
@@ -269,13 +267,13 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, previousPlayerName) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad previousPlayerName | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, _, previousPlayerName) -> previousPlayerName, playerName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> squads.[squadId] <- squad | Error _ -> ()
-                return! managingSquads squads
+                match result with | Ok (squadId, squad, _) -> squadDic.[squadId] <- squad | Error _ -> ()
+                return! managingSquads squadDic
             | HandleChangePlayerTypeCmd (_, auditUserId, squadId, currentRvn, playerId, playerType, reply) ->
                 let source = "HandleChangePlayerTypeCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerType squads.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerType squadDic.Count |> Verbose |> log
                 let result =
-                    squads |> tryFindSquad squadId (otherCmdError source)
+                    squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
                         match squad.Players |> tryFindPlayer playerId (otherCmdError source) with
                         | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
@@ -288,13 +286,13 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, playerName) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad playerName | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, _, playerName) -> playerName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> squads.[squadId] <- squad | Error _ -> ()
-                return! managingSquads squads
+                match result with | Ok (squadId, squad, _) -> squadDic.[squadId] <- squad | Error _ -> ()
+                return! managingSquads squadDic
             | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) ->
                 let source = "HandleWithdrawPlayerCmd"
-                sprintf "%s for %A (%A) when managingSquads (%i squads/s)" source squadId playerId squads.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingSquads (%i squads/s)" source squadId playerId squadDic.Count |> Verbose |> log
                 let result =
-                    squads |> tryFindSquad squadId (otherCmdError source)
+                    squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
                         match squad.Players |> tryFindPlayer playerId (otherCmdError source) with
                         | Ok (playerId, player) -> (squadId, squad, playerId, player) |> Ok
@@ -309,13 +307,13 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, playerName) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad playerName | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, _, playerName) -> playerName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> squads.[squadId] <- squad | Error _ -> ()
-                return! managingSquads squads
+                match result with | Ok (squadId, squad, _) -> squadDic.[squadId] <- squad | Error _ -> ()
+                return! managingSquads squadDic
             | HandleEliminateSquadCmd (_, auditUserId, squadId, currentRvn, reply) ->
                 let source = "HandleEliminateSquadCmd"
-                sprintf "%s for %A when managingSquads (%i squads/s)" source squadId squads.Count |> Verbose |> log
+                sprintf "%s for %A when managingSquads (%i squads/s)" source squadId squadDic.Count |> Verbose |> log
                 let result =
-                    squads |> tryFindSquad squadId (otherCmdError source)
+                    squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
                         if squad.Eliminated |> not then (squadId, squad) |> Ok
                         else "Team has already been eliminated" |> otherCmdError source)
@@ -324,8 +322,8 @@ type Squads () =
                 let! result = match result with | Ok (squad, rvn, squadEvent, _) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad () | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, squad, _) -> squad.SquadName) |> reply.Reply
-                match result with | Ok (squadId, squad, _) -> squads.[squadId] <- squad | Error _ -> ()
-                return! managingSquads squads }
+                match result with | Ok (squadId, squad, _) -> squadDic.[squadId] <- squad | Error _ -> ()
+                return! managingSquads squadDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Entity Entity.Squads |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

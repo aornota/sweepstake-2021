@@ -6,11 +6,13 @@ open Aornota.Common.Revision
 open Aornota.Server.Common.Helpers
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2018.Server.Agents.Entities.Drafts
 open Aornota.Sweepstake2018.Server.Agents.Entities.Fixtures
 open Aornota.Sweepstake2018.Server.Agents.Entities.Squads
 open Aornota.Sweepstake2018.Server.Agents.Entities.Users
@@ -20,9 +22,10 @@ open Aornota.Sweepstake2018.Server.Authorization
 open System
 open System.IO
 
-let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release
-let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release
-let private deleteExistingFixturesEvents = ifDebug false false // note: should *not* generally set to true for Release
+let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
+let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
+let private deleteExistingFixturesEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
+let private deleteExistingDraftsEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
 
 let private log category = (Host, category) |> consoleLogger.Log
 
@@ -451,7 +454,7 @@ let private createInitialFixturesEventsIfNecessary = async {
         sprintf "creating initial Fixture/s events -> %s" fixturesDir |> Info |> log
         "starting Fixtures agent" |> Info |> log
         () |> fixtures.Start
-        // Note: Send dummy OnFixturesEventsRead to Users agent to ensure that it transitions [from pendingOnFixturesEventsRead] to managingFixtures; otherwise HandleCreateFixtureCmdAsync (&c.) would be ignored (and block).
+        // Note: Send dummy OnFixturesEventsRead to Users agent to ensure that it transitions [from pendingOnFixturesEventsRead] to managingFixtures; otherwise HandleCreateFixtureCmdAsync would be ignored (and block).
         "sending dummy OnFixturesEventsRead to Fixtures agent" |> Info |> log
         [] |> fixtures.OnFixturesEventsRead
 
@@ -679,6 +682,51 @@ let private createInitialFixturesEventsIfNecessary = async {
         () |> fixtures.Reset
     return () }
 
+let private createInitialDraftsEventsIfNecessary = async {
+    let draftsDir = directory EntityType.Drafts
+
+    // #region: Force re-creation of initial Draft/s events if directory already exists (if requested)
+    if deleteExistingDraftsEvents && Directory.Exists draftsDir then
+        sprintf "deleting existing Draft/s events -> %s" draftsDir |> Info |> log
+        delete draftsDir
+    // #endregion
+
+    if Directory.Exists draftsDir then sprintf "preserving existing Draft/s events -> %s" draftsDir |> Info |> log
+    else
+        sprintf "creating initial Draft/s events -> %s" draftsDir |> Info |> log
+        "starting Drafts agent" |> Info |> log
+        () |> drafts.Start
+        // Note: Send dummy OnSquadsRead | OnDraftsEventsRead | OnUserDraftsEventsRead to Drafts agent to ensure that it transitions [from pendingAllRead] to managingDrafts; otherwise HandleCreateDraftCmdAsync would be ignored (and block).
+        "sending dummy OnSquadsRead | OnDraftsEventsRead | OnUserDraftsEventsRead to Drafts agent" |> Info |> log
+        [] |> drafts.OnSquadsRead
+        [] |> drafts.OnDraftsEventsRead
+        [] |> drafts.OnUserDraftsEventsRead
+
+        let draft1Id, draft1Ordinal = Guid "00000000-0000-0000-0000-000000000001" |> DraftId, DraftOrdinal 1
+        let draft1Starts, draft1Ends = (2018, 06, 04, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 09, 17, 00) |> dateTimeOffsetUtc
+        let draft1Type = (draft1Starts, draft1Ends) |> Constrained
+        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft1Id, draft1Ordinal, draft1Type) |> drafts.HandleCreateDraftCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft1Id draft1Ordinal)
+        let draft2Id, draft2Ordinal = Guid "00000000-0000-0000-0000-000000000002" |> DraftId, DraftOrdinal 2
+        let draft2Starts, draft2Ends = (2018, 06, 09, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 12, 17, 00) |> dateTimeOffsetUtc
+        let draft2Type = (draft2Starts, draft2Ends) |> Constrained
+        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft2Id, draft2Ordinal, draft2Type) |> drafts.HandleCreateDraftCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft2Id draft2Ordinal)
+        let draft3Id, draft3Ordinal = Guid "00000000-0000-0000-0000-000000000003" |> DraftId, DraftOrdinal 3
+        let draft3Starts, draft3Ends = (2018, 06, 12, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 14, 11, 00) |> dateTimeOffsetUtc
+        let draft3Type = (draft3Starts, draft3Ends) |> Constrained
+        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft3Id, draft3Ordinal, draft3Type) |> drafts.HandleCreateDraftCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft3Id draft3Ordinal)
+        let draft4Id, draft4Ordinal = Guid "00000000-0000-0000-0000-000000000004" |> DraftId, DraftOrdinal 4
+        let draft4Type = Unconstrained
+        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft4Id, draft4Ordinal, draft4Type) |> drafts.HandleCreateDraftCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft4Id draft4Ordinal)
+
+        // Note: Reset Drafts agent [to pendingAllRead] so that it handles subsequent DraftsEventsRead event (&c.) appropriately (i.e. from readPersistedEvents).
+        "resetting Drafts agent" |> Info |> log
+        () |> drafts.Reset
+    return () }
+
 let createInitialPersistedEventsIfNecessary = async {
     "creating initial persisted events (if necessary)" |> Info |> log
     let previousLogFilter = () |> consoleLogger.CurrentLogFilter
@@ -687,4 +735,5 @@ let createInitialPersistedEventsIfNecessary = async {
     do! createInitialUsersEventsIfNecessary // note: although this can cause various events to be broadcast (UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these
     do! createInitialSquadsEventsIfNecessary // note: although this can cause various events to be broadcast (SquadsRead | SquadEventWritten | &c.), no agents should yet be subscribed to these
     do! createInitialFixturesEventsIfNecessary // note: although this can cause various events to be broadcast (FixturesRead | FixtureEventWritten | &c.), no agents should yet be subscribed to these
+    // TEMP-NMB... do! createInitialDraftsEventsIfNecessary // note: although this can cause various events to be broadcast (DraftsRead | DraftEventWritten | &c.), no agents should yet be subscribed to these
     previousLogFilter |> consoleLogger.ChangeLogFilter }

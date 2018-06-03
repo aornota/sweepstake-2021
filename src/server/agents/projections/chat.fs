@@ -215,7 +215,7 @@ type Chat () =
                 let chatMessageDic = ChatMessageDic ()
                 let projecteeDic = ProjecteeDic ()
                 let state = (chatUserDic, chatMessageDic) |> Initialization |> updateState source projecteeDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | OnUserCreated _ -> "OnUserCreated when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserTypeChanged _ -> "OnUserTypeChanged when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserSignedInOrOut _ -> "OnUserSignedInOrOut when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
@@ -224,10 +224,10 @@ type Chat () =
             | HandleInitializeChatProjectionQry _ -> "HandleInitializeChatProjectionQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleMoreChatMessagesQry _ -> "HandleMoreChatMessagesQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleSendChatMessageCmd _ -> "HandleSendChatMessageCmd when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead () }
-        and projectingChat (state, chatUserDic, chatMessageDic, projecteeDic) = async {
+        and projectingChat state chatUserDic chatMessageDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+            | Start _ -> "Start when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | Housekeeping ->
                 let source = "Housekeeping"
                 sprintf "%s when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -240,8 +240,8 @@ type Chat () =
                     else
                         let state = (updatedChatMessageDic, state) |> ChatMessageChange |> updateState source projecteeDic
                         state, updatedChatMessageDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
-            | OnUsersRead _ -> "OnUsersRead when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
+            | OnUsersRead _ -> "OnUsersRead when projectingChat" |> IgnoredInput |> Agent |> log ; return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | OnUserCreated (userId, userName, userType) ->
                 let source = "OnUserCreated"
                 sprintf "%s (%A %A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId userName userType chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -249,7 +249,7 @@ type Chat () =
                     (userId, { UserName = userName ; UserType = userType ; LastActivity = None }) |> chatUserDic.Add
                 sprintf "%s when projectingChat -> %i chat user/s)" source chatUserDic.Count |> Info |> log
                 let state = (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | OnUserTypeChanged (userId, userType) ->
                 let source = "OnUserTypeChanged"
                 sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId userType chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -273,7 +273,7 @@ type Chat () =
                     else
                         let state = (updatedChatMessageDic, state) |> ChatMessageChange |> updateState source projecteeDic
                         state, updatedChatMessageDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | OnUserSignedInOrOut (userId, signedIn) ->
                 let source = "OnUserSignedInOrOut"
                 sprintf "%s (%A %b) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId signedIn chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -283,7 +283,7 @@ type Chat () =
                     chatUser.UserName |> (if signedIn then UserSignedInMsg else UserSignedOutMsg) |> ChatProjectionMsg |> ServerChatMsg |> sendMsg connectionIds
                     chatUserDic.[userId] <- { chatUser with LastActivity = match signedIn with | true -> DateTimeOffset.UtcNow |> Some | false -> None }
                 let state = (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | OnUserActivity userId ->
                 let source = "OnUserActivity"
                 sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -297,13 +297,13 @@ type Chat () =
                         throttled |> not
                     else false
                 let state = if updated then (chatUserDic, state) |> ChatUserChange |> updateState source projecteeDic else state
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
                 sprintf "%s (%A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionIds chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
                 connectionIds |> List.iter (fun connectionId -> if connectionId |> projecteeDic.ContainsKey then connectionId |> projecteeDic.Remove |> ignore) // note: silently ignore unknown connectionIds                
                 sprintf "%s when projectingChat -> %i projectee/s)" source projecteeDic.Count |> Info |> log
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | HandleInitializeChatProjectionQry (_, connectionId, reply) ->
                 let source = "HandleInitializeChatProjectionQry"
                 sprintf "%s for %A when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -331,7 +331,7 @@ type Chat () =
                 let result = (initializedState |> chatProjectionDto, hasMoreChatMessages) |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | HandleMoreChatMessagesQry (_, connectionId, reply) ->
                 let source = "HandleMoreChatMessagesQry"
                 sprintf "%s for %A when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source connectionId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -360,7 +360,7 @@ type Chat () =
                         (projectee.LastRvn, chatMessageDtos, hasMoreChatMessages) |> Ok
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic)
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic
             | HandleSendChatMessageCmd (_, userId, chatMessageId, messageText, reply) ->
                 let source = "HandleSendChatMessageCmd" 
                 sprintf "%s (%A %A) when projectingChat (%i chat user/s) (%i chat message/s) (%i projectee/s)" source userId chatMessageId chatUserDic.Count chatMessageDic.Count projecteeDic.Count |> Info |> log
@@ -378,7 +378,7 @@ type Chat () =
                 result |> logResult source (sprintf "%A" >> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
                 let state = (chatMessageDic, state) |> ChatMessageChange |> updateState source projecteeDic
-                return! projectingChat (state, chatUserDic, chatMessageDic, projecteeDic) }
+                return! projectingChat state chatUserDic chatMessageDic projecteeDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Projection Projection.Chat |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

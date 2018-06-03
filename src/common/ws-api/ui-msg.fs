@@ -5,6 +5,7 @@ open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
@@ -38,6 +39,8 @@ type UiAuthUserAdminMsg =
     | ResetPasswordCmd of userId : UserId * currentRvn : Rvn * password : Password
     | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType
 
+type UiAuthDraftAdminMsg = | ProcessDraftCmd of draftId : DraftId * currentRvn : Rvn
+
 type UiAuthNewsMsg =
     | CreatePostCmd of postId : PostId * postType : PostType * messageText : Markdown
     | ChangePostCmd of postId : PostId * currentRvn : Rvn * messageText : Markdown
@@ -62,6 +65,7 @@ type UiAuthMsg =
     | UserNonApiActivity
     | UiAuthAppMsg of uiAuthAppMsg : UiAuthAppMsg
     | UiAuthUserAdminMsg of uiAuthUserAdminMsg : UiAuthUserAdminMsg
+    | UiAuthDraftAdminMsg of uiAuthDraftAdminMsg : UiAuthDraftAdminMsg
     | UiAuthNewsMsg of uiAuthNewsMsg : UiAuthNewsMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
     | UiAuthFixturesMsg of uiAuthFixturesMsg : UiAuthFixturesMsg

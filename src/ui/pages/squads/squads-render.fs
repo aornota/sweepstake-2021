@@ -13,6 +13,7 @@ open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
@@ -235,23 +236,74 @@ let private groupTab currentGroup dispatch group =
     let isActive = match currentGroup with | Some currentGroup when currentGroup = group -> true | Some _ | None -> false
     { IsActive = isActive ; TabText = group |> groupText ; TabLinkType = ClickableLink (fun _ -> group |> ShowGroup |> dispatch ) }
 
-let private squadTab currentSquadId dispatch (squadId, squad) =
-    let (SquadName squadName) = squad.SquadName
-    let isActive = match currentSquadId with | Some currentSquadId when currentSquadId = squadId -> true | Some _ | None -> false
-    { IsActive = isActive ; TabText = squadName ; TabLinkType = ClickableLink (fun _ -> squadId |> ShowSquad |> dispatch ) }
-
 let private squadTabs currentSquadId dispatch (squadDic:SquadDic) =
+    let squadTab (squadId, squad) =
+        let (SquadName squadName) = squad.SquadName
+        let isActive = match currentSquadId with | Some currentSquadId when currentSquadId = squadId -> true | Some _ | None -> false
+        { IsActive = isActive ; TabText = squadName ; TabLinkType = ClickableLink (fun _ -> squadId |> ShowSquad |> dispatch ) }
     match squadDic |> group currentSquadId with
     | Some group ->
         let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
-        groupSquads |> List.map (squadTab currentSquadId dispatch)
+        groupSquads |> List.map squadTab
     | None -> []
 
 let private scoreText score =
     let scoreText = sprintf "%i" score
     if score > 0 then bold scoreText else str scoreText
 
-let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
+let activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto =
+    let canDraft =
+        match authUser with
+        | Some authUser -> match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
+        | None -> false
+    match canDraft, currentDraftDto with
+    | true, Some currentDraftDto ->
+        match currentDraftDto.DraftStatusDto with
+        | OpenedDto _ -> (currentDraftDto.DraftId, currentDraftDto.DraftOrdinal, true) |> Some
+        | PendingProcessingDto -> (currentDraftDto.DraftId, currentDraftDto.DraftOrdinal, false) |> Some
+        | _ -> None
+    | _ -> None
+
+// TODO-SOON: Move draftedTeam | draftedPlayer to squads-common.fs (since might also be useful for squads-state)?...
+let private draftedTeam squadId currentDraftPicks =
+    currentDraftPicks |> List.tryFind (fun draftPick ->
+        match draftPick.UserDraftPickBasic with | TeamPickBasic (pickSquadId, _) when pickSquadId = squadId -> true | _ -> false)
+let private draftedPlayer playerId currentDraftPicks =
+    currentDraftPicks |> List.tryFind (fun draftPick ->
+        match draftPick.UserDraftPickBasic with | PlayerPickBasic (_, pickPlayerId, _) when pickPlayerId = playerId -> true | _ -> false)
+
+let private inDraftTag theme (draftOrdinal:DraftOrdinal) =
+    let tagText = sprintf "Selected for %s" (draftOrdinal |> draftTextLower)
+    [ [ str tagText ] |> tag theme { tagInfo with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned }
+
+let private draftLeftAndRight theme draftId draftOrdinal isOpen draftPick userDraftPickBasic dispatch =
+    let addText, removeText = sprintf "Add to %s" (draftOrdinal |> draftTextLower), "Remove"
+    let paraRight = { paraDefaultSmallest with ParaAlignment = RightAligned }
+    match draftPick with
+    | Some draftPick ->
+        match draftPick.DraftPickStatus with
+        | Some AddPending ->
+            let draftLeft = if isOpen then [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Loading } ] |> para theme paraRight |> Some else None
+            draftLeft, None
+        | Some RemovePending ->
+            let draftRight = if isOpen then [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } |> Some else None
+            draftOrdinal |> inDraftTag theme |> Some, draftRight
+        | None ->
+            let draftRight =
+                if isOpen then
+                    let onClick = (fun _ -> (draftId, userDraftPickBasic) |> RemoveFromDraft |> dispatch)
+                    [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Clickable (onClick, None) } |> Some
+                else None
+            draftOrdinal |> inDraftTag theme |> Some, draftRight
+    | None ->
+        let draftLeft =
+            if isOpen then
+                let onClick = (fun _ -> (draftId, userDraftPickBasic) |> AddToDraft |> dispatch)
+                [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Clickable (onClick, None) } ] |> para theme paraRight |> Some
+            else None
+        draftLeft, None
+
+let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
     let theme = getTheme useDefaultTheme
     let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
     let canEliminate =
@@ -266,6 +318,15 @@ let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = /
         else if squad.Eliminated then
             [ [ str "Eliminated" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
         else None
+
+    // TODO-SOON: Only allow draft if not already picked...
+
+    let draftLeft, draftRight =
+        match activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
+        | Some (draftId, draftOrdinal, isOpen) ->
+            let userDraftPickBasic = (squadId, squad.SquadName) |> TeamPickBasic
+            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedTeam squadId) userDraftPickBasic dispatch
+        | None -> None, None
     let score = 0 // TEMP-NMB...
     div divCentred [
         table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
@@ -274,6 +335,8 @@ let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = /
                     th [ [ bold "Team"] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Seeding" ] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Coach" ] |> para theme paraDefaultSmallest ]
+                    th []
+                    th []
                     th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     th [] ] ]
@@ -282,6 +345,8 @@ let private renderSquad (useDefaultTheme, squadId, squad, authUser) dispatch = /
                     td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                     td [ [ str (sprintf "%i" seeding) ] |> para theme paraDefaultSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
+                    td [ Rct.ofOption draftLeft ]
+                    td [ Rct.ofOption draftRight ]
                     td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
@@ -293,7 +358,7 @@ let private ago (timestamp:DateTime) =
     timestamp.ToString ("HH:mm:ss")
 #endif
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, authUser) dispatch = // TODO-SOON: Enable ShowWithdrawPlayerModal link in release builds...
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch = // TODO-SOON: Enable ShowWithdrawPlayerModal link in release builds...
     let theme = getTheme useDefaultTheme
     let canEdit, canWithdraw =
         match authUser with
@@ -322,14 +387,26 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (ago dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
             [ [ str withdrawnText ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
         else None
+
+    // TODO-SOON: Only allow draft if not already picked - and not withdrawn...
+
+    let draftLeftAndRight playerId player =
+        match activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
+        | Some (draftId, draftOrdinal, isOpen) ->
+            let userDraftPickBasic = (squadId, playerId, player.PlayerName) |> PlayerPickBasic
+            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedPlayer playerId) userDraftPickBasic dispatch
+        | None -> None, None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
+        let draftLeft, draftRight = draftLeftAndRight playerId player
         let score = 0 // TEMP-NMB...
         tr false [
             td [ [ str playerName ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (editName playerId) ]
             td [ [ str playerTypeText ] |> para theme paraCentredSmallest ]
             td [ Rct.ofOption (changePosition playerId) ]
+            td [ Rct.ofOption draftLeft ]
+            td [ Rct.ofOption draftRight ]
             td [ [ italic String.Empty ] |> para theme paraDefaultSmallest ]
             td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
             td [ Rct.ofOption (withdraw playerId player) ] ]
@@ -344,6 +421,8 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
                         th [ [ bold "Player" ] |> para theme paraDefaultSmallest ]
                         th []
                         th [ [ bold "Position" ] |> para theme paraCentredSmallest ]
+                        th []
+                        th []
                         th []
                         th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
                         th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
@@ -411,8 +490,10 @@ let render (useDefaultTheme, state, authUser:AuthUser option, hasModal) dispatch
             match currentSquadId with
             | Some currentSquadId when currentSquadId |> squadDic.ContainsKey ->
                 let squad = squadDic.[currentSquadId]
+                let currentDraftDto = activeState.CurrentDraftDto
+                let currentDraftPicks = activeState.CurrentDraftPicks
                 yield br
-                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, authUser) dispatch
-                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, authUser) dispatch
+                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch
+                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch
                 yield Rct.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
             | Some _ | None -> () ] // note: should never happen

@@ -34,6 +34,7 @@ type private NewsInput =
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
 
 type private Post = { Rvn : Rvn ; UserId : UserId ; PostType : PostType ; MessageText : Markdown ; Timestamp : DateTimeOffset ; Removed : bool }
+type private PostDic = Dictionary<PostId, Post>
 
 let private log category = (Entity Entity.News, category) |> consoleLogger.Log
 
@@ -51,8 +52,8 @@ let private applyNewsEvent source idAndPostResult (nextRvn, newsEvent:NewsEvent)
         ifDebug (sprintf "PostId mismatch for %A -> %A" postId newsEvent) UNEXPECTED_ERROR |> otherError
     | Ok (postId, None), _ when validateNextRvn None nextRvn |> not -> // note: should never happen
         ifDebug (sprintf "Invalid initial Rvn for %A -> %A (%A)" postId nextRvn newsEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (postId, Some user), _ when validateNextRvn (Some user.Rvn) nextRvn |> not -> // note: should never happen
-        ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" postId user.Rvn nextRvn newsEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (postId, Some post), _ when validateNextRvn (Some post.Rvn) nextRvn |> not -> // note: should never happen
+        ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" postId post.Rvn nextRvn newsEvent) UNEXPECTED_ERROR |> otherError
     | Ok (postId, None), PostCreated (_, userId, postType, messageText, timestamp) ->
         (postId, { Rvn = nextRvn ; UserId = userId ; PostType = postType ; MessageText = messageText ; Timestamp = timestamp ; Removed = false } |> Some) |> Ok
     | Ok (postId, None), _ -> // note: should never happen
@@ -67,7 +68,7 @@ let private applyNewsEvent source idAndPostResult (nextRvn, newsEvent:NewsEvent)
 
 let private initializePosts source (newsEvents:(PostId * (Rvn * NewsEvent) list) list) =
     let source = sprintf "%s#initializePosts" source
-    let posts = new Dictionary<PostId, Post> ()
+    let postDic = PostDic ()
     let results =
         newsEvents
         |> List.map (fun (postId, events) ->
@@ -76,7 +77,7 @@ let private initializePosts source (newsEvents:(PostId * (Rvn * NewsEvent) list)
             | [] -> ifDebug (sprintf "No NewsEvents for %A" postId) UNEXPECTED_ERROR |> otherError source) // note: should never happen
     results
     |> List.choose (fun idAndPostResult -> match idAndPostResult with | Ok (postId, Some post) -> (postId, post) |> Some | Ok (_, None) | Error _ -> None)
-    |> List.iter (fun (postId, post) -> posts.Add (postId, post))
+    |> List.iter (fun (postId, post) -> postDic.Add (postId, post))
     let errors =
         results
         |> List.choose (fun idAndPostResult ->
@@ -84,14 +85,12 @@ let private initializePosts source (newsEvents:(PostId * (Rvn * NewsEvent) list)
             | Ok (_, Some _) -> None
             | Ok (_, None) -> ifDebug (sprintf "%s: applyPostEvent returned Ok (_, None)" source) UNEXPECTED_ERROR |> OtherError |> Some // note: should never happen
             | Error error -> error |> Some)
-    posts, errors
+    postDic, errors
 
-let private updatePost postId post (posts:Dictionary<PostId, Post>) =
-    if postId |> posts.ContainsKey then posts.[postId] <- post
-    posts
+let private updatePost postId post (postDic:PostDic) = if postId |> postDic.ContainsKey then postDic.[postId] <- post
 
-let private tryFindPost postId onError (posts:Dictionary<PostId, Post>) =
-    if postId |> posts.ContainsKey then (postId, posts.[postId]) |> Ok else ifDebug (sprintf "%A does not exist" postId) UNEXPECTED_ERROR |> onError
+let private tryFindPost postId onError (postDic:PostDic) =
+    if postId |> postDic.ContainsKey then (postId, postDic.[postId]) |> Ok else ifDebug (sprintf "%A does not exist" postId) UNEXPECTED_ERROR |> onError
 
 let private tryApplyNewsEvent source postId post nextRvn newsEvent =
     match applyNewsEvent source (Ok (postId, post)) (nextRvn, newsEvent) with
@@ -135,43 +134,43 @@ type News () =
             | HandleCreatePostCmd _ -> "HandleCreatePostCmd when pendingOnNewsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnNewsEventsRead ()
             | HandleChangePostCmd _ -> "HandleChangePostCmd when pendingOnNewsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnNewsEventsRead ()
             | HandleRemovePostCmd _ -> "HandleRemovePostCmd when pendingOnNewsEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnNewsEventsRead () }
-        and managingNews posts = async {
+        and managingNews postDic = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> sprintf "Start when managingNews (%i post/s)" posts.Count |> IgnoredInput |> Agent |> log ; return! managingNews posts
-            | OnNewsEventsRead _ -> sprintf "OnNewsEventsRead when managingNews (%i post/s)" posts.Count |> IgnoredInput |> Agent |> log ; return! managingNews posts
+            | Start _ -> sprintf "Start when managingNews (%i post/s)" postDic.Count |> IgnoredInput |> Agent |> log ; return! managingNews postDic
+            | OnNewsEventsRead _ -> sprintf "OnNewsEventsRead when managingNews (%i post/s)" postDic.Count |> IgnoredInput |> Agent |> log ; return! managingNews postDic
             | HandleCreatePostCmd (_, auditUserId, postId, postType, Markdown messageText, reply) ->
                 let source = "HandleCreatePostCmd"
-                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId postType posts.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId postType postDic.Count |> Verbose |> log
                 let messageText = Markdown (messageText.Trim ())
                 let result =
-                    if postId |> posts.ContainsKey |> not then () |> Ok else ifDebug (sprintf "%A already exists" postId) UNEXPECTED_ERROR |> otherCmdError source
+                    if postId |> postDic.ContainsKey |> not then () |> Ok else ifDebug (sprintf "%A already exists" postId) UNEXPECTED_ERROR |> otherCmdError source
                     |> Result.bind (fun _ -> match messageText |> validatePostMessageText with | Some errorText -> errorText |> otherCmdError source | None -> () |> Ok)
                     |> Result.bind (fun _ -> (postId, auditUserId, postType, messageText, DateTimeOffset.UtcNow) |> PostCreated |> tryApplyNewsEvent source postId None initialRvn)
                 let! result = match result with | Ok (post, rvn, newsEvent) -> tryWriteNewsEventAsync auditUserId rvn newsEvent post | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (postId, post) -> sprintf "Audit%A %A %A" auditUserId postId post |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                match result with | Ok (postId, post) -> (postId, post) |> posts.Add | Error _ -> ()
-                return! managingNews posts
+                match result with | Ok (postId, post) -> (postId, post) |> postDic.Add | Error _ -> ()
+                return! managingNews postDic
             | HandleChangePostCmd (editOrRemovePostToken, auditUserId, postId, currentRvn, Markdown messageText, reply) ->
                 let source = "HandleChangePostCmd"
-                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId currentRvn posts.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId currentRvn postDic.Count |> Verbose |> log
                 let messageText = Markdown (messageText.Trim ())
                 let result =
-                    posts |> tryFindPost postId (otherCmdError source)
+                    postDic |> tryFindPost postId (otherCmdError source)
                     |> Result.bind (fun (postId, post) -> if editOrRemovePostToken.UserId <> post.UserId then NotAuthorized |> AuthCmdAuthznError |> Error else (postId, post) |> Ok)
                     |> Result.bind (fun (postId, post) -> match messageText |> validatePostMessageText with | None -> (postId, post) |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun (postId, post) -> (postId, messageText) |> PostChanged |> tryApplyNewsEvent source postId (Some post) (incrementRvn currentRvn))
                 let! result = match result with | Ok (post, rvn, newsEvent) -> tryWriteNewsEventAsync auditUserId rvn newsEvent post | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (postId, post) -> Some (sprintf "Audit%A %A %A" auditUserId postId post)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                let posts = match result with | Ok (postId, post) -> posts |> updatePost postId post | Error _ -> posts
-                return! managingNews posts
+                match result with | Ok (postId, post) -> postDic |> updatePost postId post | Error _ -> ()
+                return! managingNews postDic
             | HandleRemovePostCmd (editOrRemovePostToken, auditUserId, postId, currentRvn, reply) ->
                 let source = "HandleRemovePostCmd"
-                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId currentRvn posts.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingNews (%i post/s)" source postId currentRvn postDic.Count |> Verbose |> log
                 let result =
-                    posts |> tryFindPost postId (otherCmdError source)
+                    postDic |> tryFindPost postId (otherCmdError source)
                     |> Result.bind (fun (postId, post) -> if editOrRemovePostToken.UserId <> post.UserId then NotAuthorized |> AuthCmdAuthznError |> Error else (postId, post) |> Ok)
 
                     // TODO-SOON: Prevent removal of MatchResult-related posts?...
@@ -183,8 +182,8 @@ type News () =
                 let! result = match result with | Ok (post, rvn, newsEvent) -> tryWriteNewsEventAsync auditUserId rvn newsEvent post | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (postId, post) -> Some (sprintf "Audit%A %A %A" auditUserId postId post)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                let posts = match result with | Ok (postId, post) -> posts |> updatePost postId post | Error _ -> posts
-                return! managingNews posts }
+                match result with | Ok (postId, post) -> postDic |> updatePost postId post | Error _ -> ()
+                return! managingNews postDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Entity Entity.News |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

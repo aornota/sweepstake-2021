@@ -3,7 +3,7 @@ module Aornota.Common.IfDebug
 open System
 
 #if DEBUG
-let [<Literal>] private FAKE_ERROR_FREQUENCY = 0.0 // TODO-NEXT: Revert to 0.02 (if reqiured)...
+let [<Literal>] private FAKE_ERROR_FREQUENCY = 0.0 // TODO-AS-REQUIRED: Revert to, e.g.,  0.02...
 #endif
 
 #if DEBUG

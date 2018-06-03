@@ -64,6 +64,7 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 () |> Entities.News.news.Start
 () |> Entities.Squads.squads.Start
 () |> Entities.Fixtures.fixtures.Start
+() |> Entities.Drafts.drafts.Start
 
 "starting Projections agents" |> Info |> log
 () |> Projections.UserAdmin.userAdmin.Start
@@ -78,10 +79,10 @@ readPersistedEvents ()
 "starting Connections agent" |> Info |> log
 serverStarted |> connections.Start
 
-(* TEMP-NMB: Finesse logging for development/debugging purposes...
-("development/debugging", function | Entity Entity.Fixtures | Projection Projection.Fixtures -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter *)
+(* TEMP-NMB: Finesse logging for development/debugging purposes... *)
+("development/debugging", function | Entity Entity.Drafts | Projection Projection.Squads -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
 
-"server ready" |> Info |> log
+"ready" |> Info |> log
 
 let private host = builder.Build ()
 

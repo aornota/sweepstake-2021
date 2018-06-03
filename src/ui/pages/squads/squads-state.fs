@@ -7,6 +7,7 @@ open Aornota.Common.UnexpectedError
 
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.ShouldNeverHappen
+open Aornota.UI.Common.TimestampHelper
 open Aornota.UI.Common.Toasts
 
 open Aornota.Sweepstake2018.Common.Domain.Core
@@ -19,6 +20,7 @@ open Aornota.Sweepstake2018.UI.Pages.Squads.Common
 open System
 
 open Elmish
+open Aornota.Sweepstake2018.Common.Domain.Draft
 
 let initialize (authUser:AuthUser option) currentSquadId : State * Cmd<Input> =
     let state = { ProjectionState = Initializing currentSquadId }
@@ -111,6 +113,25 @@ let private squadIdOrDefault currentSquadId (squadDic:SquadDic) =
 
 let private cmdErrorText error = match error with | AuthCmdJwtError _ | AuthCmdAuthznError _ | AuthCmdPersistenceError _ -> UNEXPECTED_ERROR | OtherAuthCmdError (OtherError errorText) -> errorText
 let private qryErrorText error = match error with | AuthQryJwtError _ | AuthQryAuthznError _ -> UNEXPECTED_ERROR | OtherAuthQryError (OtherError errorText) -> errorText
+
+let private draftNotificationMessage currentDraftDto =
+    let date (local:DateTime) = sprintf "%s %i%s %s" (local.DayOfWeek |> dayName) local.Day (local.Day |> suffix) (local.Month |> monthName)
+    let dateAndTime (local:DateTime) = sprintf "%s at %s" (local |> date) (local.ToString ("HH:mm"))
+    match currentDraftDto with
+    | Some currentDraftDto ->
+        let draftTextLower = currentDraftDto.DraftOrdinal |> draftTextLower
+        let text =
+            match currentDraftDto.DraftStatusDto with
+            | PendingOpenDto (starts, ends) ->
+                let starts, ends = starts.LocalDateTime, ends.LocalDateTime
+                sprintf "The %s will open on %s and will close on %s" draftTextLower (starts |> dateAndTime) (ends |> dateAndTime)
+            | OpenedDto ends ->
+                let ends = ends.LocalDateTime
+                sprintf "The %s is now open and will close on %s" draftTextLower (ends |> dateAndTime)
+            | PendingProcessingDto -> sprintf "The %s will be processed soon" draftTextLower
+            | FreeSelectionDto -> "There are no further drafts; please pick team/coach | goalkeeper | outfield players (as required)" // TODO-SOON: Finesse this...
+        infoMessage text false |> Some
+    | None -> None
 
 let private handleAddPlayerCmdResult (result:Result<Rvn * PlayerName, AuthCmdError<string>>) activeState state : State * Cmd<Input> =
     match activeState.AddPlayersState with
@@ -219,6 +240,9 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
         let squadsProjection = squadsProjectionDto |> squadsProjection
         let activeState = {
             SquadsProjection = squadsProjection
+            CurrentDraftDto = None
+            CurrentDraftNotificationId = None
+            CurrentDraftPicks = []
             CurrentSquadId = squadsProjection.SquadDic |> squadIdOrDefault currentSquadId
             AddPlayersState = None
             ChangePlayerNameState = None
@@ -228,17 +252,27 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
         { state with ProjectionState = Active activeState }, Cmd.none
     | InitializeSquadsProjectionUnauthQryResult (Error (OtherError errorText)), Initializing _ ->
         { state with ProjectionState = InitializationFailed }, errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
-    | InitializeSquadsProjectionAuthQryResult (Ok squadsProjectionDto), Initializing currentSquadId ->
+    | InitializeSquadsProjectionAuthQryResult (Ok (squadsProjectionDto, currentDraftDto)), Initializing currentSquadId ->
         let squadsProjection = squadsProjectionDto |> squadsProjection
+        let draftNotificationCmd, draftNotificationId =
+            match currentDraftDto |> draftNotificationMessage with
+            | Some draftNotificationMessage -> draftNotificationMessage |> AddNotificationMessage |> Cmd.ofMsg, draftNotificationMessage.NotificationId |> Some
+            | None -> Cmd.none, None
+
+        // TODO-SOON: Other "initialization" (e.g. Ok might include some sort of CurrentUserDraftPickDic?...
+
         let activeState = {
             SquadsProjection = squadsProjection
+            CurrentDraftDto = currentDraftDto
+            CurrentDraftNotificationId = draftNotificationId
+            CurrentDraftPicks = []
             CurrentSquadId = squadsProjection.SquadDic |> squadIdOrDefault currentSquadId
             AddPlayersState = None
             ChangePlayerNameState = None
             ChangePlayerTypeState = None
             WithdrawPlayerState = None
             EliminateSquadState = None }
-        { state with ProjectionState = Active activeState }, Cmd.none
+        { state with ProjectionState = Active activeState }, draftNotificationCmd
     | InitializeSquadsProjectionAuthQryResult (Error error), Initializing _ ->
         { state with ProjectionState = InitializationFailed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
     | AddPlayerCmdResult result, Active activeState ->
@@ -299,6 +333,14 @@ let private handleServerSquadsMsg serverSquadsMsg authUser state : State * Cmd<I
                 state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
         | None -> // note: silently ignore unknown squadId (should never happen)
             state, Cmd.none
+    | SquadsProjectionMsg (CurrentDraftChangedMsg currentDraftDto), Active activeState ->
+        let removeNotificationCmd = match activeState.CurrentDraftNotificationId with | Some notificationId -> notificationId |> RemoveNotificationMessage |> Cmd.ofMsg | None -> Cmd.none
+        let draftNotificationCmd, draftNotificationId =
+            match currentDraftDto |> draftNotificationMessage with
+            | Some draftNotificationMessage -> draftNotificationMessage |> AddNotificationMessage |> Cmd.ofMsg, draftNotificationMessage.NotificationId |> Some
+            | None -> Cmd.none, None
+        let activeState = { activeState with CurrentDraftDto = currentDraftDto ; CurrentDraftNotificationId = draftNotificationId ; CurrentDraftPicks = [] }
+        { state with ProjectionState = Active activeState }, Cmd.batch [ removeNotificationCmd ; draftNotificationCmd ]
     | SquadsProjectionMsg _, _ -> // note: silently ignore SquadsProjectionMsg if not Active
         state, Cmd.none
     | _, _ ->
@@ -445,6 +487,8 @@ let transition input authUser state =
         match input, state.ProjectionState with
         | AddNotificationMessage _, _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
+        | RemoveNotificationMessage _, _ -> // note: expected to be handled by Program.State.transition
+            state, Cmd.none, false
         | SendUiUnauthMsg _, _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
         | SendUiAuthMsg _, _ -> // note: expected to be handled by Program.State.transition
@@ -458,6 +502,36 @@ let transition input authUser state =
         | ShowSquad squadId, Active activeState -> // note: no need to check for unknown squadId (should never happen)
             let activeState = { activeState with CurrentSquadId = squadId |> Some }
             { state with ProjectionState = Active activeState }, Cmd.none, true
+        | AddToDraft (_draftId, userDraftPickBasic), Active activeState ->
+            let currentDraftPicks = activeState.CurrentDraftPicks
+            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPickBasic = userDraftPickBasic) |> not then
+                // TEMP-NMB...
+                let draftPick = { UserDraftPickBasic = userDraftPickBasic ; DraftPickStatus = AddPending |> Some } // TENP-NMB
+                //let draftPick = { UserDraftPickBasic = userDraftPickBasic ; DraftPickStatus = None } // TENP-NMB
+                // ...NMB-TEMP
+                let activeState = { activeState with CurrentDraftPicks = draftPick :: currentDraftPicks }
+
+                // TODO-NEXT: SendUiAuthMsg (&c.)...
+
+                { state with ProjectionState = Active activeState }, "Dummy implementation of AddToDraft: not persisted" |> warningToastCmd, true
+            else state, UNEXPECTED_ERROR |> errorToastCmd, true
+        | RemoveFromDraft (_draftId, userDraftPickBasic), Active activeState ->
+            let currentDraftPicks = activeState.CurrentDraftPicks
+            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not) then
+                // TEMP-NMB...
+                let currentDraftPicks = currentDraftPicks |> List.map (fun draftPick ->
+                    if draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not then { draftPick with DraftPickStatus = RemovePending |> Some }
+                    else draftPick)
+                (*let currentDraftPicks = currentDraftPicks |> List.choose (fun draftPick ->
+                    if draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not then None
+                    else draftPick |> Some)*)
+                // ...NMB-TEMP
+                let activeState = { activeState with CurrentDraftPicks = currentDraftPicks }
+
+                // TODO-NEXT: SendUiAuthMsg (&c.)...
+
+                { state with ProjectionState = Active activeState }, "Dummy implementation of RemoveFromDraft: not persisted" |> warningToastCmd, true
+            else state, UNEXPECTED_ERROR |> errorToastCmd, true
         | ShowAddPlayersModal squadId, Active activeState -> // note: no need to check for unknown squadId (should never happen)
             let addPlayersState = defaultAddPlayersState squadId Goalkeeper None None
             let activeState = { activeState with AddPlayersState = addPlayersState |> Some }

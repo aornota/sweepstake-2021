@@ -10,6 +10,7 @@ open System
 open System.Collections.Generic
 
 type SubscriptionId = private | SubscriptionId of guid : Guid
+type private SubscriptionDic = Dictionary<SubscriptionId, Signal -> unit>
 
 type SignalFilter = Signal -> bool
 type LogSignalFilter = string * SignalFilter
@@ -40,40 +41,40 @@ type Broadcaster () =
             | Start ((filterName, logSignalFilter), reply) ->
                 sprintf "Start when awaitingStart -> broadcasting (log signal filter: '%s')" filterName |> Info |> log
                 () |> reply.Reply
-                return! broadcasting (new Dictionary<SubscriptionId, Signal -> unit> (), (filterName, logSignalFilter))
+                return! broadcasting (SubscriptionDic ()) (filterName, logSignalFilter)
             | Broadcast _ -> "Broadcast when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | Subscribe _ -> "Subscribe when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | Unsubscribe _ -> "Unsubscribe when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | CurrentLogSignalFilter _ -> "CurrentLogSignalFilter when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | ChangeLogSignalFilter _ -> "ChangeLogSignalFilter when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and broadcasting (subscriptions, (filterName, signalFilter)) = async {
+        and broadcasting subscriptionDic (filterName, signalFilter) = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when broadcasting" |> IgnoredInput |> Agent |> log ; return! broadcasting (subscriptions, (filterName, signalFilter))
+            | Start _ -> "Start when broadcasting" |> IgnoredInput |> Agent |> log ; return! broadcasting subscriptionDic (filterName, signalFilter)
             | Broadcast signal ->
-                if signalFilter signal then sprintf "Broadcast -> %i subscription/s -> %A" subscriptions.Count signal |> Info |> log
-                subscriptions |> List.ofSeq |> List.iter (fun (KeyValue (_, onSignal)) -> onSignal signal)
-                return! broadcasting (subscriptions, (filterName, signalFilter))
+                if signalFilter signal then sprintf "Broadcast -> %i subscription/s -> %A" subscriptionDic.Count signal |> Info |> log
+                subscriptionDic |> List.ofSeq |> List.iter (fun (KeyValue (_, onSignal)) -> onSignal signal)
+                return! broadcasting subscriptionDic (filterName, signalFilter)
             | Subscribe (onSignal, reply) ->
                 let subscriptionId = Guid.NewGuid () |> SubscriptionId
-                (subscriptionId, onSignal) |> subscriptions.Add
-                sprintf "Subscribe when broadcasting -> added %A -> %i subscription/s" subscriptionId subscriptions.Count |> Info |> log
+                (subscriptionId, onSignal) |> subscriptionDic.Add
+                sprintf "Subscribe when broadcasting -> added %A -> %i subscription/s" subscriptionId subscriptionDic.Count |> Info |> log
                 subscriptionId |> reply.Reply
-                return! broadcasting (subscriptions, (filterName, signalFilter))
+                return! broadcasting subscriptionDic (filterName, signalFilter)
             | Unsubscribe subscriptionId ->
                 let source = "Unsubscribe"
-                if subscriptionId |> subscriptions.ContainsKey then
-                    subscriptionId |> subscriptions.Remove |> ignore
-                    sprintf "%s when broadcasting -> removed %A -> %i subscription/s" source subscriptionId subscriptions.Count |> Info |> log
-                else sprintf "%s when broadcasting (%i subscription/s) -> unknown %A" source subscriptions.Count subscriptionId |> IgnoredInput |> Agent |> log
-                return! broadcasting (subscriptions, (filterName, signalFilter))
+                if subscriptionId |> subscriptionDic.ContainsKey then
+                    subscriptionId |> subscriptionDic.Remove |> ignore
+                    sprintf "%s when broadcasting -> removed %A -> %i subscription/s" source subscriptionId subscriptionDic.Count |> Info |> log
+                else sprintf "%s when broadcasting (%i subscription/s) -> unknown %A" source subscriptionDic.Count subscriptionId |> IgnoredInput |> Agent |> log
+                return! broadcasting subscriptionDic (filterName, signalFilter)
             | CurrentLogSignalFilter reply ->
                 (filterName, signalFilter) |> reply.Reply
-                return! broadcasting (subscriptions, (filterName, signalFilter))
+                return! broadcasting subscriptionDic (filterName, signalFilter)
             | ChangeLogSignalFilter ((filterName, logSignalFilter), reply) ->
                 sprintf "ChangeLogSignalFilter when broadcasting -> broadcasting (log signal filter: '%s')" filterName |> Info |> log
                 () |> reply.Reply
-                return! broadcasting (subscriptions, (filterName, signalFilter)) }
+                return! broadcasting subscriptionDic (filterName, signalFilter) }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Source.Broadcaster |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

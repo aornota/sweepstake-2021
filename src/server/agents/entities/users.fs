@@ -43,6 +43,7 @@ type private UsersInput =
         * reply : AsyncReplyChannel<Result<UserName, AuthCmdError<string>>>
 
 type private User = { Rvn : Rvn ; UserName : UserName ; PasswordSalt : Salt ; PasswordHash : Hash ; UserType : UserType ; MustChangePasswordReason : MustChangePasswordReason option }
+type private UserDic = Dictionary<UserId, User>
 
 let [<Literal>] private NOT_PERMITTED = "You are not permitted to access this system"
 
@@ -97,7 +98,7 @@ let private applyUserEvent source idAndUserResult (nextRvn, userEvent:UserEvent)
 
 let private initializeUsers source (usersEvents:(UserId * (Rvn * UserEvent) list) list) =
     let source = sprintf "%s#initializeUsers" source
-    let users = new Dictionary<UserId, User> ()
+    let userDic = UserDic ()
     let results =
         usersEvents
         |> List.map (fun (userId, events) ->
@@ -106,7 +107,7 @@ let private initializeUsers source (usersEvents:(UserId * (Rvn * UserEvent) list
             | [] -> ifDebug (sprintf "No UserEvents for %A" userId) UNEXPECTED_ERROR |> otherError source) // note: should never happen
     results
     |> List.choose (fun idAndUserResult -> match idAndUserResult with | Ok (userId, Some user) -> (userId, user) |> Some | Ok (_, None) | Error _ -> None)
-    |> List.iter (fun (userId, user) -> users.Add (userId, user))
+    |> List.iter (fun (userId, user) -> userDic.Add (userId, user))
     let errors =
         results
         |> List.choose (fun idAndUserResult ->
@@ -114,14 +115,12 @@ let private initializeUsers source (usersEvents:(UserId * (Rvn * UserEvent) list
             | Ok (_, Some _) -> None
             | Ok (_, None) -> ifDebug (sprintf "%s: applyUserEvent returned Ok (_, None)" source) UNEXPECTED_ERROR |> OtherError |> Some // note: should never happen
             | Error error -> error |> Some)
-    users, errors
+    userDic, errors
 
-let private updateUser userId user (users:Dictionary<UserId, User>) =
-    if userId |> users.ContainsKey then users.[userId] <- user
-    users
+let private updateUser userId user (userDic:UserDic) = if userId |> userDic.ContainsKey then userDic.[userId] <- user
 
-let private tryFindUser userId onError (users:Dictionary<UserId, User>) =
-    if userId |> users.ContainsKey then (userId, users.[userId]) |> Ok else ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> onError
+let private tryFindUser userId onError (userDic:UserDic) =
+    if userId |> userDic.ContainsKey then (userId, userDic.[userId]) |> Ok else ifDebug (sprintf "%A does not exist" userId) UNEXPECTED_ERROR |> onError
 
 let private tryApplyUserEvent source userId user nextRvn userEvent =
     match applyUserEvent source (Ok (userId, user)) (nextRvn, userEvent) with
@@ -174,25 +173,25 @@ type Users () =
             | HandleCreateUserCmd _ -> "HandleCreateUserCmd when pendingOnUsersEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersEventsRead ()
             | HandleResetPasswordCmd _ -> "HandleResetPasswordCmd when pendingOnUsersEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersEventsRead ()
             | HandleChangeUserTypeCmd _ -> "HandleChangeUserTypeCmd when pendingOnUsersEventsRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersEventsRead () }
-        and managingUsers users = async {
+        and managingUsers userDic = async {
             let! input = inbox.Receive ()
             match input with
-            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingUsers users
-            | Start _ -> sprintf "Start when managingUsers (%i user/s)" users.Count |> IgnoredInput |> Agent |> log ; return! managingUsers users
+            | IsAwaitingStart reply -> false |> reply.Reply ; return! managingUsers userDic
+            | Start _ -> sprintf "Start when managingUsers (%i user/s)" userDic.Count |> IgnoredInput |> Agent |> log ; return! managingUsers userDic
             | Reset reply ->
-                sprintf "Reset when managingUsers (%i user/s) -> pendingOnUsersEventsRead" users.Count |> Info |>log
+                sprintf "Reset when managingUsers (%i user/s) -> pendingOnUsersEventsRead" userDic.Count |> Info |> log
                 () |> reply.Reply
                 return! pendingOnUsersEventsRead ()
-            | OnUsersEventsRead _ -> sprintf "OnUsersEventsRead when managingUsers (%i user/s)" users.Count |> IgnoredInput |> Agent |> log ; return! managingUsers users
+            | OnUsersEventsRead _ -> sprintf "OnUsersEventsRead when managingUsers (%i user/s)" userDic.Count |> IgnoredInput |> Agent |> log ; return! managingUsers userDic
             | HandleSignInCmd (userName, password, reply) ->
                 let source = "HandleSignInCmd"
                 let invalidCredentialsError errorText = errorText |> InvalidCredentials |> Error
-                sprintf "%s for %A when managingUsers (%i user/s)" source userName users.Count |> Verbose |> log
+                sprintf "%s for %A when managingUsers (%i user/s)" source userName userDic.Count |> Verbose |> log
                 let result =
                     match validateUserName [] userName with | None -> () |> Ok | Some errorText -> errorText |> Some |> invalidCredentialsError
                     |> Result.bind (fun _ -> match validatePassword password with | None -> () |> Ok | Some errorText -> errorText |> Some |> invalidCredentialsError)
                     |> Result.bind (fun _ ->
-                        let matches = users |> List.ofSeq |> List.choose (fun (KeyValue (userId, user)) -> if user.UserName = userName then (userId, user) |> Some else None)
+                        let matches = userDic |> List.ofSeq |> List.choose (fun (KeyValue (userId, user)) -> if user.UserName = userName then (userId, user) |> Some else None)
                         match matches with
                         | [ userId, user ] ->
                             if hash password user.PasswordSalt <> user.PasswordHash then ifDebug ("Incorrect password" |> Some) None |> invalidCredentialsError
@@ -207,12 +206,12 @@ type Users () =
                         | [] -> ifDebug (sprintf "No matches for %A" userName |> Some) None |> invalidCredentialsError)
                 result |> logResult source (fun (authUser:AuthUser) -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
-                return! managingUsers users
+                return! managingUsers userDic
             | HandleAutoSignInCmd (userId, permissionsFromJwt, reply) ->
                 let source = "HandleAutoSignInCmd"
-                sprintf "%s for %A when managingUsers (%i user/s)" source userId users.Count |> Verbose |> log
+                sprintf "%s for %A when managingUsers (%i user/s)" source userId userDic.Count |> Verbose |> log
                 let result =
-                    users |> tryFindUser userId (OtherError >> OtherAutoSignInCmdError >> Error)
+                    userDic |> tryFindUser userId (OtherError >> OtherAutoSignInCmdError >> Error)
                     |> Result.bind (fun (userId, user) ->
                         if user.UserType = PersonaNonGrata then NOT_PERMITTED |> OtherError |> OtherAutoSignInCmdError |> Error
                         else
@@ -226,14 +225,14 @@ type Users () =
                                 | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> AutoSignInCmdJwtError |> Error)
                 result |> logResult source (fun (authUser:AuthUser) -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> reply.Reply
-                return! managingUsers users
+                return! managingUsers userDic
             | HandleChangePasswordCmd (changePasswordToken, auditUserId, currentRvn, Password password, reply) ->
                 let source = "HandleChangePasswordCmd"
-                sprintf "%s for %A (%A) when managingUsers (%i user/s)" source auditUserId currentRvn users.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingUsers (%i user/s)" source auditUserId currentRvn userDic.Count |> Verbose |> log
                 let password = Password (password.Trim ())
                 let result =
                     if changePasswordToken.UserId = auditUserId then () |> Ok else NotAuthorized |> AuthCmdAuthznError |> Error
-                    |> Result.bind (fun _ -> users |> tryFindUser auditUserId (otherCmdError source))
+                    |> Result.bind (fun _ -> userDic |> tryFindUser auditUserId (otherCmdError source))
                     |> Result.bind (fun (userId, user) -> match validatePassword password with | None -> (userId, user) |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun (userId, user) ->
                         if hash password user.PasswordSalt <> user.PasswordHash then (userId, user) |> Ok
@@ -244,20 +243,20 @@ type Users () =
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, user) -> user.Rvn) |> reply.Reply
-                let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
-                return! managingUsers users
+                match result with | Ok (userId, user) -> userDic |> updateUser userId user | Error _ -> ()
+                return! managingUsers userDic
             | HandleCreateUserCmd (createUserToken, auditUserId, userId, UserName userName, Password password, userType, reply) ->
                 let source = "HandleCreateUserCmd"
-                sprintf "%s for %A (%A %A) when managingUsers (%i user/s)" source userId userName userType users.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingUsers (%i user/s)" source userId userName userType userDic.Count |> Verbose |> log
                 let userName = UserName (userName.Trim ())
                 let password = Password (password.Trim ())
                 let result =
                     if createUserToken.UserTypes |> List.contains userType then () |> Ok else NotAuthorized |> AuthCmdAuthznError |> Error
                     |> Result.bind (fun _ ->
-                        if userId |> users.ContainsKey |> not then () |> Ok
+                        if userId |> userDic.ContainsKey |> not then () |> Ok
                         else ifDebug (sprintf "%A already exists" userId) UNEXPECTED_ERROR |> otherCmdError source)
                     |> Result.bind (fun _ ->
-                        let userNames = users |> List.ofSeq |> List.map (fun (KeyValue (_, user)) -> user.UserName)
+                        let userNames = userDic |> List.ofSeq |> List.map (fun (KeyValue (_, user)) -> user.UserName)
                         match validateUserName userNames userName with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ -> match validatePassword password with | None -> () |> Ok | Some errorText -> errorText |> otherCmdError source)
                     |> Result.bind (fun _ ->
@@ -266,14 +265,14 @@ type Users () =
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> sprintf "Audit%A %A %A" auditUserId userId user |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, user) -> user.UserName) |> reply.Reply
-                match result with | Ok (userId, user) -> (userId, user) |> users.Add | Error _ -> ()
-                return! managingUsers users
+                match result with | Ok (userId, user) -> (userId, user) |> userDic.Add | Error _ -> ()
+                return! managingUsers userDic
             | HandleResetPasswordCmd (resetPasswordToken, auditUserId, userId, currentRvn, Password password, reply) ->
                 let source = "HandleResetPasswordCmd"
-                sprintf "%s for %A (%A) when managingUsers (%i user/s)" source userId currentRvn users.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingUsers (%i user/s)" source userId currentRvn userDic.Count |> Verbose |> log
                 let password = Password (password.Trim ())
                 let result =
-                    users |> tryFindUser userId (otherCmdError source)
+                    userDic |> tryFindUser userId (otherCmdError source)
                     |> Result.bind (fun (userId, user) ->
                         match resetPasswordToken.UserTarget with
                         | NotSelf userTypes ->
@@ -288,13 +287,13 @@ type Users () =
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, user) -> user.UserName) |> reply.Reply
-                let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
-                return! managingUsers users
+                match result with | Ok (userId, user) -> userDic |> updateUser userId user | Error _ -> ()
+                return! managingUsers userDic
             | HandleChangeUserTypeCmd (changeUserTypeToken, auditUserId, userId, currentRvn, userType, reply) ->
                 let source = "HandleChangeUserTypeCmd"
-                sprintf "%s %A for %A (%A) when managingUsers (%i user/s)" source userType userId currentRvn users.Count |> Verbose |> log
+                sprintf "%s %A for %A (%A) when managingUsers (%i user/s)" source userType userId currentRvn userDic.Count |> Verbose |> log
                 let result =
-                    users |> tryFindUser userId (otherCmdError source)
+                    userDic |> tryFindUser userId (otherCmdError source)
                     |> Result.bind (fun (userId, user) ->
                         match changeUserTypeToken.UserTarget with
                         | NotSelf userTypes ->
@@ -311,8 +310,8 @@ type Users () =
                 let! result = match result with | Ok (user, rvn, userEvent) -> tryWriteUserEventAsync auditUserId rvn userEvent user | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (userId, user) -> Some (sprintf "Audit%A %A %A" auditUserId userId user)) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, user) -> user.UserName) |> reply.Reply
-                let users = match result with | Ok (userId, user) -> users |> updateUser userId user | Error _ -> users
-                return! managingUsers users }
+                match result with | Ok (userId, user) -> userDic |> updateUser userId user | Error _ -> ()
+                return! managingUsers userDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Entity Entity.Users |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception

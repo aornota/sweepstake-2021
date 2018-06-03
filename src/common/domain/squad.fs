@@ -23,7 +23,7 @@ type PlayerType = | Goalkeeper | Defender | Midfielder | Forward
 
 type PlayerStatus = | Active | Withdrawn of dateWithdrawn : DateTimeOffset option
 
-type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: draftedBy? pickedBy? score?...
+type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus } // TODO-NMB-MEDIUM: pickedBy? score?...
 
 type SquadOnlyDto = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool }
 

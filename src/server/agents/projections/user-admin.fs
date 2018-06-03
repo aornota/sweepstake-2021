@@ -133,7 +133,7 @@ type UserAdmin () =
                 usersRead |> List.iter (fun userRead -> (userRead.UserId, { Rvn = userRead.Rvn ; UserName = userRead.UserName ; UserType = userRead.UserType ; LastActivity = None }) |> user4AdminDic.Add)           
                 let projecteeDic = ProjecteeDic ()
                 let state = user4AdminDic |> Initialization |> updateState source projecteeDic
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnUserCreated _ -> "OnUserCreated when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnUserTypeChanged _ -> "OnUserTypeChanged when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | OnOtherUserEvent _ -> "OnOtherUserEvent when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
@@ -141,11 +141,11 @@ type UserAdmin () =
             | OnUserActivity _ -> "OnUserActivity when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | RemoveConnections _ -> "RemoveConnections when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead ()
             | HandleInitializeUserAdminProjectionQry _ -> "HandleInitializeUserAdminProjectionQry when pendingOnUsersRead" |> IgnoredInput |> Agent |> log ; return! pendingOnUsersRead () }
-        and projectingUserAdmins (state, user4AdminDic, projecteeDic) = async {
+        and projectingUserAdmins state user4AdminDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when projectingUserAdmins" |> IgnoredInput |> Agent |> log ; return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
-            | OnUsersRead _ -> "OnUsersRead when projectingUserAdmins" |> IgnoredInput |> Agent |> log ; return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+            | Start _ -> "Start when projectingUserAdmins" |> IgnoredInput |> Agent |> log ; return! projectingUserAdmins state user4AdminDic projecteeDic
+            | OnUsersRead _ -> "OnUsersRead when projectingUserAdmins" |> IgnoredInput |> Agent |> log ; return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnUserCreated (userId, rvn, userName, userType) ->
                 let source = "OnUserCreated"
                 sprintf "%s (%A %A %A) when projectingUserAdmins (%i user/s) (%i projectee/s)" source userId userName userType user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -153,7 +153,7 @@ type UserAdmin () =
                     (userId, { UserName = userName ; Rvn = rvn ; UserType = userType ; LastActivity = None }) |> user4AdminDic.Add
                 sprintf "%s when projectingUserAdmins -> %i user/s)" source user4AdminDic.Count |> Info |> log
                 let state = (user4AdminDic, state) |> User4AdminChange |> updateState source projecteeDic
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnUserTypeChanged (userId, rvn, userType) ->
                 let source = "OnUserTypeChanged"
                 sprintf "%s (%A %A) when projectingUserAdmins (%i user/s) (%i projectee/s)" source userId userType user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -161,7 +161,7 @@ type UserAdmin () =
                     let user4Admin = user4AdminDic.[userId]
                     user4AdminDic.[userId] <- { user4Admin with Rvn = rvn ; UserType = userType }
                 let state = (user4AdminDic, state) |> User4AdminChange |> updateState source projecteeDic
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnOtherUserEvent (userId, rvn) ->
                 let source = "OnOtherUserEvent"
                 sprintf "%s (%A) when projectingUserAdmins (%i user/s) (%i projectee/s)" source userId user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -169,7 +169,7 @@ type UserAdmin () =
                     let user4Admin = user4AdminDic.[userId]
                     user4AdminDic.[userId] <- { user4Admin with Rvn = rvn }
                 let state = (user4AdminDic, state) |> User4AdminChange |> updateState source projecteeDic
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnUserSignedInOrOut (userId, signedIn) ->
                 let source = "OnUserSignedInOrOut"
                 sprintf "%s (%A %b) when projectingUserAdmins (%i user/s) (%i projectee/s)" source userId signedIn user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -177,7 +177,7 @@ type UserAdmin () =
                     let user4Admin = user4AdminDic.[userId]
                     user4AdminDic.[userId] <- { user4Admin with LastActivity = match signedIn with | true -> DateTimeOffset.UtcNow |> Some | false -> None }
                 let state = (user4AdminDic, state) |> User4AdminChange |> updateState source projecteeDic
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | OnUserActivity userId ->
                 let source = "OnUserActivity"
                 sprintf "%s (%A) when projectingUserAdmins (%i user/s) (%i projectee/s)" source userId user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -191,13 +191,13 @@ type UserAdmin () =
                         throttled |> not
                     else false
                 let state = if updated then (user4AdminDic, state) |> User4AdminChange |> updateState source projecteeDic else state
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
                 sprintf "%s (%A) when projectingUserAdmins (%i user/s) (%i projectee/s)" source connectionIds user4AdminDic.Count projecteeDic.Count |> Info |> log
                 connectionIds |> List.iter (fun connectionId -> if connectionId |> projecteeDic.ContainsKey then connectionId |> projecteeDic.Remove |> ignore) // note: silently ignore unknown connectionIds                
                 sprintf "%s when projectingUserAdmins -> %i projectee/s)" source projecteeDic.Count |> Info |> log
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic)
+                return! projectingUserAdmins state user4AdminDic projecteeDic
             | HandleInitializeUserAdminProjectionQry (_, connectionId, reply) ->
                 let source = "HandleInitializeUserAdminProjectionQry"
                 sprintf "%s for %A when projectingUserAdmins (%i user/s) (%i projectee/s)" source connectionId user4AdminDic.Count projecteeDic.Count |> Info |> log
@@ -209,7 +209,7 @@ type UserAdmin () =
                 let result = state |> userAdminProjectionDto |> Ok
                 result |> logResult source (fun userAdminProjectionDto -> sprintf "%i user/s" userAdminProjectionDto.User4AdminDtos.Length |> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingUserAdmins (state, user4AdminDic, projecteeDic) }
+                return! projectingUserAdmins state user4AdminDic projecteeDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Projection Projection.UserAdmin |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
