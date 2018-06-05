@@ -115,8 +115,6 @@ let private cmdErrorText error = match error with | AuthCmdJwtError _ | AuthCmdA
 let private qryErrorText error = match error with | AuthQryJwtError _ | AuthQryAuthznError _ -> UNEXPECTED_ERROR | OtherAuthQryError (OtherError errorText) -> errorText
 
 let private draftNotificationMessage currentDraftDto =
-    let date (local:DateTime) = sprintf "%s %i%s %s" (local.DayOfWeek |> dayName) local.Day (local.Day |> suffix) (local.Month |> monthName)
-    let dateAndTime (local:DateTime) = sprintf "%s at %s" (local |> date) (local.ToString ("HH:mm"))
     match currentDraftDto with
     | Some currentDraftDto ->
         let draftTextLower = currentDraftDto.DraftOrdinal |> draftTextLower
@@ -124,10 +122,10 @@ let private draftNotificationMessage currentDraftDto =
             match currentDraftDto.DraftStatusDto with
             | PendingOpenDto (starts, ends) ->
                 let starts, ends = starts.LocalDateTime, ends.LocalDateTime
-                sprintf "The %s will open on %s and will close on %s" draftTextLower (starts |> dateAndTime) (ends |> dateAndTime)
+                sprintf "The %s will open on %s and will close on %s" draftTextLower (starts |> dateAndTimeText) (ends |> dateAndTimeText)
             | OpenedDto ends ->
                 let ends = ends.LocalDateTime
-                sprintf "The %s is now open and will close on %s" draftTextLower (ends |> dateAndTime)
+                sprintf "The %s is now open and will close on %s" draftTextLower (ends |> dateAndTimeText)
             | PendingProcessingDto -> sprintf "The %s will be processed soon" draftTextLower
             | FreeSelectionDto -> "There are no further drafts; please pick team/coach | goalkeeper | outfield players (as required)" // TODO-SOON: Finesse this...
         infoMessage text false |> Some

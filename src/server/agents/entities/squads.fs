@@ -75,8 +75,8 @@ let private applySquadEvent source idAndSquadResult (nextRvn, squadEvent:SquadEv
     | Ok (squadId, Some squad), SquadCreated _ -> // note: should never happen
         ifDebug (sprintf "Invalid non-initial SquadEvent for %A (%A) -> %A" squadId squad squadEvent) UNEXPECTED_ERROR |> otherError
     | Ok (squadId, Some squad), PlayerAdded (_, playerId, playerName, playerType) ->
-        if squad.Players |> nonWithdrawnCount >= (squadId |> maxPlayers) then
-            ifDebug (sprintf "%A cannot have more than %i non-withdrawn Players -> %A" squadId (squadId |> maxPlayers) squadEvent) UNEXPECTED_ERROR |> otherError
+        if squad.Players |> nonWithdrawnCount >= MAX_PLAYERS_PER_SQUAD then
+            ifDebug (sprintf "%s -> %A" squadIsFullText squadEvent) UNEXPECTED_ERROR |> otherError
         else if playerId |> squad.Players.ContainsKey then // note: should never happen
             ifDebug (sprintf "%A already exists for %A -> %A" playerId squadId squadEvent) UNEXPECTED_ERROR |> otherError
         else 
@@ -230,8 +230,8 @@ type Squads () =
                         if playerId |> squad.Players.ContainsKey |> not then (squadId, squad, playerId) |> Ok
                         else ifDebug (sprintf "%A already exists" playerId) UNEXPECTED_ERROR |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId) ->
-                        if squad.Players |> nonWithdrawnCount < (squadId |> maxPlayers) then (squadId, squad, playerId) |> Ok
-                        else (squadId |> squadIsFullText) |> otherCmdError source)
+                        if squad.Players |> nonWithdrawnCount < MAX_PLAYERS_PER_SQUAD then (squadId, squad, playerId) |> Ok
+                        else squadIsFullText |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId) ->
                         let playerNames = squad.Players |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player.PlayerName)
                         match validatePlayerName playerNames playerName with
@@ -302,8 +302,7 @@ type Squads () =
                         | Active -> (squadId, squad, playerId, player) |> Ok
                         | Withdrawn _ -> "Player has already been withdrawn" |> otherCmdError source)
                     |> Result.bind (fun (squadId, squad, playerId, player) ->
-                        // TODO-SOON: Change "None" to "(DateTimeOffset.UtcNow |> Some)" once all *final* squads have been entered...
-                        (squadId, playerId, None) |> PlayerWithdrawn |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn) player.PlayerName)
+                        (squadId, playerId, (DateTimeOffset.UtcNow |> Some)) |> PlayerWithdrawn |> tryApplySquadEvent source squadId (Some squad) (incrementRvn currentRvn) player.PlayerName)
                 let! result = match result with | Ok (squad, rvn, squadEvent, playerName) -> tryWriteSquadEventAsync auditUserId rvn squadEvent squad playerName | Error error -> error |> Error |> thingAsync
                 result |> logResult source (fun (squadId, squad, _) -> sprintf "Audit%A %A %A" auditUserId squadId squad |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> Result.map (fun (_, _, playerName) -> playerName) |> reply.Reply

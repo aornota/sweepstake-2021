@@ -18,6 +18,9 @@ let monthName month =
     | 1 -> "January" | 2 -> "February" | 3 -> "March" | 4 -> "April" | 5 -> "May" | 6 -> "June" | 7 -> "July" | 8 -> "August" | 9 -> "September" | 10 -> "October"
     | 11 -> "November" | 12 -> "December" | _ -> SHOULD_NEVER_HAPPEN
 
+let dateText (timestamp:DateTime) = sprintf "%s %i%s %s" (timestamp.DayOfWeek |> dayName) timestamp.Day (timestamp.Day |> suffix) (timestamp.Month |> monthName)
+let dateAndTimeText (timestamp:DateTime) = sprintf "%s at %s" (timestamp |> dateText) (timestamp.ToString ("HH:mm"))
+
 let ago (timestamp:DateTime) =
     let now = DateTime.Now
     let elapsed = now - timestamp

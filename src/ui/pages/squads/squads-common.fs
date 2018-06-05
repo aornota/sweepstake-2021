@@ -67,6 +67,7 @@ type SquadsProjection = { Rvn : Rvn ; SquadDic : SquadDic }
 
 type DraftPickStatus = | AddPending | RemovePending
 
+// TODO-SOON: Add Rank [option?], i.e. so can show in "Selected for...draft" tag?...
 type DraftPick = { UserDraftPickBasic : UserDraftPickBasic ; DraftPickStatus : DraftPickStatus option }
 
 type AddPlayerStatus =

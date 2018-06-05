@@ -76,6 +76,9 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 "reading persisted events" |> Info |> log
 readPersistedEvents ()
 
+"requesting immediate housekeeping" |> Info |> log
+() |> Entities.Drafts.drafts.Housekeeping
+
 "starting Connections agent" |> Info |> log
 serverStarted |> connections.Start
 

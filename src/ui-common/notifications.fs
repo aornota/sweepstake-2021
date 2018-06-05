@@ -2,9 +2,7 @@ module Aornota.UI.Common.Notifications
 
 open Aornota.Common.UnitsOfMeasure
 
-#if TICK
 open Aornota.UI.Common.TimestampHelper
-#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -12,6 +10,8 @@ open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
 open System
+
+module Rct = Fable.Helpers.React
 
 type NotificationId = | NotificationId of guid : Guid with
     static member Create () = Guid.NewGuid () |> NotificationId
@@ -31,18 +31,22 @@ let private render theme source dispatch notificationMessage =
         if notificationMessage.Dismissable then { notificationData with OnDismissNotification = (fun _ -> notificationMessage.NotificationId |> dispatch) |> Some }
         else notificationData
     let sourceAndTypeText = sprintf "%s | %s" source (match notificationMessage.Type with | Debug -> "DEBUG" | Info -> "INFORMATION" | Warning -> "WARNING" | Danger -> "ERROR")
-    let timestampText =
+    let timestamp =
+        if notificationMessage.Dismissable then
+            let timestampText =
 #if TICK
-        ago notificationMessage.Timestamp
+                ago notificationMessage.Timestamp
 #else
-        notificationMessage.Timestamp.ToString ("HH:mm:ss")
+                notificationMessage.Timestamp |> dateAndTimeText
 #endif
+            levelRight [ levelItem [ para theme { paraDefaultSmallest with ParaAlignment = RightAligned } [ str timestampText ] ] ] |> Some
+        else None
     [
         divVerticalSpace 10
         notification theme notificationData [
             level true [
                 levelLeft [ levelItem [ para theme { paraDefaultSmallest with Weight = Bold } [ str sourceAndTypeText ] ] ]
-                levelRight [ levelItem [ para theme { paraDefaultSmallest with ParaAlignment = RightAligned } [ str timestampText ] ] ] ]
+                Rct.ofOption timestamp ]
             para theme { paraDefaultSmallest with Weight = SemiBold } [ str notificationMessage.Text ] ]
     ]
 

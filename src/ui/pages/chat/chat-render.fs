@@ -4,9 +4,7 @@ open Aornota.Common.Markdown
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.Render.Markdown
-#if TICK
 open Aornota.UI.Common.TimestampHelper
-#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -53,7 +51,7 @@ let private renderChatMessage theme authUserId dispatch (chatMessageId, chatMess
 #if TICK
                         ago timestamp.LocalDateTime
 #else
-                        timestamp.LocalDateTime.ToString ("HH:mm:ss")
+                        timestamp.LocalDateTime |> dateAndTimeText
 #endif
                 [ str timestampText ] |> para theme paraDefaultSmallest
         yield level true [

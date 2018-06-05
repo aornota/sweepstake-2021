@@ -5,9 +5,7 @@ open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Common.Render.Markdown
-#if TICK
 open Aornota.UI.Common.TimestampHelper
-#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -134,7 +132,7 @@ let private renderPost theme authUser dispatch (postId, post) =
 #if TICK
                 ago post.Timestamp.LocalDateTime
 #else
-                post.Timestamp.LocalDateTime.ToString ("HH:mm:ss")
+                post.Timestamp.LocalDateTime |> dateAndTimeText
 #endif
             [ str timestampText ] |> para theme paraDefaultSmallest
         let (UserName userName) = post.UserName

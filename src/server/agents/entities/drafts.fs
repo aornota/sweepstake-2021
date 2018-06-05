@@ -364,6 +364,7 @@ type Drafts () =
         else
             "agent has already been started" |> Info |> log
     member __.Reset () = Reset |> agent.PostAndReply // note: not async (since need to reset agents deterministically)
+    member __.Housekeeping () = Housekeeping |> agent.Post
     member __.OnSquadsRead squadsRead = squadsRead |> OnSquadsRead |> agent.Post
     member __.OnDraftsEventsRead draftsEvents = draftsEvents |> OnDraftsEventsRead |> agent.Post
     member __.OnUserDraftsEventsRead userDraftsEvents = userDraftsEvents |> OnUserDraftsEventsRead |> agent.Post

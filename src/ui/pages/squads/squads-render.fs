@@ -3,9 +3,7 @@ module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 open Aornota.Common.IfDebug
 
 open Aornota.UI.Common.LazyViewOrHMR
-#if TICK
 open Aornota.UI.Common.TimestampHelper
-#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -57,7 +55,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
     let onDismiss = match addPlayersState.AddPlayerStatus with | Some AddPlayerPending -> None | Some _ | None -> (fun _ -> CancelAddPlayers |> dispatch) |> Some
     let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
     let nonWithdrawnCount = squad |> nonWithdrawnCount
-    let squadIsFull = nonWithdrawnCount >= (squadId |> maxPlayers)
+    let squadIsFull = nonWithdrawnCount >= MAX_PLAYERS_PER_SQUAD
     let isAddingPlayer, addPlayerInteraction, onEnter =
         let addPlayer = (fun _ -> AddPlayer |> dispatch)
         match addPlayersState.AddPlayerStatus with
@@ -70,7 +68,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
     let (PlayerId newPlayerKey) = addPlayersState.NewPlayerId
     let body = [
         if squadIsFull then
-            yield notification theme notificationWarning [ [ str (squadId |> squadIsFullText) ] |> para theme paraCentredSmallest ]
+            yield notification theme notificationWarning [ [ str squadIsFullText ] |> para theme paraCentredSmallest ]
             yield br
         match errorText with
         | Some errorText ->
@@ -351,14 +349,14 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, curre
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
-let private ago (timestamp:DateTime) =
+let private withdrawnAgo (timestamp:DateTime) =
 #if TICK
     timestamp |> ago
 #else
-    timestamp.ToString ("HH:mm:ss")
+    sprintf "on %s" (timestamp |> dateAndTimeText)
 #endif
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch = // TODO-SOON: Enable ShowWithdrawPlayerModal link in release builds...
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch =
     let theme = getTheme useDefaultTheme
     let canEdit, canWithdraw =
         match authUser with
@@ -377,25 +375,26 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             let onClick = (fun _ -> (squadId, playerId) |> ShowChangePlayerTypeModal |> dispatch)
             [ [ str "Change position" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
         else None
+    let isWithdrawnAndDate player = match player.PlayerStatus with | PlayerStatus.Active -> false, None | Withdrawn dateWithdrawn -> true, dateWithdrawn
     let withdraw playerId player =
-        let isWithdrawn, dateWithdrawn = match player.PlayerStatus with | PlayerStatus.Active -> false, None | Withdrawn dateWithdrawn -> true, dateWithdrawn
+        let isWithdrawn, dateWithdrawn = player |> isWithdrawnAndDate
         if canWithdraw && squad.Eliminated |> not && isWithdrawn |> not then
             let onClick = (fun _ -> (squadId, playerId) |> ShowWithdrawPlayerModal |> dispatch)
-            let withdraw = [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick)
-            ifDebug (withdraw |> Some) None // TEMP-NMB...
+            [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
         else if isWithdrawn then
-            let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (ago dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
+            let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (withdrawnAgo dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
             [ [ str withdrawnText ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
         else None
 
-    // TODO-SOON: Only allow draft if not already picked - and not withdrawn...
+    // TODO-SOON: Only allow draft if not already picked...
 
     let draftLeftAndRight playerId player =
-        match activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
-        | Some (draftId, draftOrdinal, isOpen) ->
+        let isWithdrawn, _ = player |> isWithdrawnAndDate
+        match isWithdrawn, activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
+        | false, Some (draftId, draftOrdinal, isOpen) ->
             let userDraftPickBasic = (squadId, playerId, player.PlayerName) |> PlayerPickBasic
             draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedPlayer playerId) userDraftPickBasic dispatch
-        | None -> None, None
+        | _ -> None, None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
         let draftLeft, draftRight = draftLeftAndRight playerId player
@@ -438,10 +437,10 @@ let private addPlayers theme squadId squad authUser dispatch =
         match authUser.Permissions.SquadPermissions with
         | Some squadPermissions ->
             if squadPermissions.AddOrEditPlayerPermission then
-                if nonWithdrawnCount < (squadId |> maxPlayers)  then
+                if nonWithdrawnCount < MAX_PLAYERS_PER_SQUAD  then
                     [ [ str "Add player/s" ] |> para theme paraAddPlayers ] |> link theme (ClickableLink (fun _ -> squadId |> ShowAddPlayersModal |> dispatch)) |> Some
                 else
-                    [ italic (squadId |> squadIsFullText) ] |> para theme paraAddPlayers |> Some
+                    [ italic squadIsFullText ] |> para theme paraAddPlayers |> Some
             else None
         | None -> None
     | _, _ -> None

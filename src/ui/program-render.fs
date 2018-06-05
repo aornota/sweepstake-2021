@@ -6,9 +6,7 @@ open Aornota.Common.UnitsOfMeasure
 open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.Render.Markdown
-#if TICK
 open Aornota.UI.Common.TimestampHelper
-#endif
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -77,7 +75,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
 #if TICK
                 ago serverStarted.LocalDateTime
 #else
-                sprintf "at %s" (serverStarted.LocalDateTime.ToString ("HH:mm:ss"))
+                sprintf "on %s" (serverStarted.LocalDateTime |> dateAndTimeText)
 #endif
             navbarItem [ [ str (sprintf "Server started %s" timestampText ) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDark } ] |> Some
         | _, _ -> None

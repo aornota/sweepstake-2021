@@ -76,7 +76,6 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
                 let confirmParticipant = [ [ str "Confirm participant" ] |> para theme paraConfirm ] |> link theme (ClickableLink onClick)
                 ifDebug (confirmParticipant |> Some) None
             else None
-    let date (local:DateTime) = sprintf "%s %i%s %s" (local.DayOfWeek |> dayName) local.Day (local.Day |> suffix) (local.Month |> monthName)
     let stageText stage =
         let stageText =
             match stage with
@@ -105,7 +104,7 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
         match extra with | Some extra -> [ extra ] |> para theme paraExtra |> Some | None -> None
     let fixtureRow (fixtureId, fixture) =
         tr false [
-            td [ [ str (fixture.KickOff.LocalDateTime |> date) ] |> para theme paraDefaultSmallest ]
+            td [ [ str (fixture.KickOff.LocalDateTime |> dateText) ] |> para theme paraDefaultSmallest ]
             td [ [ str (fixture.KickOff.LocalDateTime.ToString ("HH:mm")) ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (stageText fixture.Stage) ]
             td [ Rct.ofOption (confirmParticipant Home fixture.HomeParticipantDto fixtureId) ]
