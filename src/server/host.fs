@@ -33,7 +33,12 @@ let private uiPath = // note: relative to current [server] directory, "ui" folde
     let uiPath = Path.Combine ("..", "ui") |> Path.GetFullPath
     if Directory.Exists uiPath then uiPath else "ui" |> Path.GetFullPath
 
+let private indexPath = Path.Combine (uiPath, "index.html")
+
+let private webApp : HttpFunc -> Http.HttpContext -> HttpFuncResult = choose [ route "/" >=> htmlFile indexPath ]
+
 let private configureApp (app:IApplicationBuilder) =
+    app.UseGiraffe webApp |> ignore
     app.UseStaticFiles () |> ignore
     app.UseWebSockets () |> ignore
     app.UseMiddleware<WsMiddleware> () |> ignore

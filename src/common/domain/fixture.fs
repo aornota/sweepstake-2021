@@ -29,10 +29,4 @@ type Participant =
     | Confirmed of squadId : SquadId
     | Unconfirmed of unconfirmed : Unconfirmed
 
-type ParticipantDto =
-    | ConfirmedDto of squadId : SquadId * squadName : SquadName
-    | UnconfirmedDto of unconfirmed : Unconfirmed
-
-type FixtureDto = { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomeParticipantDto : ParticipantDto ; AwayParticipantDto : ParticipantDto ; KickOff : DateTimeOffset }
-
-type FixturesProjectionDto = { FixtureDtos : FixtureDto list }
+type FixtureDto = { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }

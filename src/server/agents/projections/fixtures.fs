@@ -1,9 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Projections.Fixtures
 
 (* Broadcasts: SendMsg
-   Subscribes: SquadsRead
-               FixturesRead
-               // note: no need to handle SquadEventWritten since SquadCreated cannot happen once SquadsRead (and SquadEliminated is of no interest)
+   Subscribes: FixturesRead
                FixtureEventWritten (ParticipantConfirmed only)
                Disconnected *)
 
@@ -25,16 +23,13 @@ open System.Collections.Generic
 
 type private FixtureInput =
     | Start of reply : AsyncReplyChannel<unit>
-    | OnSquadsRead of squadsRead : SquadRead list
     | OnFixturesRead of fixturesRead : FixtureRead list
     | OnParticipantConfirmed of fixtureId : FixtureId * rvn : Rvn * role : Role * squadId : SquadId
     | RemoveConnections of connectionIds : ConnectionId list
     | HandleInitializeFixturesProjectionQry of connectionId : ConnectionId
-        * reply : AsyncReplyChannel<Result<FixturesProjectionDto, OtherError<string>>>
+        * reply : AsyncReplyChannel<Result<FixtureDto list, OtherError<string>>>
     
-type private SquadDic = Dictionary<SquadId, SquadName>
-
-type private Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipantDto : ParticipantDto ; AwayParticipantDto : ParticipantDto ; KickOff : DateTimeOffset }
+type private Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }
 type private FixtureDic = Dictionary<FixtureId, Fixture>
 
 type private Projectee = { LastRvn : Rvn }
@@ -57,9 +52,8 @@ let private logResult source successText result =
         sprintf "%s Ok%s" source successText |> Info |> log
     | Error error -> sprintf "%s Error -> %A" source error |> Danger |> log
 
-let private fixtureDto (fixtureId, fixture:Fixture) =
-    { FixtureId = fixtureId ; Rvn = fixture.Rvn ; Stage = fixture.Stage ; HomeParticipantDto = fixture.HomeParticipantDto ; AwayParticipantDto = fixture.AwayParticipantDto
-      KickOff = fixture.KickOff }
+let private fixtureDto (fixtureId, fixture:Fixture) : FixtureDto =
+    { FixtureId = fixtureId ; Rvn = fixture.Rvn ; Stage = fixture.Stage ; HomeParticipant = fixture.HomeParticipant ; AwayParticipant = fixture.AwayParticipant ; KickOff = fixture.KickOff }
 
 let private fixtureDtoDic (fixtureDic:FixtureDic) =
     let fixtureDtoDic = FixtureDtoDic ()
@@ -68,8 +62,7 @@ let private fixtureDtoDic (fixtureDic:FixtureDic) =
         (fixtureDto.FixtureId, fixtureDto) |> fixtureDtoDic.Add)
     fixtureDtoDic
 
-let private fixtureProjectionDto state =
-    { FixtureDtos = state.FixtureDic |> List.ofSeq |> List.map (fun (KeyValue (fixtureId, fixture)) -> (fixtureId, fixture) |> fixtureDto) }
+let private fixtureDtos state = state.FixtureDic |> List.ofSeq |> List.map (fun (KeyValue (fixtureId, fixture)) -> (fixtureId, fixture) |> fixtureDto)
 
 let private sendMsg connectionIds serverMsg = (serverMsg, connectionIds) |> SendMsg |> broadcaster.Broadcast
 
@@ -78,7 +71,7 @@ let private sendFixtureDtoDelta (projecteeDic:ProjecteeDic) fixtureDtoDelta =
     projecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) ->
         let projectee = { projectee with LastRvn = incrementRvn projectee.LastRvn }
         sprintf "sendFixtureDtoDelta -> %A (%A)" connectionId projectee.LastRvn |> Info |> log
-        (projectee.LastRvn, fixtureDtoDelta) |> FixturesDeltaMsg |> FixturesProjectionMsg |> ServerFixturesMsg |> sendMsg [ connectionId ]
+        (projectee.LastRvn, fixtureDtoDelta) |> FixturesDeltaMsg |> FixturesProjectionMsg |> ServerAppMsg |> sendMsg [ connectionId ]
         (connectionId, projectee) |> updatedProjecteeDic.Add)
     updatedProjecteeDic |> List.ofSeq |> List.iter (fun (KeyValue (connectionId, projectee)) -> projecteeDic.[connectionId] <- projectee)
 
@@ -103,33 +96,6 @@ let private updateState source (projecteeDic:ProjecteeDic) stateChangeType =
                 state
     newState
 
-let private tryFindSquadName (squadDic:SquadDic) squadId =
-    if squadId |> squadDic.ContainsKey |> not then None // note: silently ignore unknown squadId (should never happen)
-    else squadDic.[squadId] |> Some
-
-let private participantDto (squadDic:SquadDic) participant =
-    match participant with
-    | Confirmed squadId -> match squadId |> tryFindSquadName squadDic with | Some squadName -> (squadId, squadName) |> ConfirmedDto |> Some | None -> None
-    | Unconfirmed unconfirmed -> unconfirmed |> UnconfirmedDto |> Some
-
-let private ifAllRead source (squadsRead:(SquadRead list) option, fixturesRead:(FixtureRead list) option) =
-    match squadsRead, fixturesRead with
-    | Some squadsRead, Some fixturesRead ->
-        let squadDic = SquadDic ()
-        squadsRead |> List.iter (fun squadRead -> (squadRead.SquadId, squadRead.SquadName) |> squadDic.Add)
-        let fixtureDic = FixtureDic ()
-        fixturesRead
-        |> List.iter (fun fixtureRead ->
-            match fixtureRead.HomeParticipant |> participantDto squadDic, fixtureRead.AwayParticipant |> participantDto squadDic with
-            | Some homeParticipantDto, Some awayParticipantDto ->
-                let fixture = { Rvn = fixtureRead.Rvn ; Stage = fixtureRead.Stage ; HomeParticipantDto = homeParticipantDto ; AwayParticipantDto = awayParticipantDto ; KickOff = fixtureRead.KickOff }
-                (fixtureRead.FixtureId, fixture) |> fixtureDic.Add
-            | _ -> ())
-        let projecteeDic = ProjecteeDic ()
-        let state = fixtureDic |> Initialization |> updateState source projecteeDic
-        (state, squadDic, fixtureDic, projecteeDic) |> Some
-    | _ -> None
-
 type Fixtures () =
     let agent = MailboxProcessor.Start (fun inbox ->
         let rec awaitingStart () = async {
@@ -138,86 +104,72 @@ type Fixtures () =
             | Start reply ->
                 "Start when awaitingStart -> pendingFixturesRead (0 users) (0 posts) (0 projectees)" |> Info |> log
                 () |> reply.Reply
-                return! pendingFixturesRead None None
-            | OnSquadsRead _ -> "OnSquadsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+                return! pendingFixturesRead ()
             | OnFixturesRead _ -> "OnFixturesRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnParticipantConfirmed _ -> "OnParticipantConfirmed when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnections _ -> "RemoveConnections when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and pendingFixturesRead squadsRead fixturesRead = async {
+        and pendingFixturesRead () = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
-            | OnSquadsRead squadsRead ->
-                let source = "OnSquadsRead"
-                sprintf "%s (%i squads/s) when pendingFixturesRead" source squadsRead.Length |> Info |> log
-                let squads = squadsRead |> Some
-                match (squads, fixturesRead) |> ifAllRead source with
-                | Some (state, squadDic, fixtureDic, projecteeDic) ->
-                    return! projectingFixtures state squadDic fixtureDic projecteeDic
-                | None -> return! pendingFixturesRead squads fixturesRead
+            | Start _ -> "Start when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead ()
             | OnFixturesRead fixturesRead ->
                 let source = "OnFixturesRead"
                 sprintf "%s (%i fixture/s) when pendingFixturesRead" source fixturesRead.Length |> Info |> log
-                let fixtures = fixturesRead |> Some
-                match (squadsRead, fixtures) |> ifAllRead source with
-                | Some (state, squadDic, fixtureDic, projecteeDic) ->
-                    return! projectingFixtures state squadDic fixtureDic projecteeDic
-                | None -> return! pendingFixturesRead squadsRead fixtures
-            | OnParticipantConfirmed _ -> "OnParticipantConfirmed when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
-            | RemoveConnections _ -> "RemoveConnections when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
-            | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead }
-        and projectingFixtures state squadDic fixtureDic projecteeDic = async {
+                let fixtureDic = FixtureDic ()
+                fixturesRead |> List.iter (fun fixtureRead ->
+                    let fixture = { Rvn = fixtureRead.Rvn ; Stage = fixtureRead.Stage ; HomeParticipant = fixtureRead.HomeParticipant ; AwayParticipant = fixtureRead.AwayParticipant
+                                    KickOff = fixtureRead.KickOff }
+                    (fixtureRead.FixtureId, fixture) |> fixtureDic.Add)
+                let projecteeDic = ProjecteeDic ()
+                let state = fixtureDic |> Initialization |> updateState source projecteeDic
+                return! projectingFixtures state fixtureDic projecteeDic
+            | OnParticipantConfirmed _ -> "OnParticipantConfirmed when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead ()
+            | RemoveConnections _ -> "RemoveConnections when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead ()
+            | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead () }
+        and projectingFixtures state fixtureDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when projectingFixtures" |> IgnoredInput |> Agent |> log ; return! projectingFixtures state squadDic fixtureDic projecteeDic
-            | OnSquadsRead _ -> "OnSquadsRead when projectingFixtures" |> IgnoredInput |> Agent |> log ; return! projectingFixtures state squadDic fixtureDic projecteeDic
-            | OnFixturesRead _ -> "OnFixturesRead when projectingFixtures" |> IgnoredInput |> Agent |> log ; return! projectingFixtures state squadDic fixtureDic projecteeDic
+            | Start _ -> "Start when projectingFixtures" |> IgnoredInput |> Agent |> log ; return! projectingFixtures state fixtureDic projecteeDic
+            | OnFixturesRead _ -> "OnFixturesRead when projectingFixtures" |> IgnoredInput |> Agent |> log ; return! projectingFixtures state fixtureDic projecteeDic
             | OnParticipantConfirmed (fixtureId, rvn, role, squadId) ->
                 let source = "OnParticipantConfirmed"
-                sprintf "%s (%A %A) when projectingFixtures (%i squad/s) (%i fixture/s) (%i projectee/s)" source fixtureId rvn squadDic.Count fixtureDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A) when projectingFixtures (%i fixture/s) (%i projectee/s)" source fixtureId rvn fixtureDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if fixtureId |> fixtureDic.ContainsKey then // note: silently ignore unknown fixtureId (should never happen)
                         let fixture = fixtureDic.[fixtureId]
                         match role with
                         | Home ->
-                            match (squadId |> Confirmed) |> participantDto squadDic with
-                            | Some homeParticipantDto ->
-                                fixtureDic.[fixtureId] <- { fixture with Rvn = rvn ; HomeParticipantDto = homeParticipantDto }
-                                (fixtureDic, state) |> FixtureChange |> updateState source projecteeDic
-                            | None -> state
+                            fixtureDic.[fixtureId] <- { fixture with Rvn = rvn ; HomeParticipant = squadId |> Confirmed }
+                            (fixtureDic, state) |> FixtureChange |> updateState source projecteeDic
                         | Away ->
-                            match (squadId |> Confirmed) |> participantDto squadDic with
-                            | Some awayParticipantDto ->
-                                fixtureDic.[fixtureId] <- { fixture with Rvn = rvn ; AwayParticipantDto = awayParticipantDto }
-                                (fixtureDic, state) |> FixtureChange |> updateState source projecteeDic
-                            | None -> state
+                            fixtureDic.[fixtureId] <- { fixture with Rvn = rvn ; AwayParticipant = squadId |> Confirmed }
+                            (fixtureDic, state) |> FixtureChange |> updateState source projecteeDic
                     else state
-                return! projectingFixtures state squadDic fixtureDic projecteeDic
+                return! projectingFixtures state fixtureDic projecteeDic
             | RemoveConnections connectionIds ->
                 let source = "RemoveConnections"
-                sprintf "%s (%A) when projectingFixtures (%i squad/s) (%i fixture/s) (%i projectee/s)" source connectionIds squadDic.Count fixtureDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A) when projectingFixtures (%i fixture/s) (%i projectee/s)" source connectionIds fixtureDic.Count projecteeDic.Count |> Info |> log
                 connectionIds |> List.iter (fun connectionId -> if connectionId |> projecteeDic.ContainsKey then connectionId |> projecteeDic.Remove |> ignore) // note: silently ignore unknown connectionIds                
                 sprintf "%s when projectingFixtures -> %i projectee/s)" source projecteeDic.Count |> Info |> log
-                return! projectingFixtures state squadDic fixtureDic projecteeDic
+                return! projectingFixtures state fixtureDic projecteeDic
             | HandleInitializeFixturesProjectionQry (connectionId, reply) ->
                 let source = "HandleInitializeFixturesProjectionQry"
-                sprintf "%s for %A when projectingFixtures (%i squad/s) (%i fixture/s) (%i projectee/s)" source connectionId squadDic.Count fixtureDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s for %A when projectingFixtures (%i fixture/s) (%i projectee/s)" source connectionId fixtureDic.Count projecteeDic.Count |> Info |> log
                 let projectee = { LastRvn = initialRvn }
                 // Note: connectionId might already be known, e.g. re-initialization.
                 if connectionId |> projecteeDic.ContainsKey |> not then (connectionId, projectee) |> projecteeDic.Add else projecteeDic.[connectionId] <- projectee
                 sprintf "%s when projectingFixtures -> %i projectee/s)" source projecteeDic.Count |> Info |> log
-                let result = state |> fixtureProjectionDto |> Ok
-                result |> logResult source (fun fixtureProjectionDto -> sprintf "%i fixture/s" fixtureProjectionDto.FixtureDtos.Length |> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                let result = state |> fixtureDtos |> Ok
+                result |> logResult source (fun fixtureDtos -> sprintf "%i fixture/s" fixtureDtos.Length |> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
                 result |> reply.Reply
-                return! projectingFixtures state squadDic fixtureDic projecteeDic }
+                return! projectingFixtures state fixtureDic projecteeDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
     do Projection Projection.Fixtures |> logAgentException |> agent.Error.Add // note: an unhandled exception will "kill" the agent - but at least we can log the exception
     member __.Start () =
         let onEvent = (fun event ->
             match event with
-            | SquadsRead squadsRead -> squadsRead |> OnSquadsRead |> agent.Post
             | FixturesRead fixturesRead -> fixturesRead |> OnFixturesRead |> agent.Post
             | FixtureEventWritten (rvn, fixtureEvent) ->
                 match fixtureEvent with
@@ -226,7 +178,7 @@ type Fixtures () =
             | Disconnected connectionId -> [ connectionId ] |> RemoveConnections |> agent.Post
             | _ -> ())
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
-        sprintf "agent subscribed to Tick | UsersRead | UserEventWritten (subset) | UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnected broadcasts -> %A" subscriptionId |> Info |> log
+        sprintf "agent subscribed to FixturesRead | FixtureEventWritten | Disconnected broadcasts -> %A" subscriptionId |> Info |> log
         Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.HandleInitializeFixturesProjectionQryAsync connectionId =
         (fun reply -> (connectionId, reply) |> HandleInitializeFixturesProjectionQry) |> agent.PostAndAsyncReply

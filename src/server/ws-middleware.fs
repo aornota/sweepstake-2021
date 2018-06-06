@@ -32,15 +32,16 @@ type WsMiddleware (next:RequestDelegate) =
             ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
             if receiveResult.CloseStatus.HasValue then return receiveResult |> Some
             else
+                let bufferText = buffer |> encoding.GetString
                 try // note: expect buffer to be deserializable to UiMsg              
                     sprintf "deserializing message for %A" connectionId |> Verbose |> log
-                    let uiMsg = buffer |> encoding.GetString |> Json |> ofJson<UiMsg>
+                    let uiMsg = bufferText |> Json |> ofJson<UiMsg>
                     ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
                     sprintf "message deserialized for %A -> %A" connectionId uiMsg |> Verbose |> log
                     (connectionId, uiMsg) |> connections.HandleUiMsg
                     return! receiving (connectionId, ws) 0u
                 with exn ->
-                    sprintf "deserializing message failed for %A -> %A" connectionId exn.Message |> Danger |> log
+                    sprintf "deserializing message failed for %A (%s) -> %A" connectionId bufferText exn.Message |> Danger |> log
                     (connectionId, exn) |> connections.OnDeserializeUiMsgError
                     return! receiving (connectionId, ws) 0u
         with exn ->

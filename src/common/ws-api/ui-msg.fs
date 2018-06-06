@@ -16,18 +16,15 @@ type UiUnauthAppMsg =
     | AutoSignInCmd of sessionId : SessionId * jwt : Jwt
     | InitializeUsersProjectionUnauthQry
     | InitializeSquadsProjectionQry
+    | InitializeFixturesProjectionQry
 
 type UiUnauthNewsMsg =
     | InitializeNewsProjectionQry
     | MorePostsQry
 
-type UiUnauthFixturesMsg =
-    | InitializeFixturesProjectionQry
-
 type UiUnauthMsg =
     | UiUnauthAppMsg of uiUnauthAppMsg : UiUnauthAppMsg
     | UiUnauthNewsMsg of uiUnauthNewsMsg : UiUnauthNewsMsg
-    | UiUnauthFixturesMsg of uiUnauthFixturesMsg : UiUnauthFixturesMsg
 
 type UiAuthAppMsg =
     | SignOutCmd

@@ -345,6 +345,22 @@ type Connections () =
                         result |> logResult source (fun squadDtos -> sprintf "%i squad/s" squadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
                     return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiUnauthMsg (UiUnauthAppMsg InitializeFixturesProjectionQry) ->
+                    let source = "InitializeFixturesProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.Fixtures.fixtures.HandleInitializeFixturesProjectionQryAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeFixturesProjectionQryResult |> ServerAppMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun fixtureDtos -> sprintf "%i fixtures/s" fixtureDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthNewsMsg InitializeNewsProjectionQry) ->
                     let source = "InitializeNewsProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -375,22 +391,6 @@ type Connections () =
                         let serverMsg = result |> MorePostsQryResult |> ServerNewsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (fun (_, postDtos, hasMorePosts) -> sprintf "%i post/s (%b)" postDtos.Length hasMorePosts |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
-                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiUnauthMsg (UiUnauthFixturesMsg InitializeFixturesProjectionQry) ->
-                    let source = "InitializeFixturesProjectionQry"
-                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
-                    let fWithWs = (fun _ -> async {
-                        let result =
-                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
-                            else () |> Ok
-                        let! result =
-                            match result with
-                            | Ok _ -> connectionId |> Projections.Fixtures.fixtures.HandleInitializeFixturesProjectionQryAsync
-                            | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> InitializeFixturesProjectionQryResult |> ServerFixturesMsg
-                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun fixturesProjectionDto -> sprintf "%i fixtures/s" fixturesProjectionDto.FixtureDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
                     return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UserNonApiActivity) ->

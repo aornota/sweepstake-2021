@@ -60,6 +60,9 @@ type SquadsProjectionMsg =
     | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
     | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
 
+type FixturesProjectionMsg =
+    | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
+
 type DraftsProjectionMsg =
     | CurrentDraftChangedMsg of currentDraftDto : CurrentDraftDto option
 
@@ -76,6 +79,8 @@ type ServerAppMsg =
     | UsersProjectionMsg of usersProjectionMsg : UsersProjectionMsg
     | InitializeSquadsProjectionQryResult of result : Result<SquadDto list, OtherError<string>>
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
+    | InitializeFixturesProjectionQryResult of result : Result<FixtureDto list, OtherError<string>>
+    | FixturesProjectionMsg of fixturesProjectionMsg : FixturesProjectionMsg
     | InitializeDraftsProjectionQryResult of result : Result<CurrentDraftDto option, AuthQryError<string>>
     | DraftsProjectionMsg of draftsProjectionMsg : DraftsProjectionMsg
 
@@ -105,13 +110,8 @@ type ServerSquadsMsg =
     | WithdrawPlayerCmdResult of result : Result<PlayerName, AuthCmdError<string>>
     | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
 
-type FixturesProjectionMsg =
-    | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
-
 type ServerFixturesMsg =
-    | InitializeFixturesProjectionQryResult of result : Result<FixturesProjectionDto, OtherError<string>>
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>
-    | FixturesProjectionMsg of fixturesProjectionMsg : FixturesProjectionMsg
 
 type ChatProjectionMsg =
     | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto> * hasMoreChatMessages : bool

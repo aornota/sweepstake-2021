@@ -231,6 +231,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
     let hasModal = if hasStaticModal then true else match unauthState.SignInState with | Some _ -> true | None -> false
     let usersProjection = unauthState.UnauthProjections.UsersProjection
     let squadsProjection = unauthState.UnauthProjections.SquadsProjection
+    let fixturesProjection = unauthState.UnauthProjections.FixturesProjection
     div divDefault [
         match hasStaticModal, unauthState.SignInState with
         | false, Some signInState ->
@@ -250,12 +251,8 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
             let squadsState = unauthState.UnauthPageStates.SquadsState
             yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
-            match unauthState.UnauthPageStates.FixturesState with
-            | Some fixturesState ->
-                yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage FixturesPage when UnauthPageStates.FixturesState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks) ]
+            let fixturesState = unauthState.UnauthPageStates.FixturesState
+            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch) ]
 
 let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -314,8 +311,10 @@ let private renderDrafts useDefaultTheme =
 
 let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispatch =
     let hasModal = if hasStaticModal then true else match authState.ChangePasswordState, authState.SigningOut with | Some _, _ -> true | None, true -> true | None, false -> false
+    let authUser = authState.AuthUser |> Some
     let usersProjection = authState.UnauthProjections.UsersProjection
     let squadsProjection = authState.UnauthProjections.SquadsProjection
+    let fixturesProjection = authState.UnauthProjections.FixturesProjection
     div divDefault [
         match hasStaticModal, authState.ChangePasswordState with
         | false, Some changePasswordState ->
@@ -337,16 +336,11 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
 
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState
-            let authUser = authState.AuthUser |> Some
             let currentDraftDto = match authState.AuthProjections.DraftsProjection with | Ready currentDraftDto -> currentDraftDto | Pending | Failed -> None
             yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraftDto, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
-            match authState.UnauthPageStates.FixturesState with
-            | Some fixturesState ->
-                yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authState.AuthUser |> Some, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage FixturesPage when UnauthPageStates.FixturesState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let fixturesState = authState.UnauthPageStates.FixturesState
+            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
 
         | AuthPage DraftAdminPage ->
             match authState.AuthPageStates.DraftAdminState with

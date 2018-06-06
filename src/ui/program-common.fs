@@ -144,11 +144,12 @@ type UnauthPageStates = {
     NewsState : News.Common.State
     ScoresState : ToDo
     SquadsState : Squads.Common.State
-    FixturesState : Fixtures.Common.State option }
+    FixturesState : Fixtures.Common.State }
 
 type UnauthProjections = {
     UsersProjection : Projection<Rvn * UserDic>
-    SquadsProjection : Projection<Rvn * SquadDic> }
+    SquadsProjection : Projection<Rvn * SquadDic>
+    FixturesProjection : Projection<Rvn * FixtureDic> }
 
 type UnauthState = {
     CurrentUnauthPage : UnauthPage

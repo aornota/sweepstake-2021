@@ -17,6 +17,7 @@ open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
@@ -44,6 +45,7 @@ let private groupTabs currentFixtureFilter dispatch =
     | GroupFixtures currentGroup -> groups |> List.map (groupTab currentGroup dispatch)
     | AllFixtures | KnockoutFixtures -> []
 
+// #region startsIn
 let private startsIn (_timestamp:DateTime) : Fable.Import.React.ReactElement option * bool =
 #if TICK
     let startsIn, imminent = _timestamp |> startsIn
@@ -51,8 +53,9 @@ let private startsIn (_timestamp:DateTime) : Fable.Import.React.ReactElement opt
 #else
     None, false
 #endif
+// #endregion
 
-let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:FixtureDic, authUser) dispatch = // TODO-SOON?: Enable ShowConfirmParticipantModal link in release builds...
+let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:FixtureDic, squadDic:SquadDic, authUser) dispatch = // TODO-SOON?: Enable ShowConfirmParticipantModal link in release builds...
     let theme = getTheme useDefaultTheme
     let matchesFilter fixture =
         match currentFixtureFilter with
@@ -66,10 +69,10 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             | Some fixturePermissions -> fixturePermissions.ConfirmFixturePermission
             | None -> false
         | None -> false
-    let confirmParticipant role participantDto fixtureId =
-        match participantDto with
-        | ConfirmedDto _ -> None
-        | UnconfirmedDto _ ->
+    let confirmParticipant role participant fixtureId =
+        match participant with
+        | Confirmed _ -> None
+        | Unconfirmed _ ->
             if canConfirmParticipant then
                 let paraConfirm = match role with | Home -> { paraDefaultSmallest with ParaAlignment = RightAligned } | Away -> paraDefaultSmallest
                 let onClick = (fun _ -> (fixtureId, role) |> ShowConfirmParticipantModal |> dispatch)
@@ -86,7 +89,7 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             | ThirdPlacePlayOff -> "Third/fourth place play-off" |> Some
             | Final -> "Final" |> Some
         match stageText with | Some stageText -> [ str stageText ] |> para theme paraDefaultSmallest |> Some | None -> None
-    let participantText participantDto =
+    let participantText participant =
         let unconfirmedText unconfirmed =
             match unconfirmed with
             | Winner (Group group) -> sprintf "%s winner" (group |> groupText)
@@ -96,7 +99,11 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             | Winner (ThirdPlacePlayOff) | Winner (Final) -> SHOULD_NEVER_HAPPEN
             | RunnerUp group -> sprintf "%s runner-up" (group |> groupText)
             | Loser semiFinalOrdinal -> sprintf "Semi-final %i loser" semiFinalOrdinal
-        match participantDto with | ConfirmedDto (_, SquadName squadName) -> squadName | UnconfirmedDto unconfirmed -> unconfirmed |> unconfirmedText
+        match participant with
+        | Confirmed squadId ->
+            let (SquadName squadName) = squadId |> squadName squadDic
+            squadName
+        | Unconfirmed unconfirmed -> unconfirmed |> unconfirmedText
     let extra (local:DateTime) =
         let extra, imminent = if local < DateTime.Now then italic "Result pending" |> Some, true else local |> startsIn
         let paraExtra = { paraDefaultSmallest with ParaAlignment = RightAligned ; ParaColour = GreyscalePara Grey }
@@ -107,11 +114,11 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             td [ [ str (fixture.KickOff.LocalDateTime |> dateText) ] |> para theme paraDefaultSmallest ]
             td [ [ str (fixture.KickOff.LocalDateTime.ToString ("HH:mm")) ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (stageText fixture.Stage) ]
-            td [ Rct.ofOption (confirmParticipant Home fixture.HomeParticipantDto fixtureId) ]
-            td [ [ str (fixture.HomeParticipantDto |> participantText) ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+            td [ Rct.ofOption (confirmParticipant Home fixture.HomeParticipant fixtureId) ]
+            td [ [ str (fixture.HomeParticipant |> participantText) ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
             td [ [ str "vs." ] |> para theme paraDefaultSmallest ]
-            td [ [ str (fixture.AwayParticipantDto |> participantText) ] |> para theme paraDefaultSmallest ]
-            td [ Rct.ofOption (confirmParticipant Away fixture.AwayParticipantDto fixtureId) ]
+            td [ [ str (fixture.AwayParticipant |> participantText) ] |> para theme paraDefaultSmallest ]
+            td [ Rct.ofOption (confirmParticipant Away fixture.AwayParticipant fixtureId) ]
             td [ Rct.ofOption (fixture.KickOff.LocalDateTime |> extra) ] ]   
     let fixtures =
         fixtureDic
@@ -135,19 +142,19 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
                     th [] ] ]
             tbody [ yield! fixtureRows ] ] ]    
 
-let render (useDefaultTheme, state, authUser:AuthUser option, _hasModal, _:int<tick>) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection:Projection<_ * FixtureDic>, squadsProjection:Projection<_ * SquadDic>, _hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "Fixtures" ] |> para theme paraCentredSmall
         yield hr theme false
-        match state.ProjectionState with
-        | Initializing _ ->
+        match fixturesProjection with
+        | Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed -> // note: should never happen
+        | Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Active activeState ->
-            let fixtureDic = activeState.FixturesProjection.FixtureDic
-            let currentFixtureFilter = activeState.CurrentFixtureFilter
+        | Ready (_, fixtureDic) ->
+            let squadDic = match squadsProjection with | Ready (_, squadDic) -> squadDic | Pending | Failed -> SquadDic ()
+            let currentFixtureFilter = state.CurrentFixtureFilter
             let filterTabs = filterTabs currentFixtureFilter dispatch
             let groupTabs = groupTabs currentFixtureFilter dispatch
             yield div divCentred [ tabs theme { tabsDefault with TabsSize = Normal ; Tabs = filterTabs } ]
@@ -156,4 +163,4 @@ let render (useDefaultTheme, state, authUser:AuthUser option, _hasModal, _:int<t
                 yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             | [] -> ()
             yield br
-            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic, authUser) dispatch ]
+            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic, squadDic, authUser) dispatch ]

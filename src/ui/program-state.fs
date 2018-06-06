@@ -16,6 +16,7 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Shared
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.Literals
@@ -146,25 +147,11 @@ let defaultSignInState userName signInStatus = {
 let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) signInState state =
     let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
     let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = NewsPage)
-    let currentSquadId = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState.CurrentSquadId | None -> None
-    let squadsState, squadsCmd = Squads.State.initialize currentSquadId
+    let squadsState, squadsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState, Cmd.none | None -> Squads.State.initialize None
 
     let tempScoresState = ()
 
-    let initializeFixturesState, fixturesState =
-        match unauthPageStates, currentPage with
-        | Some unauthPageStates, _ ->
-            match unauthPageStates.FixturesState, currentPage with
-            | Some fixturesState, _ -> false, fixturesState |> Some
-            | None, FixturesPage -> true, None
-            | None, _ -> false, None
-        | None, FixturesPage -> true, None
-        | None, _ -> false, None
-    let fixturesState, fixturesCmd =
-        if initializeFixturesState then
-            let fixturesState, fixturesCmd = Fixtures.State.initialize None
-            fixturesState |> Some, fixturesCmd
-        else fixturesState, Cmd.none
+    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
 
     let usersProjection =
         match unauthProjections with
@@ -180,17 +167,21 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
         match unauthProjections with
         | Some unauthProjections -> unauthProjections.SquadsProjection, Cmd.none
         | None -> Pending, InitializeSquadsProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
+    let fixturesProjection, fixturesProjectionCmd =
+        match unauthProjections with
+        | Some unauthProjections -> unauthProjections.FixturesProjection, Cmd.none
+        | None -> Pending, InitializeFixturesProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
 
     let unauthState = {
         CurrentUnauthPage = currentPage
         UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
-        UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection }
+        UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection ; FixturesProjection = fixturesProjection }
         SignInState = signInState }
     let usersProjectionUnauthCmd = InitializeUsersProjectionUnauthQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
     let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
-    let cmd = Cmd.batch [ usersProjectionUnauthCmd ; squadsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ]
+    let cmd = Cmd.batch [ usersProjectionUnauthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ]
     { state with AppState = Unauth unauthState }, cmd
 let private defaultChangePasswordState mustChangePasswordReason changePasswordStatus = {
     MustChangePasswordReason = mustChangePasswordReason
@@ -205,25 +196,11 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
 let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
     let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = UnauthPage NewsPage)
-    let currentSquadId = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState.CurrentSquadId | None -> None
-    let squadsState, squadsCmd = Squads.State.initialize currentSquadId
+    let squadsState, squadsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState, Cmd.none | None -> Squads.State.initialize None
 
     let tempScoresState = ()
 
-    let initializeFixturesState, fixturesState =
-        match unauthPageStates, currentPage with
-        | Some unauthPageStates, _ ->
-            match unauthPageStates.FixturesState, currentPage with
-            | Some fixturesState, _ -> false, fixturesState |> Some
-            | None, UnauthPage FixturesPage -> true, None
-            | None, _ -> false, None
-        | None, UnauthPage FixturesPage -> true, None
-        | None, _ -> false, None
-    let fixturesState, fixturesCmd =
-        if initializeFixturesState then
-            let fixturesState, fixturesCmd = Fixtures.State.initialize None
-            fixturesState |> Some, fixturesCmd
-        else fixturesState, Cmd.none
+    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
 
     let initializeUserAdminState = currentPage = AuthPage UserAdminPage
     let userAdminState, userAdminCmd =
@@ -243,6 +220,10 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         match unauthProjections with
         | Some unauthProjections -> unauthProjections.SquadsProjection, Cmd.none
         | None -> Pending, InitializeSquadsProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
+    let fixturesProjection, fixturesProjectionCmd =
+        match unauthProjections with
+        | Some unauthProjections -> unauthProjections.FixturesProjection, Cmd.none
+        | None -> Pending, InitializeFixturesProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
 
     let authState = {
         AuthUser = authUser
@@ -250,7 +231,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         CurrentPage = currentPage
         UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
         AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = tempDraftAdminState ; DraftsState = tempDraftsState ; ChatState = chatState }
-        UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection }
+        UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection ; FixturesProjection = fixturesProjection }
         AuthProjections = { DraftsProjection = Pending }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
@@ -267,7 +248,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
     let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-    let cmd = Cmd.batch [ usersProjectionAuthCmd ; squadsProjectionCmd ; draftsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; chatCmd ]
+    let cmd = Cmd.batch [ usersProjectionAuthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; draftsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; chatCmd ]
     { state with AppState = Auth authState }, cmd
 
 let initialize () =
@@ -533,6 +514,36 @@ let private applyPlayersDelta currentRvn deltaRvn (delta:Delta<PlayerId, PlayerD
     |> Result.bind (fun _ -> playerDic |> Ok)
 // #endregion
 
+// #region Fixture/s
+let private fixture (fixtureDto:FixtureDto) =
+    { Rvn = fixtureDto.Rvn ; Stage = fixtureDto.Stage ; HomeParticipant = fixtureDto.HomeParticipant ; AwayParticipant = fixtureDto.AwayParticipant ; KickOff = fixtureDto.KickOff }
+
+let private fixtureDic (fixtureDtos:FixtureDto list) =
+    let fixtureDic = FixtureDic ()
+    fixtureDtos |> List.iter (fun fixtureDto ->
+        let fixtureId = fixtureDto.FixtureId
+        if fixtureId |> fixtureDic.ContainsKey |> not then // note: silently ignore duplicate fixtureIds (should never happen)
+            (fixtureId, fixtureDto |> fixture) |> fixtureDic.Add)
+    fixtureDic
+
+let private applyFixturesDelta currentRvn deltaRvn (delta:Delta<FixtureId, FixtureDto>) (fixtureDic:FixtureDic) =
+    let fixtureDic = FixtureDic fixtureDic // note: copy to ensure that passed-in dictionary *not* modified if error
+    if deltaRvn |> validateNextRvn (currentRvn |> Some) then () |> Ok else (currentRvn, deltaRvn) |> MissedDelta |> Error
+    |> Result.bind (fun _ ->
+        let alreadyExist = delta.Added |> List.choose (fun (fixtureId, fixtureDto) -> if fixtureId |> fixtureDic.ContainsKey then (fixtureId, fixtureDto) |> Some else None)
+        if alreadyExist.Length = 0 then delta.Added |> List.iter (fun (fixtureId, fixtureDto) -> (fixtureId, fixtureDto |> fixture) |> fixtureDic.Add) |> Ok
+        else alreadyExist |> AddedAlreadyExist |> Error)
+    |> Result.bind (fun _ ->
+        let doNotExist = delta.Changed |> List.choose (fun (fixtureId, fixtureDto) -> if fixtureId |> fixtureDic.ContainsKey |> not then (fixtureId, fixtureDto) |> Some else None)
+        if doNotExist.Length = 0 then delta.Changed |> List.iter (fun (fixtureId, fixtureDto) -> fixtureDic.[fixtureId] <- (fixtureDto |> fixture)) |> Ok
+        else doNotExist |> ChangedDoNotExist |> Error)
+    |> Result.bind (fun _ ->
+        let doNotExist = delta.Removed |> List.choose (fun fixtureId -> if fixtureId |> fixtureDic.ContainsKey |> not then fixtureId |> Some else None)
+        if doNotExist.Length = 0 then delta.Removed |> List.iter (fixtureDic.Remove >> ignore) |> Ok
+        else doNotExist |> RemovedDoNotExist |> Error)
+    |> Result.bind (fun _ -> fixtureDic |> Ok)
+// #endregion
+
 let private handleServerAppMsg serverAppMsg state =
     match serverAppMsg, state.AppState, state.ConnectionState with
     | ServerUiMsgErrorMsg serverUiMsgError, _, _ ->
@@ -783,6 +794,72 @@ let private handleServerAppMsg serverAppMsg state =
                 state, Cmd.none
         | Pending | Failed -> // note: silently ignore SquadsDeltaMsg if not Ready
             state, Cmd.none
+    | InitializeFixturesProjectionQryResult result, Unauth unauthState, Connected _ ->
+        let unauthProjections = unauthState.UnauthProjections
+        match unauthProjections.FixturesProjection with
+        | Pending ->
+            let state, fixturesProjection =
+                match result with
+                | Ok fixtureDtos ->
+                    let fixtureDic = fixtureDtos |> fixtureDic
+                    state, (initialRvn, fixtureDic) |> Ready
+                | Error (OtherError errorText) ->
+                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed                   
+            let unauthProjections = { unauthProjections with FixturesProjection = fixturesProjection }
+            let unauthState = { unauthState with UnauthProjections = unauthProjections }
+            { state with AppState = Unauth unauthState }, Cmd.none
+        | Failed | Ready _ ->
+            state |> shouldNeverHappen (sprintf "Unexpected InitializeFixturesProjectionQryResult when not Pending -> %A" result)
+    | InitializeFixturesProjectionQryResult result, Auth authState, Connected _ ->
+        let unauthProjections = authState.UnauthProjections
+        match unauthProjections.FixturesProjection with
+        | Pending ->
+            let state, fixturesProjection =
+                match result with
+                | Ok fixtureDtos ->
+                    let fixtureDic = fixtureDtos |> fixtureDic
+                    state, (initialRvn, fixtureDic) |> Ready
+                | Error (OtherError errorText) ->
+                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed
+            let unauthProjections = { unauthProjections with FixturesProjection = fixturesProjection }
+            let authState = { authState with UnauthProjections = unauthProjections }
+            { state with AppState = Auth authState }, Cmd.none
+        | Failed | Ready _ ->
+            state |> shouldNeverHappen (sprintf "Unexpected InitializeFixturesProjectionQryResult when not Pending -> %A" result)
+    | FixturesProjectionMsg (FixturesDeltaMsg (deltaRvn, fixtureDtoDelta)), Unauth unauthState, Connected _ ->
+        let unauthProjections = unauthState.UnauthProjections
+        match unauthProjections.FixturesProjection with
+        | Ready (rvn, fixtureDic) ->
+            match fixtureDic |> applyFixturesDelta rvn deltaRvn fixtureDtoDelta with
+            | Ok fixtureDic ->
+                let unauthProjections = { unauthProjections with FixturesProjection = (deltaRvn, fixtureDic) |> Ready }
+                let unauthState = { unauthState with UnauthProjections = unauthProjections }
+                { state with AppState = Unauth unauthState }, Cmd.none
+            | Error error ->
+                let unauthProjections = { unauthProjections with FixturesProjection = Pending }
+                let unauthState = { unauthState with UnauthProjections = unauthProjections }
+                let fixturesProjectionCmd = InitializeFixturesProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
+                let state, shouldNeverHappenCmd = state |> shouldNeverHappen (sprintf "Unable to apply %A to %A -> %A" fixtureDtoDelta fixtureDic error)
+                { state with AppState = Unauth unauthState }, Cmd.batch [ fixturesProjectionCmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
+        | Pending | Failed -> // note: silently ignore FixturesDeltaMsg if not Ready
+            state, Cmd.none
+    | FixturesProjectionMsg (FixturesDeltaMsg (deltaRvn, fixtureDtoDelta)), Auth authState, Connected _ ->
+        let unauthProjections = authState.UnauthProjections
+        match unauthProjections.FixturesProjection with
+        | Ready (rvn, fixtureDic) ->
+            match fixtureDic |> applyFixturesDelta rvn deltaRvn fixtureDtoDelta with
+            | Ok fixtureDic ->
+                let unauthProjections = { unauthProjections with FixturesProjection = (deltaRvn, fixtureDic) |> Ready }
+                let authState = { authState with UnauthProjections = unauthProjections }
+                { state with AppState = Auth authState }, Cmd.none
+            | Error error ->
+                let unauthProjections = { unauthProjections with FixturesProjection = Pending }
+                let authState = { authState with UnauthProjections = unauthProjections }
+                let fixturesProjectionCmd = InitializeFixturesProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
+                let state, shouldNeverHappenCmd = state |> shouldNeverHappen (sprintf "Unable to apply %A to %A -> %A" fixtureDtoDelta fixtureDic error)
+                { state with AppState = Auth authState }, Cmd.batch [ fixturesProjectionCmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
+        | Pending | Failed -> // note: silently ignore FixturesDeltaMsg if not Ready
+            state, Cmd.none
     | InitializeDraftsProjectionQryResult result, Auth authState, Connected _ ->
         let authProjections = authState.AuthProjections
         match authProjections.DraftsProjection with
@@ -833,10 +910,6 @@ let private handleServerMsg serverMsg state =
         state, Cmd.none
     | ServerSquadsMsg serverSquadsMsg, Auth _ ->
         state, serverSquadsMsg |> ReceiveServerSquadsMsg |> SquadsInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | ServerFixturesMsg (InitializeFixturesProjectionQryResult result), Unauth _ ->
-        state, result |> InitializeFixturesProjectionQryResult |> ReceiveServerFixturesMsg |> FixturesInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
-    | ServerFixturesMsg (FixturesProjectionMsg fixturesProjectionMsg), Unauth _ ->
-        state, fixturesProjectionMsg |> FixturesProjectionMsg |> ReceiveServerFixturesMsg |> FixturesInput |> UnauthPageInput |> UnauthInput |> AppInput |> Cmd.ofMsg
     | ServerFixturesMsg _, Unauth _ -> // note: silently ignore ServerFixturesMsg/s if Unauth
         state, Cmd.none
     | ServerFixturesMsg serverFixturesMsg, Auth _ ->
@@ -875,18 +948,10 @@ let private handleUnauthInput unauthInput (unauthState:UnauthState) state =
                 if unauthPage <> NewsPage && unauthState.CurrentUnauthPage = NewsPage then false |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
                 else if unauthPage = NewsPage && unauthState.CurrentUnauthPage <> NewsPage then true |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
                 else Cmd.none
-            let fixturesState, fixturesCmd =
-                match unauthPage, unauthState.UnauthPageStates.FixturesState with
-                | FixturesPage, None ->
-                    let fixturesState, fixturesCmd = Fixtures.State.initialize None
-                    fixturesState |> Some, fixturesCmd
-                | _, _ -> unauthState.UnauthPageStates.FixturesState, Cmd.none
-            let unauthPageStates = { unauthState.UnauthPageStates with FixturesState = fixturesState }
-            let unauthState = { unauthState with CurrentUnauthPage = unauthPage ; UnauthPageStates = unauthPageStates }
+            let unauthState = { unauthState with CurrentUnauthPage = unauthPage }
             let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
-            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
             let state = { state with AppState = Unauth unauthState }
-            state, Cmd.batch [ newsCmd ; fixturesCmd ; state |> writePreferencesCmd ]
+            state, Cmd.batch [ newsCmd ; state |> writePreferencesCmd ]
         else state, Cmd.none
     | UnauthPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
@@ -920,21 +985,14 @@ let private handleUnauthInput unauthInput (unauthState:UnauthState) state =
         { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, squadsCmd
     | UnauthPageInput (FixturesInput (Fixtures.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
-    | UnauthPageInput (FixturesInput (Fixtures.Common.SendUiUnauthMsg uiUnauthMsg)), _ ->
-        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
-        state, cmd
     | UnauthPageInput (FixturesInput (Fixtures.Common.SendUiAuthMsg _)), _ ->
         state |> shouldNeverHappen "Unexpected FixturesInput SendUiAuthMsg when Unauth"
     | UnauthPageInput (FixturesInput fixturesInput), _ ->
-        match unauthState.UnauthPageStates.FixturesState with
-        | Some fixturesState ->
-            let fixturesState, fixturesCmd, _ = fixturesState |> Fixtures.State.transition fixturesInput
-            let unauthPageStates = { unauthState.UnauthPageStates with FixturesState = fixturesState |> Some }
-            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
-            { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, fixturesCmd
-        | None ->
-            let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput when UnauthPageStates.FixturesState is None"
-            state, cmd
+        let fixturesState = unauthState.UnauthPageStates.FixturesState
+        let fixturesState, fixturesCmd, _ = fixturesState |> Fixtures.State.transition fixturesInput unauthState.UnauthProjections.FixturesProjection
+        let unauthPageStates = { unauthState.UnauthPageStates with FixturesState = fixturesState }
+        let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
+        { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, fixturesCmd
     | ShowSignInModal, None ->
         let unauthState = { unauthState with SignInState = defaultSignInState None None |> Some }
         { state with AppState = Unauth unauthState }, Cmd.none
@@ -975,12 +1033,6 @@ let private handleAuthInput authInput authState state =
                     if page <> UnauthPage NewsPage && authState.CurrentPage = UnauthPage NewsPage then false |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
                     else if page = UnauthPage NewsPage && authState.CurrentPage <> UnauthPage NewsPage then true |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
                     else Cmd.none
-                let fixturesState, fixturesCmd =
-                    match page, authState.UnauthPageStates.FixturesState with
-                    | UnauthPage FixturesPage, None ->
-                        let fixturesState, fixturesCmd = Fixtures.State.initialize None
-                        fixturesState |> Some, fixturesCmd
-                    | _, _ -> authState.UnauthPageStates.FixturesState, Cmd.none
                 let userAdminState, userAdminCmd =
                     match page, authState.AuthPageStates.UserAdminState with
                     | AuthPage UserAdminPage, None ->
@@ -991,15 +1043,13 @@ let private handleAuthInput authInput authState state =
                     if page <> AuthPage ChatPage && authState.CurrentPage = AuthPage ChatPage then false |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else if page = AuthPage ChatPage && authState.CurrentPage <> AuthPage ChatPage then true |> ToggleChatIsCurrentPage |> Cmd.ofMsg
                     else Cmd.none
-                let unauthPageStates = { authState.UnauthPageStates with FixturesState = fixturesState }
                 let authPageStates = { authState.AuthPageStates with UserAdminState = userAdminState }
-                let authState = { authState with CurrentPage = page ; UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates }
+                let authState = { authState with CurrentPage = page ; AuthPageStates = authPageStates }
                 let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
-                let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
                 let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
                 let state = { state with AppState = Auth authState }
-                state, Cmd.batch [ newsCmd ; fixturesCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
+                state, Cmd.batch [ newsCmd ; userAdminCmd ; chatCmd ; state |> writePreferencesCmd ], true
         else state, Cmd.none, true
     | PageInput (UPageInput (NewsInput (News.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
@@ -1035,22 +1085,15 @@ let private handleAuthInput authInput authState state =
         { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, squadsCmd, isUserNonApiActivity
     | PageInput (UPageInput (FixturesInput (Fixtures.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
-    | PageInput (UPageInput (FixturesInput (Fixtures.Common.SendUiUnauthMsg uiUnauthMsg))), _, false ->
-        let cmd = uiUnauthMsg |> sendUnauthMsgCmd state.ConnectionState
-        state, cmd, false
     | PageInput (UPageInput (FixturesInput (Fixtures.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
         let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
         { state with AppState = Auth authState }, cmd, false
     | PageInput (UPageInput (FixturesInput fixturesInput)), _, _ ->
-        match authState.UnauthPageStates.FixturesState with
-        | Some fixturesState ->
-            let fixturesState, fixturesCmd, isUserNonApiActivity = fixturesState |> Fixtures.State.transition fixturesInput
-            let unauthPageStates = { authState.UnauthPageStates with FixturesState = fixturesState |> Some }
-            let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
-            { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, fixturesCmd, isUserNonApiActivity
-        | None ->
-            let state, cmd = state |> shouldNeverHappen "Unexpected FixturesInput when UnauthPageStates.FixturesState is None"
-            state, cmd, false
+        let fixturesState = authState.UnauthPageStates.FixturesState
+        let fixturesState, fixturesCmd, isUserNonApiActivity = fixturesState |> Fixtures.State.transition fixturesInput authState.UnauthProjections.FixturesProjection
+        let unauthPageStates = { authState.UnauthPageStates with FixturesState = fixturesState }
+        let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+        { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, fixturesCmd, isUserNonApiActivity
     | PageInput (APageInput (UserAdminInput (UserAdmin.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (APageInput (UserAdminInput (UserAdmin.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
