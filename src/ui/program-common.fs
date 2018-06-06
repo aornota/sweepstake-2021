@@ -1,14 +1,17 @@
 module Aornota.Sweepstake2018.UI.Program.Common
 
+open Aornota.Common.Revision
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.Notifications
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
@@ -97,6 +100,7 @@ type AppInput =
     | UnauthInput of unauthInput : UnauthInput
     | AuthInput of authInput : AuthInput
 
+// #region Input
 type Input =
 #if TICK
     | Tick
@@ -111,6 +115,7 @@ type Input =
     | WsError of wsError : WsError
     | HandleServerMsg of serverMsg : ServerMsg
     | AppInput of appInput : AppInput
+// #endregion
 
 type ConnectedState = {
     Ws : Brw.WebSocket // TODO-NMB-MEDIUM: Switch to using Fable.Websockets.Elmish?...
@@ -137,13 +142,18 @@ type SignInState = {
 
 type UnauthPageStates = {
     NewsState : News.Common.State
-    ScoresState : ToDo option
-    SquadsState : Squads.Common.State option
+    ScoresState : ToDo
+    SquadsState : Squads.Common.State
     FixturesState : Fixtures.Common.State option }
+
+type UnauthProjections = {
+    UsersProjection : Projection<Rvn * UserDic>
+    SquadsProjection : Projection<Rvn * SquadDic> }
 
 type UnauthState = {
     CurrentUnauthPage : UnauthPage
     UnauthPageStates : UnauthPageStates
+    UnauthProjections : UnauthProjections
     SignInState : SignInState option }
 
 type ChangePasswordStatus =
@@ -163,8 +173,10 @@ type ChangePasswordState = {
 type AuthPageStates = {
     UserAdminState : UserAdmin.Common.State option
     DraftAdminState : ToDo option
-    DraftsState : ToDo option
+    DraftsState : ToDo
     ChatState : Chat.Common.State }
+
+type AuthProjections = { DraftsProjection : Projection<CurrentDraftDto option> }
 
 type AuthState = {
     AuthUser : AuthUser
@@ -172,6 +184,8 @@ type AuthState = {
     CurrentPage : Page
     UnauthPageStates : UnauthPageStates
     AuthPageStates : AuthPageStates
+    UnauthProjections : UnauthProjections
+    AuthProjections : AuthProjections
     ChangePasswordState : ChangePasswordState option
     SigningOut : bool }
 

@@ -60,6 +60,11 @@ type AuthUser = {
     MustChangePasswordReason : MustChangePasswordReason option
     Jwt : Jwt }
 
+type UserUnauthDto = { UserId : UserId ; UserName : UserName }
+type UserAuthDto = { Rvn : Rvn ; UserType : UserType ; LastActivity : DateTimeOffset option }
+
+type UserDto = UserUnauthDto * UserAuthDto option
+
 let permissions userId userType =
     let changePasswordPermission = match userType with | SuperUser | Administrator | Pleb -> userId |> Some | PersonaNonGrata -> None
     let createUserPermission, resetPasswordPermission, changeUserTypePermission =

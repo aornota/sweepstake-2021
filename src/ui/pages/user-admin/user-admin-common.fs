@@ -1,7 +1,5 @@
 module Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
 
-open Aornota.Common.Revision
-
 open Aornota.UI.Common.Notifications
 
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -9,7 +7,6 @@ open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
 open System
-open System.Collections.Generic
 
 type CreateUsersInput =
     | NewUserNameTextChanged of newUserNameText : string
@@ -40,11 +37,6 @@ type Input =
     | ResetPasswordInput of resetPasswordInput : ResetPasswordInput
     | ShowChangeUserTypeModal of userId : UserId * userTypes : UserType list
     | ChangeUserTypeInput of changeUserTypeInput : ChangeUserTypeInput
-
-type User4Admin = { Rvn : Rvn ; UserName : UserName ; UserType : UserType ; LastActivity : DateTimeOffset option }
-type User4AdminDic = Dictionary<UserId, User4Admin>
-
-type UserAdminProjection = { Rvn : Rvn ; User4AdminDic : User4AdminDic }
 
 type CreateUserStatus =
     | CreateUserPending
@@ -88,19 +80,7 @@ type ChangeUserTypeState = {
     UserType : UserType option
     ChangeUserTypeStatus : ChangeUserTypeStatus option }
 
-type ActiveState = {
-    UserAdminProjection : UserAdminProjection
+type State = {
     CreateUsersState : CreateUsersState option
     ResetPasswordState : ResetPasswordState option
     ChangeUserTypeState : ChangeUserTypeState option }
-
-type ProjectionState =
-    | Initializing
-    | InitializationFailed
-    | Active of activeState : ActiveState
-
-type State = { 
-    AuthUser : AuthUser
-    ProjectionState : ProjectionState }
-
-let userNames (user4AdminDic:User4AdminDic) = user4AdminDic |> List.ofSeq |> List.map (fun (KeyValue (_, user4Admin)) -> user4Admin.UserName)

@@ -8,6 +8,7 @@ open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 open System.Collections.Generic
@@ -42,10 +43,8 @@ type Input =
     | ShowRemovePostModal of postId : PostId
     | RemovePostInput of removePostInput : RemovePostInput
 
-type Post = { Rvn : Rvn ; UserId : UserId ; UserName : UserName ; PostTypeDto : PostTypeDto ; Timestamp : DateTimeOffset ; Removed : bool }
+type Post = { Rvn : Rvn ; UserId : UserId ; PostTypeDto : PostTypeDto ; Timestamp : DateTimeOffset ; Removed : bool }
 type PostDic = Dictionary<PostId, Post>
-
-type NewsProjection = { Rvn : Rvn ; PostDic : PostDic }
 
 type AddPostStatus =
     | AddPostPending
@@ -75,20 +74,14 @@ type RemovePostState = {
     PostId : PostId    
     RemovePostStatus : RemovePostStatus option }
 
-type ActiveState = {
-    NewsProjection : NewsProjection
+type ReadyState = {
     HasMorePosts : bool
     MorePostsPending : bool
     AddPostState : AddPostState option
     EditPostState : EditPostState option
     RemovePostState : RemovePostState option }
 
-type ProjectionState =
-    | Initializing
-    | InitializationFailed
-    | Active of activeState : ActiveState
-
 type State = {
-    ProjectionState : ProjectionState
+    NewsProjection : Projection<Rvn * PostDic * ReadyState>
     IsCurrentPage : bool
     UnseenCount : int }

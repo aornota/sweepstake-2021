@@ -18,9 +18,7 @@ type PostTypeDto =
     | StandardDto of messageText : Markdown
     // TODO-SOON... | MatchResultDto of messageText : Markdown * matchResult : TBC
 
-type PostDto = { PostId : PostId ; Rvn : Rvn ; UserId : UserId ; UserName : UserName ; PostTypeDto : PostTypeDto ; Timestamp : DateTimeOffset }
-
-type NewsProjectionDto = { PostDtos : PostDto list }
+type PostDto = { PostId : PostId ; Rvn : Rvn ; UserId : UserId ; PostTypeDto : PostTypeDto ; Timestamp : DateTimeOffset }
 
 let [<Literal>] private MAX_NEWS_POST_LENGTH = 2000
 

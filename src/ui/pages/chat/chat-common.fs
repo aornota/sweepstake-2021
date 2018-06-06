@@ -9,6 +9,8 @@ open Aornota.Sweepstake2018.Common.Domain.Chat
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2018.UI.Shared
+
 
 open System
 open System.Collections.Generic
@@ -34,27 +36,16 @@ type NewChatMessageState = {
     NewMessageErrorText : string option
     SendChatMessageStatus : SendChatMessageStatus option }
 
-type ChatUser = { UserName : UserName ; LastActivity : DateTimeOffset option }
-type ChatUserDic = Dictionary<UserId, ChatUser>
-
 type ChatMessage = { UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset ; Expired : bool }
 type ChatMessageDic = Dictionary<ChatMessageId, ChatMessage>
 
-type ChatProjection = { Rvn : Rvn ; ChatUserDic : ChatUserDic ; ChatMessageDic : ChatMessageDic }
-
-type ActiveState = {
-    ChatProjection : ChatProjection
+type ReadyState = {
     HasMoreChatMessages : bool
     MoreChatMessagesPending : bool
     NewChatMessageState : NewChatMessageState }
 
-type ProjectionState =
-    | Initializing
-    | InitializationFailed
-    | Active of activeState : ActiveState
-
 type State = {
     AuthUser : AuthUser
-    ProjectionState : ProjectionState
+    ChatProjection : Projection<Rvn * ChatMessageDic * ReadyState>
     IsCurrentPage : bool
     UnseenCount : int }

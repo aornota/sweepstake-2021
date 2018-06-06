@@ -13,12 +13,12 @@ type Entity =
     | Drafts
 
 type Projection =
-    | UserAdmin
+    | Users
     | News
     | Squads
     | Fixtures
-    | Chat
     | Drafts
+    | Chat
   
 type Source =
     | ConsoleLogger
@@ -64,7 +64,7 @@ let private sourceTextAndColour source =
     | Entity entity ->
         let text =
             match entity with
-            | Users -> "Users"
+            | Entity.Users -> "Users"
             | Entity.News -> "News"
             | Entity.Squads -> "Squads"
             | Entity.Fixtures -> "Fixtures"
@@ -73,7 +73,7 @@ let private sourceTextAndColour source =
     | Projection projection ->
         let text =
             match projection with
-            | UserAdmin -> "UserAdmin"
+            | Projection.Users -> "Users"
             | Projection.News -> "News"
             | Projection.Squads -> "Squads"
             | Projection.Fixtures -> "Fixtures"

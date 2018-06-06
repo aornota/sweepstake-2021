@@ -6,14 +6,10 @@ open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
 
-type ChatUserDto = { UserId : UserId ; UserName : UserName ; LastActivity : DateTimeOffset option }
-
 type ChatMessageId = | ChatMessageId of guid : Guid with
     static member Create () = Guid.NewGuid () |> ChatMessageId
 
 type ChatMessageDto = { ChatMessageId : ChatMessageId ; UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
-
-type ChatProjectionDto = { ChatUserDtos : ChatUserDto list ; ChatMessageDtos : ChatMessageDto list }
 
 let [<Literal>] private MAX_CHAT_MESSAGE_LENGTH = 2000
 

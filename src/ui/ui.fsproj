@@ -38,6 +38,7 @@
     <Compile Include="../ui-common/render-markdown.fs" />
     <Compile Include="../ui-common/notifications.fs" />
     <Compile Include="../ui-common/toasts.fs" />
+    <Compile Include="ui-shared.fs" />
     <Compile Include="pages/user-admin/user-admin-common.fs" />
     <Compile Include="pages/user-admin/user-admin-state.fs" />
     <Compile Include="pages/user-admin/user-admin-render.fs" />

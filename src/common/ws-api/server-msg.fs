@@ -10,7 +10,6 @@ open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.Domain.UserAdmin
 
 open System
 
@@ -51,6 +50,19 @@ type AutoSignOutReason =
     | PasswordReset
     | PermissionsChanged of isPersonaNonGrata : bool
 
+type UsersProjectionMsg =
+    | UsersDeltaUnauthMsg of deltaRvn : Rvn * delta : Delta<UserId, UserUnauthDto>
+    | UsersDeltaAuthMsg of deltaRvn : Rvn * delta : Delta<UserId, UserDto>
+    | UserSignedInAuthMsg of userName : UserName
+    | UserSignedOutAuthMsg of userName : UserName
+
+type SquadsProjectionMsg =
+    | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
+    | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
+
+type DraftsProjectionMsg =
+    | CurrentDraftChangedMsg of currentDraftDto : CurrentDraftDto option
+
 type ServerAppMsg =
     | ServerUiMsgErrorMsg of serverUiMsgError : ServerUiMsgError
     | ConnectedMsg of startedOffset : DateTimeOffset * otherConnectionCount : int * signedInUserCount : int
@@ -59,44 +71,42 @@ type ServerAppMsg =
     | ChangePasswordCmdResult of result : Result<Rvn, AuthCmdError<string>>
     | SignOutCmdResult of result : Result<unit, AuthCmdError<string>>
     | AutoSignOutMsg of reason : AutoSignOutReason option
-
-type UserAdminProjectionMsg = | Users4AdminDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, User4AdminDto>
+    | InitializeUsersProjectionUnauthQryResult of result : Result<UserUnauthDto list, OtherError<string>>
+    | InitializeUsersProjectionAuthQryResult of result : Result<UserDto list, AuthQryError<string>>
+    | UsersProjectionMsg of usersProjectionMsg : UsersProjectionMsg
+    | InitializeSquadsProjectionQryResult of result : Result<SquadDto list, OtherError<string>>
+    | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
+    | InitializeDraftsProjectionQryResult of result : Result<CurrentDraftDto option, AuthQryError<string>>
+    | DraftsProjectionMsg of draftsProjectionMsg : DraftsProjectionMsg
 
 type ServerUserAdminMsg =
-    | InitializeUserAdminProjectionQryResult of result : Result<UserAdminProjectionDto, AuthQryError<string>>
     | CreateUserCmdResult of result : Result<UserName, AuthCmdError<string>>
     | ResetPasswordCmdResult of result : Result<UserName, AuthCmdError<string>>
     | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
-    | UserAdminProjectionMsg of userAdminProjectionMsg : UserAdminProjectionMsg
 
-type ServerDraftAdminMsg = | ProcessDraftCmdResult of result : Result<unit, AuthCmdError<string>>
+type ServerDraftAdminMsg =
+    | ProcessDraftCmdResult of result : Result<unit, AuthCmdError<string>>
 
-type NewsProjectionMsg = | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
+type NewsProjectionMsg =
+    | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
 
 type ServerNewsMsg =
-    | InitializeNewsProjectionQryResult of result : Result<NewsProjectionDto * bool, OtherError<string>>
+    | InitializeNewsProjectionQryResult of result : Result<PostDto list * bool, OtherError<string>>
     | MorePostsQryResult of result : Result<Rvn * PostDto list * bool, OtherError<string>>
     | CreatePostCmdResult of result : Result<unit, AuthCmdError<string>>
     | ChangePostCmdResult of result : Result<unit, AuthCmdError<string>>
     | RemovePostCmdResult of result : Result<unit, AuthCmdError<string>>
     | NewsProjectionMsg of newsProjectionMsg : NewsProjectionMsg
 
-type SquadsProjectionMsg =
-    | SquadsDeltaMsg of deltaRvn : Rvn * delta : Delta<SquadId, SquadOnlyDto>
-    | PlayersDeltaMsg of deltaRvn : Rvn * squadId : SquadId * squadRvn : Rvn * Delta<PlayerId, PlayerDto>
-    | CurrentDraftChangedMsg of currentDraftDto : CurrentDraftDto option
-
 type ServerSquadsMsg =
-    | InitializeSquadsProjectionUnauthQryResult of result : Result<SquadsProjectionDto, OtherError<string>>
-    | InitializeSquadsProjectionAuthQryResult of result : Result<SquadsProjectionDto * CurrentDraftDto option, AuthQryError<string>>
     | AddPlayerCmdResult of result : Result<Rvn * PlayerName, AuthCmdError<string>>
     | ChangePlayerNameCmdResult of result : Result<PlayerName * PlayerName, AuthCmdError<string>>
     | ChangePlayerTypeCmdResult of result : Result<PlayerName, AuthCmdError<string>>
     | WithdrawPlayerCmdResult of result : Result<PlayerName, AuthCmdError<string>>
     | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
-    | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
 
-type FixturesProjectionMsg = | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
+type FixturesProjectionMsg =
+    | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
 
 type ServerFixturesMsg =
     | InitializeFixturesProjectionQryResult of result : Result<FixturesProjectionDto, OtherError<string>>
@@ -104,13 +114,10 @@ type ServerFixturesMsg =
     | FixturesProjectionMsg of fixturesProjectionMsg : FixturesProjectionMsg
 
 type ChatProjectionMsg =
-    | ChatUsersDeltaMsg of deltaRvn : Rvn * delta : Delta<UserId, ChatUserDto>
     | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto> * hasMoreChatMessages : bool
-    | UserSignedInMsg of userName : UserName
-    | UserSignedOutMsg of userName : UserName
 
 type ServerChatMsg =
-    | InitializeChatProjectionQryResult of result : Result<ChatProjectionDto * bool, AuthQryError<string>>
+    | InitializeChatProjectionQryResult of result : Result<ChatMessageDto list * bool, AuthQryError<string>>
     | MoreChatMessagesQryResult of result : Result<Rvn * ChatMessageDto list * bool, AuthQryError<string>>
     | SendChatMessageCmdResult of result : Result<unit, AuthCmdError<string>>
     | ChatProjectionMsg of chatProjectionMsg : ChatProjectionMsg

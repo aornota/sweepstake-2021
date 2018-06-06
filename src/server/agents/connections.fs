@@ -313,6 +313,38 @@ type Connections () =
                         result |> logResult source (fun authUser -> sprintf "%A %A" authUser.UserName authUser.UserId |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)
                     do! (connectionDic, signedInUserDic) |> ifNoSignedInSession source connectionId fWithWs
                     return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiUnauthMsg (UiUnauthAppMsg InitializeUsersProjectionUnauthQry) ->
+                    let source = "InitializeUsersProjectionUnauthQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.Users.users.HandleInitializeUsersProjectionUnauthQryAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeUsersProjectionUnauthQryResult |> ServerAppMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun userDtos -> sprintf "%i user/s" userDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiUnauthMsg (UiUnauthAppMsg InitializeSquadsProjectionQry) ->
+                    let source = "InitializeSquadsProjectionQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithWs = (fun _ -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
+                            else () |> Ok
+                        let! result =
+                            match result with
+                            | Ok _ -> connectionId |> Projections.Squads.squads.HandleInitializeSquadsProjectionQryAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeSquadsProjectionQryResult |> ServerAppMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun squadDtos -> sprintf "%i squad/s" squadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
+                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthNewsMsg InitializeNewsProjectionQry) ->
                     let source = "InitializeNewsProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
@@ -322,11 +354,11 @@ type Connections () =
                             else () |> Ok
                         let! result =
                             match result with
-                            | Ok _ -> connectionId |> Projections.News.news.HandleInitializeNewsProjectionQry
+                            | Ok _ -> connectionId |> Projections.News.news.HandleInitializeNewsProjectionQryAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeNewsProjectionQryResult |> ServerNewsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun (newsProjectionDto, _) -> sprintf "%i post/s" newsProjectionDto.PostDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        result |> logResult source (fun (postDtos, hasMorePosts) -> sprintf "%i post/s (%b)" postDtos.Length hasMorePosts |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
                     return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthNewsMsg MorePostsQry) ->
@@ -338,27 +370,11 @@ type Connections () =
                             else () |> Ok
                         let! result =
                             match result with
-                            | Ok _ -> connectionId |> Projections.News.news.HandleMorePostsQry
+                            | Ok _ -> connectionId |> Projections.News.news.HandleMorePostsQryAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> MorePostsQryResult |> ServerNewsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun (_, postDtos, _) -> sprintf "%i post/s" postDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
-                    do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
-                    return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiUnauthMsg (UiUnauthSquadsMsg InitializeSquadsProjectionUnauthQry) ->
-                    let source = "InitializeSquadsProjectionUnauthQry"
-                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
-                    let fWithWs = (fun _ -> async {
-                        let result =
-                            if debugFakeError () then sprintf "Fake %s error -> %A" source connectionId |> OtherError |> Error
-                            else () |> Ok
-                        let! result =
-                            match result with
-                            | Ok _ -> connectionId |> Projections.Squads.squads.HandleInitializeSquadsProjectionUnauthQry
-                            | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> InitializeSquadsProjectionUnauthQryResult |> ServerSquadsMsg
-                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun squadsProjectionDto -> sprintf "%i squad/s" squadsProjectionDto.SquadDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        result |> logResult source (fun (_, postDtos, hasMorePosts) -> sprintf "%i post/s (%b)" postDtos.Length hasMorePosts |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifConnection source connectionId fWithWs
                     return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiUnauthMsg (UiUnauthFixturesMsg InitializeFixturesProjectionQry) ->
@@ -370,7 +386,7 @@ type Connections () =
                             else () |> Ok
                         let! result =
                             match result with
-                            | Ok _ -> connectionId |> Projections.Fixtures.fixtures.HandleInitializeFixturesProjectionQry
+                            | Ok _ -> connectionId |> Projections.Fixtures.fixtures.HandleInitializeFixturesProjectionQryAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeFixturesProjectionQryResult |> ServerFixturesMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
@@ -421,8 +437,25 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthUserAdminMsg InitializeUserAdminProjectionQry) ->
-                    let source = "InitializeUserAdminProjectionQry"
+                | UiAuthMsg (jwt, UiAuthAppMsg InitializeUsersProjectionAuthQry) ->
+                    let source = "InitializeUsersProjectionAuthQry"
+                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
+                    let fWithConnection = (fun (_, (userId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthQryError |> Error
+                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok _ ->
+                                (connectionId, userId) |> Projections.Users.users.HandleInitializeUsersProjectionAuthQryAsync
+                            | Error error -> error |> Error |> thingAsync
+                        let serverMsg = result |> InitializeUsersProjectionAuthQryResult |> ServerAppMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (fun userDtos -> sprintf "%i user/s" userDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiAuthMsg (jwt, UiAuthAppMsg InitializeDraftsProjectionQry) ->
+                    let source = "InitializeDraftsProjectionQry"
                     sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
                     let fWithConnection = (fun (_, (userId, _)) -> async {
                         let result =
@@ -431,14 +464,13 @@ type Connections () =
                         let! result =
                             match result with
                             | Ok userTokens ->
-                                match userTokens.UserAdminProjectionQryToken with
-                                | Some userAdminProjectionQryToken ->
-                                    (userAdminProjectionQryToken, connectionId) |> Projections.UserAdmin.userAdmin.HandleInitializeUserAdminProjectionQry
+                                match userTokens.DraftToken with
+                                | Some draftToken -> (draftToken, connectionId, userId) |> Projections.Drafts.drafts.HandleInitializeDraftsProjectionQryAsync
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> InitializeUserAdminProjectionQryResult |> ServerUserAdminMsg
+                        let serverMsg = result |> InitializeDraftsProjectionQryResult |> ServerAppMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun userAdminProjectionDto -> sprintf "%i user/s" userAdminProjectionDto.User4AdminDtos.Length |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthUserAdminMsg (CreateUserCmd (userId, userName, password, userType))) ->
@@ -587,26 +619,6 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthSquadsMsg InitializeSquadsProjectionAuthQry) ->
-                    let source = "InitializeSquadsProjectionAuthQry"
-                    sprintf "%s when managingConnections (%i connection/s) (%i signed-in user/s)" source connectionDic.Count signedInUserDic.Count |> Verbose |> log               
-                    let fWithConnection = (fun (_, (userId, _)) -> async {
-                        let result =
-                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthQryError |> Error
-                            else signedInUserDic |> tokensForAuthQryApi source userId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
-                        let! result =
-                            match result with
-                            | Ok userTokens ->
-                                match userTokens.SquadsProjectionAuthQryToken with
-                                | Some squadsProjectionAuthQryToken ->
-                                    (squadsProjectionAuthQryToken, connectionId, userId) |> Projections.Squads.squads.HandleInitializeSquadsProjectionAuthQry
-                                | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
-                            | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> InitializeSquadsProjectionAuthQryResult |> ServerSquadsMsg
-                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (fun (squadsProjectionDto, currentDraftDto) -> sprintf "%i squad/s (%A)" squadsProjectionDto.SquadDtos.Length currentDraftDto |> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
-                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
-                    return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthSquadsMsg (AddPlayerCmd (squadId, currentRvn, playerId, playerName, playerType))) ->
                     let source = "AddPlayerCmd"
                     sprintf "%s (%A %A %A) for %A (%A) when managingConnections (%i connection/s) (%i signed-in user/s)" source playerId playerName playerType squadId currentRvn connectionDic.Count signedInUserDic.Count |> Verbose |> log
@@ -738,7 +750,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleInitializeChatProjectionQry
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleInitializeChatProjectionQryAsync
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeChatProjectionQryResult |> ServerChatMsg
@@ -757,7 +769,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleMoreChatMessagesQry
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleMoreChatMessagesQryAsync
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> MoreChatMessagesQryResult |> ServerChatMsg
@@ -776,7 +788,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some sendChatMessageToken -> (sendChatMessageToken, userId, chatMessageId, messageText) |> chat.HandleSendChatMessageCmd
+                                | Some sendChatMessageToken -> (sendChatMessageToken, userId, chatMessageId, messageText) |> chat.HandleSendChatMessageCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> SendChatMessageCmdResult |> ServerChatMsg

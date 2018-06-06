@@ -15,6 +15,7 @@ open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
@@ -349,12 +350,14 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, curre
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
+// #region withdrawnAgo
 let private withdrawnAgo (timestamp:DateTime) =
 #if TICK
     timestamp |> ago
 #else
     sprintf "on %s" (timestamp |> dateAndTimeText)
 #endif
+// #endregion
 
 let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch =
     let theme = getTheme useDefaultTheme
@@ -445,42 +448,41 @@ let private addPlayers theme squadId squad authUser dispatch =
         | None -> None
     | _, _ -> None
 
-let render (useDefaultTheme, state, authUser:AuthUser option, hasModal) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraftDto:CurrentDraftDto option, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "Squads" ] |> para theme paraCentredSmall
         yield hr theme false
-        match state.ProjectionState with
-        | Initializing _ ->
+        match squadsProjection with
+        | Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed -> // note: should never happen
+        | Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Active activeState ->
-            let squadDic, currentSquadId = activeState.SquadsProjection.SquadDic, activeState.CurrentSquadId
+        | Ready (_, squadDic) ->
+            let currentSquadId = state.CurrentSquadId
             let currentGroup = squadDic |> group currentSquadId
             let groupTabs = groups |> List.map (groupTab currentGroup dispatch)
             let squadTabs = squadDic |> squadTabs currentSquadId dispatch
-            match hasModal, activeState.AddPlayersState with
+            match hasModal, state.AddPlayersState with
             | false, Some addPlayersState ->
                 yield div divDefault [ lazyViewOrHMR2 renderAddPlayersModal (useDefaultTheme, squadDic, addPlayersState) (AddPlayersInput >> dispatch) ]
             | _ -> ()
-            match hasModal, activeState.ChangePlayerNameState with
+            match hasModal, state.ChangePlayerNameState with
             | false, Some changePlayerNameState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangePlayerNameModal (useDefaultTheme, squadDic, changePlayerNameState) (ChangePlayerNameInput >> dispatch) ]
             | _ -> ()
-            match hasModal, activeState.ChangePlayerTypeState with
+            match hasModal, state.ChangePlayerTypeState with
             | false, Some changePlayerTypeState ->
                 yield div divDefault [ lazyViewOrHMR2 renderChangePlayerTypeModal (useDefaultTheme, squadDic, changePlayerTypeState) (ChangePlayerTypeInput >> dispatch) ]
             | _ -> ()
-            match hasModal, activeState.WithdrawPlayerState with
+            match hasModal, state.WithdrawPlayerState with
             | false, Some withdrawPlayerState ->
                 yield div divDefault [ lazyViewOrHMR2 renderWithdrawPlayerModal (useDefaultTheme, squadDic, withdrawPlayerState) (WithdrawPlayerInput >> dispatch) ]
             | _ -> ()           
-            match hasModal, activeState.EliminateSquadState with
+            match hasModal, state.EliminateSquadState with
             | false, Some eliminateSquadState ->
                 yield div divDefault [ lazyViewOrHMR2 renderEliminateSquadModal (useDefaultTheme, squadDic, eliminateSquadState) (EliminateSquadInput >> dispatch) ]
             | _ -> ()
-            // TODO-NMB-MEDIUM: Search box (e.g. for drafting)?...
             yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             match squadTabs with
             | _ :: _ ->
@@ -489,8 +491,7 @@ let render (useDefaultTheme, state, authUser:AuthUser option, hasModal) dispatch
             match currentSquadId with
             | Some currentSquadId when currentSquadId |> squadDic.ContainsKey ->
                 let squad = squadDic.[currentSquadId]
-                let currentDraftDto = activeState.CurrentDraftDto
-                let currentDraftPicks = activeState.CurrentDraftPicks
+                let currentDraftPicks = state.CurrentDraftPicks
                 yield br
                 yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch
                 yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch

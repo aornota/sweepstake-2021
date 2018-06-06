@@ -8,8 +8,6 @@ type ChangePasswordToken private (userId) =
     new (_:MetaToken, userId:UserId) = ChangePasswordToken userId
     member __.UserId = userId
 
-type UserAdminProjectionQryToken private () =
-    new (_:MetaToken) = UserAdminProjectionQryToken ()   
 type CreateUserToken private (userTypes) =
     new (_:MetaToken, userTypes:UserType list) = CreateUserToken userTypes
     member __.UserTypes = userTypes
@@ -58,7 +56,6 @@ type ChatToken private () =
 
 type private ValidatedUserTokens = {
     ChangePasswordToken : ChangePasswordToken option
-    UserAdminProjectionQryToken : UserAdminProjectionQryToken option
     CreateUserToken : CreateUserToken option
     ResetPasswordToken : ResetPasswordToken option
     ChangeUserTypeToken : ChangeUserTypeToken option
@@ -79,10 +76,9 @@ type private ValidatedUserTokens = {
 type UserTokens private (vut:ValidatedUserTokens) =
     new (permissions:Permissions) =
         let changePasswordToken = match permissions.ChangePasswordPermission with | Some userId -> (MetaToken, userId) |> ChangePasswordToken |> Some | None -> None
-        let userAdminProjectionQryToken, createUserToken, resetPasswordToken, changeUserTypeToken =
+        let createUserToken, resetPasswordToken, changeUserTypeToken =
             match permissions.UserAdminPermissions with
             | Some userAdminPermissions ->
-                let userAdminProjectionQryToken = MetaToken |> UserAdminProjectionQryToken |> Some
                 let createUserToken = (MetaToken, userAdminPermissions.CreateUserPermission) |> CreateUserToken |> Some
                 let resetPasswordToken =
                     match userAdminPermissions.ResetPasswordPermission with
@@ -92,8 +88,8 @@ type UserTokens private (vut:ValidatedUserTokens) =
                     match userAdminPermissions.ChangeUserTypePermission with
                     | Some (userTarget, userTypes) -> (MetaToken, userTarget, userTypes) |> ChangeUserTypeToken |> Some
                     | None -> None
-                userAdminProjectionQryToken, createUserToken, resetPasswordToken, changeUserTypeToken
-            | None -> None, None, None, None
+                createUserToken, resetPasswordToken, changeUserTypeToken
+            | None -> None, None, None
         let draftAdminToken = if permissions.DraftAdminPermission then MetaToken |> DraftAdminToken |> Some else None
         let resultsAdminToken = if permissions.ResultsAdminPermission then MetaToken |> ResultsAdminToken |> Some else None
         let createPostToken, editOrRemovePostToken =
@@ -124,7 +120,6 @@ type UserTokens private (vut:ValidatedUserTokens) =
         let chatToken = if permissions.ChatPermission then MetaToken |> ChatToken |> Some else None
         UserTokens {
             ChangePasswordToken = changePasswordToken
-            UserAdminProjectionQryToken = userAdminProjectionQryToken
             CreateUserToken = createUserToken
             ResetPasswordToken = resetPasswordToken
             ChangeUserTypeToken = changeUserTypeToken
@@ -142,7 +137,6 @@ type UserTokens private (vut:ValidatedUserTokens) =
             DraftToken = draftToken
             ChatToken = chatToken }
     member __.ChangePasswordToken = vut.ChangePasswordToken
-    member __.UserAdminProjectionQryToken = vut.UserAdminProjectionQryToken
     member __.CreateUserToken = vut.CreateUserToken
     member __.ResetPasswordToken = vut.ResetPasswordToken
     member __.ChangeUserTypeToken = vut.ChangeUserTypeToken

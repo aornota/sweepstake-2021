@@ -17,6 +17,7 @@ open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Program.Common
 open Aornota.Sweepstake2018.UI.Program.Markdown.Literals
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
@@ -65,6 +66,7 @@ let private headerPages (appState:AppState) =
         ]
     | ReadingPreferences | Connecting _ | ServiceUnavailable | AutomaticallySigningIn _ -> []
 
+// #region renderHeader
 let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:DateTimeOffset option, headerStatus, headerPages, _:int<tick>) dispatch =
     let isAdminPage page = match page with | AuthPage UserAdminPage | AuthPage DraftAdminPage -> true | _ -> false
     let theme = getTheme useDefaultTheme
@@ -173,6 +175,7 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
                     navbarItem [ [ str (DateTimeOffset.UtcNow.LocalDateTime.ToString ("HH:mm:ss")) ] |> para theme { paraDefaultSmallest with ParaColour = GreyscalePara GreyDarker } ]
 #endif
                     navbarItem [ [] |> button theme toggleThemeButton ] ] ] ] ]
+// #endregion
 
 let private renderStaticModal (useDefaultTheme, titleText, markdown) dispatch =
     let theme = getTheme useDefaultTheme
@@ -218,14 +221,16 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Sign in" ] |> button theme { buttonLinkSmall with Interaction = signInInteraction } ] ]
     cardModal theme [ [ bold "Sign in" ] |> para theme paraCentredSmall ] onDismiss body
 
-// TEMP-NMB...
+// #region TEMP-NMB...renderScores
 let private renderScores useDefaultTheme =
     let theme = getTheme useDefaultTheme
     columnContent [ [ bold "Scores" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-// ...NMB-TEMP
+// #endregion
 
 let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (dispatch:UnauthInput -> unit) =
     let hasModal = if hasStaticModal then true else match unauthState.SignInState with | Some _ -> true | None -> false
+    let usersProjection = unauthState.UnauthProjections.UsersProjection
+    let squadsProjection = unauthState.UnauthProjections.SquadsProjection
     div divDefault [
         match hasStaticModal, unauthState.SignInState with
         | false, Some signInState ->
@@ -234,24 +239,16 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
         match unauthState.CurrentUnauthPage with
         | NewsPage ->
             let newsState = unauthState.UnauthPageStates.NewsState
-            yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, usersProjection, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
 
         | ScoresPage ->
-            match unauthState.UnauthPageStates.ScoresState with
-            | Some _scoresState ->
-                yield renderScores useDefaultTheme
-                // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UnauthPageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage ScoresPage when UnauthPageStates.ScoresState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let _scoresState = unauthState.UnauthPageStates.ScoresState
+            yield renderScores useDefaultTheme
+            // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UnauthPageInput >> dispatch)
 
         | SquadsPage ->
-            match unauthState.UnauthPageStates.SquadsState with
-            | Some squadsState ->
-                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let squadsState = unauthState.UnauthPageStates.SquadsState
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
             match unauthState.UnauthPageStates.FixturesState with
             | Some fixturesState ->
@@ -306,17 +303,19 @@ let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
     cardModal theme [ [ bold "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
 
-// TEMP-NMB...
+// #region TEMP-NMB...renderScores | renderDrafts
 let private renderDraftAdmin useDefaultTheme =
     let theme = getTheme useDefaultTheme
     columnContent [ [ bold "Draft administration" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 let private renderDrafts useDefaultTheme =
     let theme = getTheme useDefaultTheme
     columnContent [ [ bold "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-// ...NMB-TEMP
+// #endregion
 
 let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispatch =
     let hasModal = if hasStaticModal then true else match authState.ChangePasswordState, authState.SigningOut with | Some _, _ -> true | None, true -> true | None, false -> false
+    let usersProjection = authState.UnauthProjections.UsersProjection
+    let squadsProjection = authState.UnauthProjections.SquadsProjection
     div divDefault [
         match hasStaticModal, authState.ChangePasswordState with
         | false, Some changePasswordState ->
@@ -329,24 +328,18 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         match authState.CurrentPage with
         | UnauthPage NewsPage ->
             let newsState = authState.UnauthPageStates.NewsState
-            yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, usersProjection, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
 
         | UnauthPage ScoresPage ->
-            match authState.UnauthPageStates.ScoresState with
-            | Some _scoresState ->
-                yield renderScores useDefaultTheme
-                // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UPageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage ScoresPage when UnauthPageStates.ScoresState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let _scoresState = authState.UnauthPageStates.ScoresState
+            yield renderScores useDefaultTheme
+            // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UPageInput >> PageInput >> dispatch)
 
         | UnauthPage SquadsPage ->
-            match authState.UnauthPageStates.SquadsState with
-            | Some squadsState ->
-                yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authState.AuthUser |> Some, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is UnauthPage SquadsPage when UnauthPageStates.SquadsState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let squadsState = authState.UnauthPageStates.SquadsState
+            let authUser = authState.AuthUser |> Some
+            let currentDraftDto = match authState.AuthProjections.DraftsProjection with | Ready currentDraftDto -> currentDraftDto | Pending | Failed -> None
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraftDto, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
             match authState.UnauthPageStates.FixturesState with
             | Some fixturesState ->
@@ -367,22 +360,19 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | AuthPage UserAdminPage ->
             match authState.AuthPageStates.UserAdminState with
             | Some userAdminState ->
-                yield lazyViewOrHMR2 UserAdmin.Render.render (useDefaultTheme, userAdminState, hasModal) (UserAdminInput >> APageInput >> PageInput >> dispatch)
+                yield lazyViewOrHMR2 UserAdmin.Render.render (useDefaultTheme, userAdminState, authState.AuthUser, usersProjection, hasModal) (UserAdminInput >> APageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage UserAdminPage when AuthPageStates.UserAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
 
         | AuthPage DraftsPage ->
-            match authState.AuthPageStates.DraftsState with
-            | Some _draftsState ->
-                yield renderDrafts useDefaultTheme
-               // TODO-SOON...  yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, hasModal) (DraftsInput >> APageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is AuthPage DraftsPage when AuthPageStates.DraftsState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
+            let _draftsState = authState.AuthPageStates.DraftsState
+            yield renderDrafts useDefaultTheme
+            // TODO-SOON...  yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, hasModal) (DraftsInput >> APageInput >> PageInput >> dispatch)
 
         | AuthPage ChatPage ->
-            yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, authState.AuthPageStates.ChatState, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]
+            let chatState = authState.AuthPageStates.ChatState
+            yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, usersProjection, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]
 
 let private renderContent state dispatch =
     let renderSpinner () = div divCentred [ icon iconSpinnerPulseLarge ]
@@ -435,3 +425,20 @@ let render state dispatch =
         yield lazyViewOrHMR2 renderNotificationMessages (state.UseDefaultTheme, SWEEPSTAKE_2018, state.NotificationMessages, state.Ticks) (DismissNotificationMessage >> dispatch)
         yield renderContent state dispatch // note: renderContent has its own lazyViewOrHMR[n] handling
         yield lazyViewOrHMR renderFooter state.UseDefaultTheme ]
+
+(*let private draftNotificationMessage currentDraftDto =
+    match currentDraftDto with
+    | Some currentDraftDto ->
+        let draftTextLower = currentDraftDto.DraftOrdinal |> draftTextLower
+        let text =
+            match currentDraftDto.DraftStatusDto with
+            | PendingOpenDto (starts, ends) ->
+                let starts, ends = starts.LocalDateTime, ends.LocalDateTime
+                sprintf "The %s will open on %s and will close on %s" draftTextLower (starts |> dateAndTimeText) (ends |> dateAndTimeText)
+            | OpenedDto ends ->
+                let ends = ends.LocalDateTime
+                sprintf "The %s is now open and will close on %s" draftTextLower (ends |> dateAndTimeText)
+            | PendingProcessingDto -> sprintf "The %s will be processed soon" draftTextLower
+            | FreeSelectionDto -> "There are no further drafts; please pick team/coach | goalkeeper | outfield players (as required)" // TODO-SOON: Finesse this...
+        infoMessage text false |> Some
+    | None -> None*)

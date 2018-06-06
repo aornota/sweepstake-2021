@@ -136,37 +136,37 @@ type Fixtures () =
             let! input = inbox.Receive ()
             match input with
             | Start reply ->
-                "Start when awaitingStart -> pendingAllRead (0 users) (0 posts) (0 projectees)" |> Info |> log
+                "Start when awaitingStart -> pendingFixturesRead (0 users) (0 posts) (0 projectees)" |> Info |> log
                 () |> reply.Reply
-                return! pendingAllRead None None
+                return! pendingFixturesRead None None
             | OnSquadsRead _ -> "OnSquadsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnFixturesRead _ -> "OnFixturesRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnParticipantConfirmed _ -> "OnParticipantConfirmed when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnections _ -> "RemoveConnections when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and pendingAllRead squadsRead fixturesRead = async {
+        and pendingFixturesRead squadsRead fixturesRead = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead fixturesRead
+            | Start _ -> "Start when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
             | OnSquadsRead squadsRead ->
                 let source = "OnSquadsRead"
-                sprintf "%s (%i squads/s) when pendingAllRead" source squadsRead.Length |> Info |> log
+                sprintf "%s (%i squads/s) when pendingFixturesRead" source squadsRead.Length |> Info |> log
                 let squads = squadsRead |> Some
                 match (squads, fixturesRead) |> ifAllRead source with
                 | Some (state, squadDic, fixtureDic, projecteeDic) ->
                     return! projectingFixtures state squadDic fixtureDic projecteeDic
-                | None -> return! pendingAllRead squads fixturesRead
+                | None -> return! pendingFixturesRead squads fixturesRead
             | OnFixturesRead fixturesRead ->
                 let source = "OnFixturesRead"
-                sprintf "%s (%i fixture/s) when pendingAllRead" source fixturesRead.Length |> Info |> log
+                sprintf "%s (%i fixture/s) when pendingFixturesRead" source fixturesRead.Length |> Info |> log
                 let fixtures = fixturesRead |> Some
                 match (squadsRead, fixtures) |> ifAllRead source with
                 | Some (state, squadDic, fixtureDic, projecteeDic) ->
                     return! projectingFixtures state squadDic fixtureDic projecteeDic
-                | None -> return! pendingAllRead squadsRead fixtures
-            | OnParticipantConfirmed _ -> "OnParticipantConfirmed when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead fixturesRead
-            | RemoveConnections _ -> "RemoveConnections when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead fixturesRead
-            | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead fixturesRead }
+                | None -> return! pendingFixturesRead squadsRead fixtures
+            | OnParticipantConfirmed _ -> "OnParticipantConfirmed when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
+            | RemoveConnections _ -> "RemoveConnections when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead
+            | HandleInitializeFixturesProjectionQry _ -> "HandleInitializeFixturesProjectionQry when pendingFixturesRead" |> IgnoredInput |> Agent |> log ; return! pendingFixturesRead squadsRead fixturesRead }
         and projectingFixtures state squadDic fixtureDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
@@ -205,8 +205,7 @@ type Fixtures () =
                 sprintf "%s for %A when projectingFixtures (%i squad/s) (%i fixture/s) (%i projectee/s)" source connectionId squadDic.Count fixtureDic.Count projecteeDic.Count |> Info |> log
                 let projectee = { LastRvn = initialRvn }
                 // Note: connectionId might already be known, e.g. re-initialization.
-                if connectionId |> projecteeDic.ContainsKey |> not then (connectionId, projectee) |> projecteeDic.Add
-                else projecteeDic.[connectionId] <- projectee
+                if connectionId |> projecteeDic.ContainsKey |> not then (connectionId, projectee) |> projecteeDic.Add else projecteeDic.[connectionId] <- projectee
                 sprintf "%s when projectingFixtures -> %i projectee/s)" source projecteeDic.Count |> Info |> log
                 let result = state |> fixtureProjectionDto |> Ok
                 result |> logResult source (fun fixtureProjectionDto -> sprintf "%i fixture/s" fixtureProjectionDto.FixtureDtos.Length |> Some) // note: log success/failure here (rather than assuming that calling code will do so)                   
@@ -229,7 +228,7 @@ type Fixtures () =
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
         sprintf "agent subscribed to Tick | UsersRead | UserEventWritten (subset) | UserSignedIn | UserApi | UserSignedOut | ConnectionsSignedOut | Disconnected broadcasts -> %A" subscriptionId |> Info |> log
         Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
-    member __.HandleInitializeFixturesProjectionQry connectionId =
+    member __.HandleInitializeFixturesProjectionQryAsync connectionId =
         (fun reply -> (connectionId, reply) |> HandleInitializeFixturesProjectionQry) |> agent.PostAndAsyncReply
 
 let fixtures = Fixtures ()

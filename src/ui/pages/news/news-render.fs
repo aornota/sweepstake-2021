@@ -15,6 +15,7 @@ open Aornota.UI.Theme.Shared
 open Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.News.Common
+open Aornota.Sweepstake2018.UI.Shared
 
 open System
 
@@ -112,7 +113,8 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
             [ str "Remove post" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
     cardModal theme [ [ bold "Remove post" ] |> para theme paraCentredSmall ] onDismiss body
 
-let private renderPost theme authUser dispatch (postId, post) =
+// #region renderPost
+let private renderPost theme authUser userDic dispatch (postId, post) =
     let editOrRemovePost =
         match post.Removed, authUser with
         | false, Some authUser ->
@@ -135,7 +137,7 @@ let private renderPost theme authUser dispatch (postId, post) =
                 post.Timestamp.LocalDateTime |> dateAndTimeText
 #endif
             [ str timestampText ] |> para theme paraDefaultSmallest
-        let (UserName userName) = post.UserName
+        let (UserName userName) = post.UserId |> userName userDic
         let messageText = if post.Removed then Markdown REMOVED_MARKDOWN else match post.PostTypeDto with | StandardDto messageText -> messageText
         yield level true [
             levelLeft [ levelItem [ [ bold userName ; str " posted" ] |> para theme paraDefaultSmallest ] ]
@@ -152,6 +154,7 @@ let private renderPost theme authUser dispatch (postId, post) =
         divVerticalSpace 10
         notification theme { notificationDefault with NotificationSemantic = semantic |> Some ; OnDismissNotification = onDismissNotification } children
     ]
+// #endregion
 
 let private addPost theme authUser dispatch =
     match authUser with
@@ -164,43 +167,43 @@ let private addPost theme authUser dispatch =
         | None -> None
     | None -> None
 
-let render (useDefaultTheme, state, authUser:AuthUser option, hasModal, _:int<tick>) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Projection<_ * UserDic>, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "News" ] |> para theme paraCentredSmall
         yield hr theme false
-        match state.ProjectionState with
-        | Initializing ->
+        match state.NewsProjection with
+        | Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | InitializationFailed -> // note: should never happen
+        | Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Active activeState ->
-            let postDic = activeState.NewsProjection.PostDic
+        | Ready (_, postDic, readyState) ->
+            let userDic = match usersProjection with | Ready (_, userDic) -> userDic | Pending | Failed -> UserDic ()
             let morePosts =
                 let paraMore = { paraDefaultSmallest with ParaAlignment = RightAligned }
-                if activeState.MorePostsPending then
+                if readyState.MorePostsPending then
                     [ br ; [ str "Retrieving more posts... " ; icon iconSpinnerPulseSmall ] |> para theme paraMore ]
-                else if activeState.HasMorePosts then
+                else if readyState.HasMorePosts then
                     [ br ; [ [ str "More posts" ] |> link theme (ClickableLink (fun _ -> MorePosts |> dispatch)) ] |> para theme paraMore ]
                 else []
-            match hasModal, activeState.AddPostState with
+            match hasModal, readyState.AddPostState with
             | false, Some addPostState ->
                 yield div divDefault [ lazyViewOrHMR2 renderAddPostModal (useDefaultTheme, addPostState) dispatch ]
             | _ -> ()
-            match hasModal, activeState.EditPostState with
+            match hasModal, readyState.EditPostState with
             | false, Some editPostState ->
                 yield div divDefault [ lazyViewOrHMR2 renderEditPostModal (useDefaultTheme, editPostState) dispatch ]
             | _ -> ()
-            match hasModal, activeState.RemovePostState with
+            match hasModal, readyState.RemovePostState with
             | false, Some removePostState ->
                 yield div divDefault [ lazyViewOrHMR2 renderRemovePostModal (useDefaultTheme, postDic, removePostState) (RemovePostInput >> dispatch) ]
             | _ -> ()
             yield Rct.ofOption (addPost theme authUser dispatch)           
-            yield! activeState.NewsProjection.PostDic
+            yield! postDic
                 |> List.ofSeq
                 |> List.map (fun (KeyValue (postId, post)) -> (postId, post))
                 |> List.sortBy (fun (_, post) -> post.Timestamp)
                 |> List.rev
-                |> List.map (renderPost theme authUser dispatch)
+                |> List.map (renderPost theme authUser userDic dispatch)
                 |> List.collect id
             yield! morePosts ]

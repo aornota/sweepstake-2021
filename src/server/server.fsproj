@@ -16,7 +16,6 @@
     <Compile Include="../common/delta.fs" />
     <Compile Include="../common/domain/core.fs" />
     <Compile Include="../common/domain/user.fs" />
-    <Compile Include="../common/domain/user-admin.fs" />
     <Compile Include="../common/domain/news.fs" />
     <Compile Include="../common/domain/squad.fs" />
     <Compile Include="../common/domain/fixture.fs" />
@@ -46,10 +45,11 @@
     <Compile Include="agents/entities/squads.fs" />
     <Compile Include="agents/entities/fixtures.fs" />
     <Compile Include="agents/entities/drafts.fs" />
-    <Compile Include="agents/projections/user-admin.fs" />
+    <Compile Include="agents/projections/users.fs" />
     <Compile Include="agents/projections/news.fs" />
     <Compile Include="agents/projections/squads.fs" />
     <Compile Include="agents/projections/fixtures.fs" />
+    <Compile Include="agents/projections/drafts.fs" />
     <Compile Include="agents/projections/chat.fs" />
     <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />
