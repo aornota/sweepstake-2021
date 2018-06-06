@@ -268,27 +268,27 @@ let transition input (squadsProjection:Projection<_ * SquadDic>) state =
             { state with CurrentSquadId = group |> defaultSquadId squadDic }, Cmd.none, true
         | ShowSquad squadId, Ready _ -> // note: no need to check for unknown squadId (should never happen)
             { state with CurrentSquadId = squadId |> Some }, Cmd.none, true
-        | AddToDraft (_draftId, userDraftPickBasic), Ready _ ->
+        | AddToDraft (_draftId, userDraftPick), Ready _ ->
             let currentDraftPicks = state.CurrentDraftPicks
-            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPickBasic = userDraftPickBasic) |> not then
+            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPick = userDraftPick) |> not then
                 // TEMP-NMB...
-                let draftPick = { UserDraftPickBasic = userDraftPickBasic ; DraftPickStatus = AddPending |> Some } // TENP-NMB
-                //let draftPick = { UserDraftPickBasic = userDraftPickBasic ; DraftPickStatus = None } // TENP-NMB
+                let draftPick = { UserDraftPick = userDraftPick ; DraftPickStatus = AddPending |> Some } // TENP-NMB
+                //let draftPick = { UserDraftPick = userDraftPick ; DraftPickStatus = None } // TENP-NMB
                 // ...NMB-TEMP
 
                 // TODO-NEXT: SendUiAuthMsg (&c.)...
 
                 { state with CurrentDraftPicks = draftPick :: currentDraftPicks }, "Dummy implementation of AddToDraft: not persisted" |> warningToastCmd, true
             else state, UNEXPECTED_ERROR |> errorToastCmd, true
-        | RemoveFromDraft (_draftId, userDraftPickBasic), Ready _ ->
+        | RemoveFromDraft (_draftId, userDraftPick), Ready _ ->
             let currentDraftPicks = state.CurrentDraftPicks
-            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not) then
+            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not) then
                 // TEMP-NMB...
                 let currentDraftPicks = currentDraftPicks |> List.map (fun draftPick ->
-                    if draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not then { draftPick with DraftPickStatus = RemovePending |> Some }
+                    if draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not then { draftPick with DraftPickStatus = RemovePending |> Some }
                     else draftPick)
                 (*let currentDraftPicks = currentDraftPicks |> List.choose (fun draftPick ->
-                    if draftPick.UserDraftPickBasic = userDraftPickBasic && draftPick |> isRemovePending |> not then None
+                    if draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not then None
                     else draftPick |> Some)*)
                 // ...NMB-TEMP
 

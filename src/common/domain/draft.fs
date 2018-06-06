@@ -35,14 +35,6 @@ type UserDraftPick =
     | TeamPick of squadId : SquadId
     | PlayerPick of squadId : SquadId * playerId : PlayerId
 
-type UserDraftPickBasic =
-    | TeamPickBasic of squadId : SquadId * squadName : SquadName
-    | PlayerPickBasic of squadId : SquadId * playerId : PlayerId * playerName : PlayerName
-
-type UserDraftPickFull =
-    | TeamPickFull of squadId : SquadId * squadName : SquadName * coachName : CoachName
-    | PlayerPickFull of squadId : SquadId * squadName : SquadName * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
-
 let draftTextLower (DraftOrdinal draftOrdinal) =
     if draftOrdinal = 1 then "first draft"
     else if draftOrdinal = 2 then "second draft"

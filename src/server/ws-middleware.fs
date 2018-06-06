@@ -12,6 +12,7 @@ open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Connection
 
 open System
+open System.IO
 open System.Net.WebSockets
 open System.Text
 open System.Threading
@@ -24,24 +25,35 @@ let private log category = (WsMiddleware, category) |> consoleLogger.Log
 let private encoding = Encoding.UTF8
 
 type WsMiddleware (next:RequestDelegate) =
+    let rec receive (ws:WebSocket) buffer (ms:MemoryStream) = async {
+        let! result = ws.ReceiveAsync (buffer, CancellationToken.None) |> Async.AwaitTask
+        ms.Write (buffer.Array, buffer.Offset, result.Count)
+        if result.EndOfMessage |> not then return! ms |> receive ws buffer
+        else
+            ms.Seek (0L, SeekOrigin.Begin) |> ignore
+            use reader = new StreamReader (ms, encoding)
+            return (result, reader.ReadToEnd ()) }
     let rec receiving (connectionId, ws:WebSocket) consecutiveReceiveFailureCount = async {
+        (* Note: Although buffer size should be adequate for serialized UiMsg data (even though Jwt can be fairly large), it seems that on Azure, "messages" are sometimes split into
+                 multiple chunks - so we need to cater for this [by checking EndOfMessage &c.]. *)
         let buffer : byte [] = Array.zeroCreate 4096
-        try // note: buffer size should be adequate (as serialized UiMsg data should be relatively small)
-            let! receiveResult = ws.ReceiveAsync (ArraySegment<byte> (buffer), CancellationToken.None) |> Async.AwaitTask
+        let buffer = ArraySegment<byte> buffer
+        try
+            use ms = new MemoryStream ()
+            let! (receiveResult, receivedText) = ms |> receive ws buffer
             sprintf "receiving message for %A" connectionId |> Verbose |> log
             ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
             if receiveResult.CloseStatus.HasValue then return receiveResult |> Some
             else
-                let bufferText = buffer |> encoding.GetString
                 try // note: expect buffer to be deserializable to UiMsg              
                     sprintf "deserializing message for %A" connectionId |> Verbose |> log
-                    let uiMsg = bufferText |> Json |> ofJson<UiMsg>
+                    let uiMsg = receivedText |> Json |> ofJson<UiMsg>
                     ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
                     sprintf "message deserialized for %A -> %A" connectionId uiMsg |> Verbose |> log
                     (connectionId, uiMsg) |> connections.HandleUiMsg
                     return! receiving (connectionId, ws) 0u
                 with exn ->
-                    sprintf "deserializing message failed for %A (%s) -> %A" connectionId bufferText exn.Message |> Danger |> log
+                    sprintf "deserializing message failed for %A (%s) -> %A" connectionId receivedText exn.Message |> Danger |> log
                     (connectionId, exn) |> connections.OnDeserializeUiMsgError
                     return! receiving (connectionId, ws) 0u
         with exn ->

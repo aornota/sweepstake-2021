@@ -263,13 +263,13 @@ let activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto =
         | _ -> None
     | _ -> None
 
-// TODO-SOON: Move draftedTeam | draftedPlayer to squads-common.fs (since might also be useful for squads-state)?...
+// TODO-SOON: Move draftedTeam | draftedPlayer to squads-common.fs [or ui-shared.fs?] since might also be useful for squads-state?...
 let private draftedTeam squadId currentDraftPicks =
     currentDraftPicks |> List.tryFind (fun draftPick ->
-        match draftPick.UserDraftPickBasic with | TeamPickBasic (pickSquadId, _) when pickSquadId = squadId -> true | _ -> false)
+        match draftPick.UserDraftPick with | TeamPick pickSquadId when pickSquadId = squadId -> true | _ -> false)
 let private draftedPlayer playerId currentDraftPicks =
     currentDraftPicks |> List.tryFind (fun draftPick ->
-        match draftPick.UserDraftPickBasic with | PlayerPickBasic (_, pickPlayerId, _) when pickPlayerId = playerId -> true | _ -> false)
+        match draftPick.UserDraftPick with | PlayerPick (_, pickPlayerId) when pickPlayerId = playerId -> true | _ -> false)
 
 let private inDraftTag theme (draftOrdinal:DraftOrdinal) =
     let tagText = sprintf "Selected for %s" (draftOrdinal |> draftTextLower)
@@ -323,8 +323,8 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, curre
     let draftLeft, draftRight =
         match activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
         | Some (draftId, draftOrdinal, isOpen) ->
-            let userDraftPickBasic = (squadId, squad.SquadName) |> TeamPickBasic
-            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedTeam squadId) userDraftPickBasic dispatch
+            let userDraftPick = squadId |> TeamPick
+            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedTeam squadId) userDraftPick dispatch
         | None -> None, None
     let score = 0 // TEMP-NMB...
     div divCentred [
@@ -395,8 +395,8 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
         let isWithdrawn, _ = player |> isWithdrawnAndDate
         match isWithdrawn, activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
         | false, Some (draftId, draftOrdinal, isOpen) ->
-            let userDraftPickBasic = (squadId, playerId, player.PlayerName) |> PlayerPickBasic
-            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedPlayer playerId) userDraftPickBasic dispatch
+            let userDraftPick = (squadId, playerId) |> PlayerPick
+            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedPlayer playerId) userDraftPick dispatch
         | _ -> None, None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText

@@ -40,8 +40,8 @@ type Input =
     | ReceiveServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ShowGroup of group : Group
     | ShowSquad of squadId : SquadId
-    | AddToDraft of draftId : DraftId * userDraftPickBasic : UserDraftPickBasic
-    | RemoveFromDraft of draftId : DraftId * userDraftPickBasic : UserDraftPickBasic
+    | AddToDraft of draftId : DraftId * userDraftPick : UserDraftPick
+    | RemoveFromDraft of draftId : DraftId * userDraftPick : UserDraftPick
     | ShowAddPlayersModal of squadId : SquadId
     | AddPlayersInput of addPlayersInput : AddPlayersInput
     | ShowChangePlayerNameModal of squadId : SquadId * playerId : PlayerId
@@ -56,7 +56,7 @@ type Input =
 type DraftPickStatus = | AddPending | RemovePending
 
 // TODO-SOON: Add Rank [option?], i.e. so can show in "Selected for...draft" tag?...
-type DraftPick = { UserDraftPickBasic : UserDraftPickBasic ; DraftPickStatus : DraftPickStatus option }
+type DraftPick = { UserDraftPick : UserDraftPick ; DraftPickStatus : DraftPickStatus option }
 
 type AddPlayerStatus =
     | AddPlayerPending
