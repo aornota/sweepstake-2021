@@ -64,7 +64,8 @@ type FixturesProjectionMsg =
     | FixturesDeltaMsg of deltaRvn : Rvn * delta : Delta<FixtureId, FixtureDto>
 
 type DraftsProjectionMsg =
-    | CurrentDraftChangedMsg of currentDraftDto : CurrentDraftDto option
+    | DraftsDeltaMsg of deltaRvn : Rvn * delta : Delta<DraftId, DraftDto>
+    | CurrentUserDraftDtoChangedMsg of changeRvn : Rvn * currentUserDraftDto : CurrentUserDraftDto option
 
 type ServerAppMsg =
     | ServerUiMsgErrorMsg of serverUiMsgError : ServerUiMsgError
@@ -81,7 +82,7 @@ type ServerAppMsg =
     | SquadsProjectionMsg of squadsProjectionMsg : SquadsProjectionMsg
     | InitializeFixturesProjectionQryResult of result : Result<FixtureDto list, OtherError<string>>
     | FixturesProjectionMsg of fixturesProjectionMsg : FixturesProjectionMsg
-    | InitializeDraftsProjectionQryResult of result : Result<CurrentDraftDto option, AuthQryError<string>>
+    | InitializeDraftsProjectionQryResult of result : Result<DraftDto list * CurrentUserDraftDto option, AuthQryError<string>>
     | DraftsProjectionMsg of draftsProjectionMsg : DraftsProjectionMsg
 
 type ServerUserAdminMsg =
@@ -89,8 +90,13 @@ type ServerUserAdminMsg =
     | ResetPasswordCmdResult of result : Result<UserName, AuthCmdError<string>>
     | ChangeUserTypeCmdResult of result : Result<UserName, AuthCmdError<string>>
 
+type UserDraftSummaryProjectionMsg =
+    | UserDraftSummariesDeltaMsg of deltaRvn : Rvn * delta : Delta<UserDraftKey, UserDraftSummaryDto>
+
 type ServerDraftAdminMsg =
+    | InitializeUserDraftSummaryProjectionQryResult of result : Result<UserDraftSummaryDto list, AuthQryError<string>>
     | ProcessDraftCmdResult of result : Result<unit, AuthCmdError<string>>
+    | UserDraftSummaryProjectionMsg of userDraftSummaryProjectionMsg : UserDraftSummaryProjectionMsg
 
 type NewsProjectionMsg =
     | PostsDeltaMsg of deltaRvn : Rvn * delta : Delta<PostId, PostDto> * hasMorePosts : bool
@@ -109,6 +115,8 @@ type ServerSquadsMsg =
     | ChangePlayerTypeCmdResult of result : Result<PlayerName, AuthCmdError<string>>
     | WithdrawPlayerCmdResult of result : Result<PlayerName, AuthCmdError<string>>
     | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
+    | AddToDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
+    | RemoveFromDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
 
 type ServerFixturesMsg =
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>

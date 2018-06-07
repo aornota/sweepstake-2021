@@ -50,6 +50,7 @@
     <Compile Include="agents/projections/squads.fs" />
     <Compile Include="agents/projections/fixtures.fs" />
     <Compile Include="agents/projections/drafts.fs" />
+    <Compile Include="agents/projections/user-draft-summary.fs" />
     <Compile Include="agents/projections/chat.fs" />
     <Compile Include="agents/connections.fs" />
     <Compile Include="ws-middleware.fs" />

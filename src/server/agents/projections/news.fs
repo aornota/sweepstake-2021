@@ -28,7 +28,7 @@ open System.Collections.Generic
 type private NewsInput =
     | Start of reply : AsyncReplyChannel<unit>
     | OnNewsRead of newsRead : NewsRead list
-    | OnPostCreated of postId : PostId * userId : UserId * postType : PostType * messageText : Markdown * timestamp : DateTimeOffset
+    | OnPostCreated of postId : PostId * rvn : Rvn * userId : UserId * postType : PostType * messageText : Markdown * timestamp : DateTimeOffset
     | OnPostChanged of postId : PostId * rvn : Rvn * messageText : Markdown
     | OnPostRemoved of postId : PostId
     | RemoveConnections of connectionIds : ConnectionId list
@@ -172,7 +172,7 @@ type News () =
             match input with
             | Start _ -> "Start when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews state postDic projecteeDic
             | OnNewsRead _ -> "OnNewsRead when projectingNews" |> IgnoredInput |> Agent |> log ; return! projectingNews state postDic projecteeDic
-            | OnPostCreated (postId, userId, postType, messageText, timestamp) ->
+            | OnPostCreated (postId, rvn, userId, postType, messageText, timestamp) ->
                 let source = "OnPostCreated"
                 sprintf "%s (%A %A) when projectingNews (%i post/s) (%i projectee/s)" source postId userId postDic.Count projecteeDic.Count |> Info |> log
                 let state =
@@ -181,7 +181,7 @@ type News () =
                             if postDic.Count = 0 then 1
                             else (postDic |> List.ofSeq |> List.map (fun (KeyValue (_, post)) -> post.Ordinal) |> List.max) + 1
                         let postTypeDto = match postType with | Standard -> messageText |> StandardDto
-                        let post = { Ordinal = nextOrdinal ; Rvn = initialRvn ; UserId = userId ; PostTypeDto = postTypeDto ; Timestamp = timestamp }
+                        let post = { Ordinal = nextOrdinal ; Rvn = rvn ; UserId = userId ; PostTypeDto = postTypeDto ; Timestamp = timestamp }
                         (postId, post) |> postDic.Add
                         (postDic, state) |> PostChange |> updateState source projecteeDic
                     else state
@@ -277,7 +277,7 @@ type News () =
             | NewsRead newsRead -> newsRead |> OnNewsRead |> agent.Post
             | NewsEventWritten (rvn, newsEvent) ->
                 match newsEvent with
-                | PostCreated (postId, userId, postType, messageText, timestamp) -> (postId, userId, postType, messageText, timestamp) |> OnPostCreated |> agent.Post
+                | PostCreated (postId, userId, postType, messageText, timestamp) -> (postId, rvn, userId, postType, messageText, timestamp) |> OnPostCreated |> agent.Post
                 | PostChanged (postId, messageText) -> (postId, rvn, messageText) |> OnPostChanged |> agent.Post
                 | PostRemoved postId -> postId |> OnPostRemoved |> agent.Post
             | Disconnected connectionId -> [ connectionId ] |> RemoveConnections |> agent.Post

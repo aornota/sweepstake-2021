@@ -38,6 +38,7 @@ type UiAuthUserAdminMsg =
     | ChangeUserTypeCmd of userId : UserId * currentRvn : Rvn * userType : UserType
 
 type UiAuthDraftAdminMsg =
+    | InitializeUserDraftSummaryProjectionQry
     | ProcessDraftCmd of draftId : DraftId * currentRvn : Rvn
 
 type UiAuthNewsMsg =
@@ -51,9 +52,14 @@ type UiAuthSquadsMsg =
     | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
     | WithdrawPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
     | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn
+    | AddToDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | RemoveFromDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
 
 type UiAuthFixturesMsg =
     | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
+
+(* TODO-SOON... type UiAuthDraftsMsg =
+    | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChanged : PriorityChanged *)
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
@@ -68,6 +74,7 @@ type UiAuthMsg =
     | UiAuthNewsMsg of uiAuthNewsMsg : UiAuthNewsMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
     | UiAuthFixturesMsg of uiAuthFixturesMsg : UiAuthFixturesMsg
+    // TODO-SOON... | UiAuthDraftsMsg of uiAuthDraftsMsg : UiAuthDraftsMsg
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 
 type UiMsg =

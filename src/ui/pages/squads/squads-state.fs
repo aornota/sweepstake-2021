@@ -8,7 +8,9 @@ open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.ShouldNeverHappen
 open Aornota.UI.Common.Toasts
 
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
@@ -19,8 +21,9 @@ open System
 open Elmish
 
 let initialize currentSquadId : State * Cmd<Input> =
-    { CurrentDraftPicks = [] ; CurrentSquadId = currentSquadId ; AddPlayersState = None ; ChangePlayerNameState = None ; ChangePlayerTypeState = None ; WithdrawPlayerState = None
-      EliminateSquadState = None }, Cmd.none
+    let pendingPicksState = { PendingPicks = [] ; PendingRvn = None }
+    { CurrentSquadId = currentSquadId ; PendingPicksState = pendingPicksState ; AddPlayersState = None ; ChangePlayerNameState = None ; ChangePlayerTypeState = None
+      WithdrawPlayerState = None ; EliminateSquadState = None }, Cmd.none
 
 let private squadRvn (squadDic:SquadDic) squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId].Rvn |> Some else None
 
@@ -126,7 +129,16 @@ let private handleEliminateSquadCmdResult (result:Result<SquadName, AuthCmdError
     | _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadCmdResult when EliminateSquadState is None -> %A" result)
 
-let private handleServerSquadsMsg serverSquadsMsg state : State * Cmd<Input> =
+let private userDraftPickText (squadDic:SquadDic) userDraftPick =
+    match userDraftPick with
+    | TeamPick squadId ->
+        let (SquadName squadName) = squadId |> squadName squadDic
+        squadName
+    | PlayerPick (squadId, playerId) ->
+        let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
+        playerName
+
+let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : State * Cmd<Input> =
     match serverSquadsMsg with
     | AddPlayerCmdResult result ->
         state |> handleAddPlayerCmdResult result
@@ -138,6 +150,38 @@ let private handleServerSquadsMsg serverSquadsMsg state : State * Cmd<Input> =
         state |> handleWithdrawPlayerCmdResult result
     | EliminateSquadCmdResult result ->
         state |> handleEliminateSquadCmdResult result
+    | AddToDraftCmdResult (Ok userDraftPick) ->
+        let pendingPicks = state.PendingPicksState.PendingPicks
+        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isAdding) then
+            state, sprintf "<strong>%s</strong> has been added to draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
+        else state, shouldNeverHappenCmd (sprintf "Unexpected AddToDraftCmdResult Ok when not Adding %A" userDraftPick)
+    | AddToDraftCmdResult (Error (userDraftPick, error)) ->
+        let pendingPicksState = state.PendingPicksState
+        let pendingPicks = pendingPicksState.PendingPicks
+        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isAdding) then
+            let errorText = ifDebug (sprintf "AddToDraftCmdResult error -> %A" error) (error |> cmdErrorText)
+            let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+            let errorToastCmd = sprintf "Unable to add <strong>%s</strong> to draft" (userDraftPick |> userDraftPickText squadDic) |> errorToastCmd
+            let pendingPicks = pendingPicks |> List.filter (fun pendingPick -> pendingPick.UserDraftPick <> userDraftPick || pendingPick |> isAdding |> not)
+            let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
+            { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
+        else state, shouldNeverHappenCmd (sprintf "Unexpected AddToDraftCmdResult Error when not Adding %A" userDraftPick)
+    | RemoveFromDraftCmdResult (Ok userDraftPick) ->
+        let pendingPicks = state.PendingPicksState.PendingPicks
+        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isRemoving) then
+            state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
+        else state, shouldNeverHappenCmd (sprintf "Unexpected RemoveFromDraftCmdResult Ok when not Removing %A" userDraftPick)
+    | RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
+        let pendingPicksState = state.PendingPicksState
+        let pendingPicks = pendingPicksState.PendingPicks
+        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isRemoving) then
+            let errorText = ifDebug (sprintf "RemoveFromDraftCmdResult error -> %A" error) (error |> cmdErrorText)
+            let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+            let errorToastCmd = sprintf "Unable to remove <strong>%s</strong> from draft" (userDraftPick |> userDraftPickText squadDic) |> errorToastCmd
+            let pendingPicks = pendingPicks |> List.filter (fun pendingPick -> pendingPick.UserDraftPick <> userDraftPick || pendingPick |> isRemoving |> not)
+            let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
+            { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
+        else state, shouldNeverHappenCmd (sprintf "Unexpected RemoveFromDraftCmdResult Error when not Removing %A" userDraftPick)
 
 let handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match addPlayersInput, state.AddPlayersState with
@@ -254,48 +298,70 @@ let handleEliminateSquadInput eliminateSquadInput (squadDic:SquadDic) state : St
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadInput when EliminateSquadState is None -> %A" eliminateSquadInput), false
 
-let transition input (squadsProjection:Projection<_ * SquadDic>) state =
+let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (currentUserDraftDto:CurrentUserDraftDto option) state =
     let state, cmd, isUserNonApiActivity =
         match input, squadsProjection with
         | AddNotificationMessage _, _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
         | SendUiAuthMsg _, Ready _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
-        | ReceiveServerSquadsMsg serverSquadsMsg, _ ->
-            let state, cmd = state |> handleServerSquadsMsg serverSquadsMsg
+        | ReceiveServerSquadsMsg serverSquadsMsg, Ready (_, squadDic) ->
+            let state, cmd = state |> handleServerSquadsMsg serverSquadsMsg squadDic
             state, cmd, false
         | ShowGroup group, Ready (_, squadDic) ->
             { state with CurrentSquadId = group |> defaultSquadId squadDic }, Cmd.none, true
         | ShowSquad squadId, Ready _ -> // note: no need to check for unknown squadId (should never happen)
             { state with CurrentSquadId = squadId |> Some }, Cmd.none, true
-        | AddToDraft (_draftId, userDraftPick), Ready _ ->
-            let currentDraftPicks = state.CurrentDraftPicks
-            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPick = userDraftPick) |> not then
-                // TEMP-NMB...
-                let draftPick = { UserDraftPick = userDraftPick ; DraftPickStatus = AddPending |> Some } // TENP-NMB
-                //let draftPick = { UserDraftPick = userDraftPick ; DraftPickStatus = None } // TENP-NMB
-                // ...NMB-TEMP
-
-                // TODO-NEXT: SendUiAuthMsg (&c.)...
-
-                { state with CurrentDraftPicks = draftPick :: currentDraftPicks }, "Dummy implementation of AddToDraft: not persisted" |> warningToastCmd, true
-            else state, UNEXPECTED_ERROR |> errorToastCmd, true
-        | RemoveFromDraft (_draftId, userDraftPick), Ready _ ->
-            let currentDraftPicks = state.CurrentDraftPicks
-            if currentDraftPicks |> List.exists (fun draftPick -> draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not) then
-                // TEMP-NMB...
-                let currentDraftPicks = currentDraftPicks |> List.map (fun draftPick ->
-                    if draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not then { draftPick with DraftPickStatus = RemovePending |> Some }
-                    else draftPick)
-                (*let currentDraftPicks = currentDraftPicks |> List.choose (fun draftPick ->
-                    if draftPick.UserDraftPick = userDraftPick && draftPick |> isRemovePending |> not then None
-                    else draftPick |> Some)*)
-                // ...NMB-TEMP
-
-                // TODO-NEXT: SendUiAuthMsg (&c.)...
-
-                { state with CurrentDraftPicks = currentDraftPicks }, "Dummy implementation of RemoveFromDraft: not persisted" |> warningToastCmd, true
-            else state, UNEXPECTED_ERROR |> errorToastCmd, true
+        | AddToDraft (draftId, userDraftPick), Ready _ ->
+            match authUser with
+            | Some authUser ->
+                let isPicked =
+                    match currentUserDraftDto with
+                    | Some currentUserDraftDto -> currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick)
+                    | None -> false
+                if isPicked |> not then
+                    let pendingPicksState = state.PendingPicksState
+                    let pendingPicks = pendingPicksState.PendingPicks
+                    if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick) |> not then
+                        let pendingPick = { UserDraftPick = userDraftPick ; PendingPickStatus = Adding }
+                        let currentRvn =
+                            match currentUserDraftDto with
+                            | Some currentUserDraftDto ->
+                                let (Rvn currentRvn) = currentUserDraftDto.Rvn
+                                match pendingPicksState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
+                            | None -> match pendingPicksState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
+                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> AddToDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                        let pendingPicksState = { pendingPicksState with PendingPicks = pendingPick :: pendingPicks ; PendingRvn = currentRvn |> incrementRvn |> Some }
+                        { state with PendingPicksState = pendingPicksState }, cmd, true
+                    else state, UNEXPECTED_ERROR |> errorToastCmd, true
+                else state, UNEXPECTED_ERROR |> errorToastCmd, true
+            | None -> // note: should never happen
+                state, Cmd.none, false
+        | RemoveFromDraft (draftId, userDraftPick), Ready _ ->
+            match authUser with
+            | Some authUser ->
+                let isPicked =
+                    match currentUserDraftDto with
+                    | Some currentUserDraftDto -> currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick)
+                    | None -> false
+                if isPicked then
+                    let pendingPicksState = state.PendingPicksState
+                    let pendingPicks = pendingPicksState.PendingPicks
+                    if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick) |> not then
+                        let pendingPick = { UserDraftPick = userDraftPick ; PendingPickStatus = Removing }
+                        let currentRvn =
+                            match currentUserDraftDto with
+                            | Some currentUserDraftDto ->
+                                let (Rvn currentRvn) = currentUserDraftDto.Rvn
+                                match pendingPicksState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
+                            | None -> match pendingPicksState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
+                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> RemoveFromDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                        let pendingPicksState = { pendingPicksState with PendingPicks = pendingPick :: pendingPicks ; PendingRvn = currentRvn |> incrementRvn |> Some }
+                        { state with PendingPicksState = pendingPicksState }, cmd, true
+                    else state, UNEXPECTED_ERROR |> errorToastCmd, true
+                else state, UNEXPECTED_ERROR |> errorToastCmd, true
+            | None -> // note: should never happen
+                state, Cmd.none, false
         | ShowAddPlayersModal squadId, Ready _ -> // note: no need to check for unknown squadId (should never happen)
             let addPlayersState = defaultAddPlayersState squadId Goalkeeper None None
             { state with AddPlayersState = addPlayersState |> Some }, Cmd.none, true

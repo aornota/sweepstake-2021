@@ -97,8 +97,9 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
         | Some (RemovePostFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match removePostState.RemovePostStatus with | Some (RemovePostFailed errorText) -> errorText |> Some | Some RemovePostPending | None -> None
     let warning = [
-        [ str "Are you sure you want to remove this post?" ] |> para theme paraCentredSmallest
-        [ str "Please note that this action is irreversible" ] |> para theme paraCentredSmallest ]
+        [ bold "Are you sure you want to remove this post?" ] |> para theme paraCentredSmallest
+        br
+        [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
         match errorText with
         | Some errorText ->

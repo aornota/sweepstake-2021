@@ -32,8 +32,8 @@ type FixtureRead = { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomePar
 
 type DraftRead = { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
 
-type UserDraftPickRead = { UserDraftPick : UserDraftPick ; Rank : uint32 }
-type UserDraftRead = { UserDraftId : UserDraftId ; Rvn : Rvn ; UserId : UserId ; DraftId : DraftId ; UserDraftPicksRead : UserDraftPickRead list }
+type UserDraftPickRead = { UserDraftPick : UserDraftPick ; Rank : int }
+type UserDraftRead = { UserDraftId : UserDraftId ; Rvn : Rvn ; UserDraftKey : UserDraftKey ; UserDraftPicksRead : UserDraftPickRead list }
 
 type Signal =
     | Tick of ticks : int<tick> * secondsPerTick : int<second/tick>

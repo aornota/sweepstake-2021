@@ -12,10 +12,11 @@ type UserDraftEvent =
     | UserDraftCreated of userDraftId : UserDraftId * userId : UserId * draftId : DraftId
     | Drafted of userDraftId : UserDraftId * userDraftPick : UserDraftPick
     | Undrafted of userDraftId : UserDraftId * userDraftPick : UserDraftPick
-    // TODO-SOON... | PriorityIncreased of userDraftId : UserDraftId * ...
+    | PriorityChanged of userDraftId : UserDraftId * userDraftPick : UserDraftPick * priorityChanged : PriorityChanged
     with
         member self.UserDraftId =
             match self with
             | UserDraftCreated (userDraftId, _, _) -> userDraftId
             | Drafted (userDraftId, _) -> userDraftId
             | Undrafted (userDraftId, _) -> userDraftId
+            | PriorityChanged (userDraftId, _, _) -> userDraftId

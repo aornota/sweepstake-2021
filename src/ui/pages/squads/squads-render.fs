@@ -18,8 +18,11 @@ open Aornota.Sweepstake2018.UI.Pages.Squads.Common
 open Aornota.Sweepstake2018.UI.Shared
 
 open System
+open System.Collections.Generic
 
 module Rct = Fable.Helpers.React
+
+type private UserDraftPickDic = Dictionary<UserDraftPick, int>
 
 let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ]
 
@@ -183,8 +186,9 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
         | Some (WithdrawPlayerFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match withdrawPlayerState.WithdrawPlayerStatus with | Some (WithdrawPlayerFailed errorText) -> errorText |> Some | Some WithdrawPlayerPending | None -> None
     let warning = [
-        [ str "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmallest
-        [ str "Please note that this action is irreversible" ] |> para theme paraCentredSmallest ]
+        [ bold "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmallest
+        br
+        [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
         match errorText with
         | Some errorText ->
@@ -215,8 +219,9 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
         | Some (EliminateSquadFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match eliminateSquadState.EliminateSquadStatus with | Some (EliminateSquadFailed errorText) -> errorText |> Some | Some EliminateSquadPending | None -> None
     let warning = [
-        [ str "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmallest
-        [ str "Please note that this action is irreversible" ] |> para theme paraCentredSmallest ]
+        [ bold "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmallest
+        br
+        [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
         match errorText with
         | Some errorText ->
@@ -250,59 +255,66 @@ let private scoreText score =
     let scoreText = sprintf "%i" score
     if score > 0 then bold scoreText else str scoreText
 
-let activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto =
+let private activeDraftIdAndOrdinalAndIsOpen authUser currentDraft =
     let canDraft =
         match authUser with
         | Some authUser -> match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
         | None -> false
-    match canDraft, currentDraftDto with
-    | true, Some currentDraftDto ->
-        match currentDraftDto.DraftStatusDto with
-        | OpenedDto _ -> (currentDraftDto.DraftId, currentDraftDto.DraftOrdinal, true) |> Some
-        | PendingProcessingDto -> (currentDraftDto.DraftId, currentDraftDto.DraftOrdinal, false) |> Some
+    match canDraft, currentDraft with
+    | true, Some (draftId, draft) ->
+        match draft.DraftStatus with
+        | Opened _ -> (draftId, draft.DraftOrdinal, true) |> Some
+        | PendingProcessing -> (draftId, draft.DraftOrdinal, false) |> Some
         | _ -> None
     | _ -> None
 
-// TODO-SOON: Move draftedTeam | draftedPlayer to squads-common.fs [or ui-shared.fs?] since might also be useful for squads-state?...
-let private draftedTeam squadId currentDraftPicks =
-    currentDraftPicks |> List.tryFind (fun draftPick ->
-        match draftPick.UserDraftPick with | TeamPick pickSquadId when pickSquadId = squadId -> true | _ -> false)
-let private draftedPlayer playerId currentDraftPicks =
-    currentDraftPicks |> List.tryFind (fun draftPick ->
-        match draftPick.UserDraftPick with | PlayerPick (_, pickPlayerId) when pickPlayerId = playerId -> true | _ -> false)
+let private rank userDraftPick (userDraftPickDic:UserDraftPickDic) = if userDraftPick |> userDraftPickDic.ContainsKey then userDraftPickDic.[userDraftPick] |> Some else None
 
-let private inDraftTag theme (draftOrdinal:DraftOrdinal) =
-    let tagText = sprintf "Selected for %s" (draftOrdinal |> draftTextLower)
+let private pendingTeamPick squadId (pendingPicks:PendingPick list) =
+    pendingPicks |> List.tryFind (fun pendingPick ->
+        match pendingPick.UserDraftPick with | TeamPick pickSquadId when pickSquadId = squadId -> true | _ -> false)
+let private pendingPlayerPick playerId (pendingPicks:PendingPick list) =
+    pendingPicks |> List.tryFind (fun pendingPick ->
+        match pendingPick.UserDraftPick with | PlayerPick (_, pickPlayerId) when pickPlayerId = playerId -> true | _ -> false)
+
+let private selectedForDraftTag theme (draftOrdinal:DraftOrdinal) rank =
+    let tagText = sprintf "Selected for %s: rank #%i" (draftOrdinal |> draftTextLower) rank
     [ [ str tagText ] |> tag theme { tagInfo with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned }
 
-let private draftLeftAndRight theme draftId draftOrdinal isOpen draftPick userDraftPickBasic dispatch =
+let private draftLeftAndRight theme draftId draftOrdinal isOpen userDraftPick (rank:int option) (pendingPick:PendingPick option) dispatch =
     let addText, removeText = sprintf "Add to %s" (draftOrdinal |> draftTextLower), "Remove"
     let paraRight = { paraDefaultSmallest with ParaAlignment = RightAligned }
-    match draftPick with
-    | Some draftPick ->
-        match draftPick.DraftPickStatus with
-        | Some AddPending ->
-            let draftLeft = if isOpen then [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Loading } ] |> para theme paraRight |> Some else None
-            draftLeft, None
-        | Some RemovePending ->
-            let draftRight = if isOpen then [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } |> Some else None
-            draftOrdinal |> inDraftTag theme |> Some, draftRight
+    let draftLeft =
+        match rank with
+        | Some rank -> rank |> selectedForDraftTag theme draftOrdinal |> Some
         | None ->
-            let draftRight =
+            match pendingPick with
+            | Some pendingPick ->
+                match pendingPick.PendingPickStatus with
+                | Adding -> if isOpen then [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Loading } ] |> para theme paraRight |> Some else None
+                | Removing -> None
+            | None ->
                 if isOpen then
-                    let onClick = (fun _ -> (draftId, userDraftPickBasic) |> RemoveFromDraft |> dispatch)
+                    let onClick = (fun _ -> (draftId, userDraftPick) |> AddToDraft |> dispatch)
+                    [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Clickable (onClick, None) } ] |> para theme paraRight |> Some
+                else None
+    let draftRight =
+        match rank with
+        | Some _ ->
+            match pendingPick with
+            | Some pendingPick ->
+                match pendingPick.PendingPickStatus with
+                | Adding -> None
+                | Removing -> if isOpen then [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } |> Some else None
+            | None ->
+                if isOpen then
+                    let onClick = (fun _ -> (draftId, userDraftPick) |> RemoveFromDraft |> dispatch)
                     [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Clickable (onClick, None) } |> Some
                 else None
-            draftOrdinal |> inDraftTag theme |> Some, draftRight
-    | None ->
-        let draftLeft =
-            if isOpen then
-                let onClick = (fun _ -> (draftId, userDraftPickBasic) |> AddToDraft |> dispatch)
-                [ [ str addText ] |> button theme { buttonLinkSmall with Interaction = Clickable (onClick, None) } ] |> para theme paraRight |> Some
-            else None
-        draftLeft, None
+        | None -> None
+    draftLeft, draftRight
 
-let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
+let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, userDraftPickDic, pendingPicks, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
     let theme = getTheme useDefaultTheme
     let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
     let canEliminate =
@@ -321,10 +333,11 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraftDto, curre
     // TODO-SOON: Only allow draft if not already picked...
 
     let draftLeft, draftRight =
-        match activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
+        match activeDraftIdAndOrdinalAndIsOpen authUser currentDraft with
         | Some (draftId, draftOrdinal, isOpen) ->
             let userDraftPick = squadId |> TeamPick
-            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedTeam squadId) userDraftPick dispatch
+            let rank = userDraftPickDic |> rank userDraftPick
+            draftLeftAndRight theme draftId draftOrdinal isOpen userDraftPick rank (pendingPicks |> pendingTeamPick squadId) dispatch
         | None -> None, None
     let score = 0 // TEMP-NMB...
     div divCentred [
@@ -359,7 +372,7 @@ let private withdrawnAgo (timestamp:DateTime) =
 #endif
 // #endregion
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch =
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraft, userDraftPickDic, pendingPicks, authUser) dispatch =
     let theme = getTheme useDefaultTheme
     let canEdit, canWithdraw =
         match authUser with
@@ -393,10 +406,11 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
 
     let draftLeftAndRight playerId player =
         let isWithdrawn, _ = player |> isWithdrawnAndDate
-        match isWithdrawn, activeDraftIdAndOrdinalAndIsOpen authUser currentDraftDto with
+        match isWithdrawn, activeDraftIdAndOrdinalAndIsOpen authUser currentDraft with
         | false, Some (draftId, draftOrdinal, isOpen) ->
             let userDraftPick = (squadId, playerId) |> PlayerPick
-            draftLeftAndRight theme draftId draftOrdinal isOpen (currentDraftPicks |> draftedPlayer playerId) userDraftPick dispatch
+            let rank = userDraftPickDic |> rank userDraftPick
+            draftLeftAndRight theme draftId draftOrdinal isOpen userDraftPick (rank) (pendingPicks |> pendingPlayerPick playerId) dispatch
         | _ -> None, None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
@@ -448,8 +462,15 @@ let private addPlayers theme squadId squad authUser dispatch =
         | None -> None
     | _, _ -> None
 
-let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraftDto:CurrentDraftDto option, hasModal) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
+    let userDraftPickDic =
+        match currentUserDraftDto with
+        | Some currentUserDraftDto ->
+            let userDraftPickDic = UserDraftPickDic ()
+            currentUserDraftDto.UserDraftPickDtos |> List.iter (fun userDraftPickDto -> (userDraftPickDto.UserDraftPick, userDraftPickDto.Rank) |> userDraftPickDic.Add)
+            userDraftPickDic
+        | None -> UserDraftPickDic ()
     columnContent [
         yield [ bold "Squads" ] |> para theme paraCentredSmall
         yield hr theme false
@@ -491,9 +512,9 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
             match currentSquadId with
             | Some currentSquadId when currentSquadId |> squadDic.ContainsKey ->
                 let squad = squadDic.[currentSquadId]
-                let currentDraftPicks = state.CurrentDraftPicks
+                let pendingPicks = state.PendingPicksState.PendingPicks
                 yield br
-                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch
-                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraftDto, currentDraftPicks, authUser) dispatch
+                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraft, userDraftPickDic, pendingPicks, authUser) dispatch
+                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraft, userDraftPickDic, pendingPicks, authUser) dispatch
                 yield Rct.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
             | Some _ | None -> () ] // note: should never happen

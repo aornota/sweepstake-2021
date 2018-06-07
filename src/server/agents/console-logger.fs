@@ -18,6 +18,7 @@ type Projection =
     | Squads
     | Fixtures
     | Drafts
+    | UserDraftSummary
     | Chat
   
 type Source =
@@ -78,6 +79,7 @@ let private sourceTextAndColour source =
             | Projection.Squads -> "Squads"
             | Projection.Fixtures -> "Fixtures"
             | Projection.Drafts -> "Drafts"
+            | UserDraftSummary -> "UserDraftSummary"
             | Chat -> "Chat"
         sprintf "%s [projection]" text, ConsoleColor.DarkBlue
     | Connections -> "Connections", ConsoleColor.Magenta

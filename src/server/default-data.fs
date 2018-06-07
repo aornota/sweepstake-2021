@@ -703,23 +703,23 @@ let private createInitialDraftsEventsIfNecessary = async {
         [] |> drafts.OnUserDraftsEventsRead
 
         let draft1Id, draft1Ordinal = Guid "00000000-0000-0000-0000-000000000001" |> DraftId, DraftOrdinal 1
-        let draft1Starts, draft1Ends = (2018, 06, 04, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 09, 17, 00) |> dateTimeOffsetUtc
+        let draft1Starts, draft1Ends = (2018, 06, 07, 21, 30) |> dateTimeOffsetUtc, (2018, 06, 10, 17, 00) |> dateTimeOffsetUtc
         let draft1Type = (draft1Starts, draft1Ends) |> Constrained
-        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft1Id, draft1Ordinal, draft1Type) |> drafts.HandleCreateDraftCmdAsync)
+        let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft1Id, draft1Ordinal, draft1Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft1Id draft1Ordinal)
         let draft2Id, draft2Ordinal = Guid "00000000-0000-0000-0000-000000000002" |> DraftId, DraftOrdinal 2
-        let draft2Starts, draft2Ends = (2018, 06, 09, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 12, 17, 00) |> dateTimeOffsetUtc
+        let draft2Starts, draft2Ends = (2018, 06, 10, 22, 30) |> dateTimeOffsetUtc, (2018, 06, 12, 17, 00) |> dateTimeOffsetUtc
         let draft2Type = (draft2Starts, draft2Ends) |> Constrained
-        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft2Id, draft2Ordinal, draft2Type) |> drafts.HandleCreateDraftCmdAsync)
+        let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft2Id, draft2Ordinal, draft2Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft2Id draft2Ordinal)
         let draft3Id, draft3Ordinal = Guid "00000000-0000-0000-0000-000000000003" |> DraftId, DraftOrdinal 3
-        let draft3Starts, draft3Ends = (2018, 06, 12, 22, 59) |> dateTimeOffsetUtc, (2018, 06, 14, 11, 00) |> dateTimeOffsetUtc
+        let draft3Starts, draft3Ends = (2018, 06, 12, 22, 30) |> dateTimeOffsetUtc, (2018, 06, 14, 11, 00) |> dateTimeOffsetUtc
         let draft3Type = (draft3Starts, draft3Ends) |> Constrained
-        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft3Id, draft3Ordinal, draft3Type) |> drafts.HandleCreateDraftCmdAsync)
+        let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft3Id, draft3Ordinal, draft3Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft3Id draft3Ordinal)
         let draft4Id, draft4Ordinal = Guid "00000000-0000-0000-0000-000000000004" |> DraftId, DraftOrdinal 4
         let draft4Type = Unconstrained
-        let! result = nephTokens.DraftAdminToken |> ifToken (fun token -> (token, nephId, draft4Id, draft4Ordinal, draft4Type) |> drafts.HandleCreateDraftCmdAsync)
+        let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft4Id, draft4Ordinal, draft4Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft4Id draft4Ordinal)
 
         // Note: Reset Drafts agent [to pendingAllRead] so that it handles subsequent DraftsEventsRead event (&c.) appropriately (i.e. from readPersistedEvents).
@@ -735,5 +735,5 @@ let createInitialPersistedEventsIfNecessary = async {
     do! createInitialUsersEventsIfNecessary // note: although this can cause various events to be broadcast (UsersRead | UserEventWritten | &c.), no agents should yet be subscribed to these
     do! createInitialSquadsEventsIfNecessary // note: although this can cause various events to be broadcast (SquadsRead | SquadEventWritten | &c.), no agents should yet be subscribed to these
     do! createInitialFixturesEventsIfNecessary // note: although this can cause various events to be broadcast (FixturesRead | FixtureEventWritten | &c.), no agents should yet be subscribed to these
-    // TEMP-NMB: Until ready to create initial Drafts events on Azure... do! createInitialDraftsEventsIfNecessary // note: although this can cause various events to be broadcast (DraftsRead | DraftEventWritten | &c.), no agents should yet be subscribed to these
+    do! createInitialDraftsEventsIfNecessary // note: although this can cause various events to be broadcast (DraftsRead | DraftEventWritten | &c.), no agents should yet be subscribed to these
     previousLogFilter |> consoleLogger.ChangeLogFilter }

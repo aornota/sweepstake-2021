@@ -53,11 +53,6 @@ type Input =
     | ShowEliminateSquadModal of squadId : SquadId
     | EliminateSquadInput of eliminateSquadInput : EliminateSquadInput
 
-type DraftPickStatus = | AddPending | RemovePending
-
-// TODO-SOON: Add Rank [option?], i.e. so can show in "Selected for...draft" tag?...
-type DraftPick = { UserDraftPick : UserDraftPick ; DraftPickStatus : DraftPickStatus option }
-
 type AddPlayerStatus =
     | AddPlayerPending
     | AddPlayerFailed of errorText : string
@@ -109,20 +104,22 @@ type EliminateSquadState = {
     SquadId : SquadId
     EliminateSquadStatus : EliminateSquadStatus option }
 
+type PendingPickStatus = | Adding | Removing
+
+type PendingPick = { UserDraftPick : UserDraftPick ; PendingPickStatus : PendingPickStatus }
+
+type PendingPicksState = {
+    PendingPicks : PendingPick list
+    PendingRvn : Rvn option }
+
 type State = {
-    CurrentDraftPicks : DraftPick list
     CurrentSquadId : SquadId option
+    PendingPicksState : PendingPicksState
     AddPlayersState : AddPlayersState option
     ChangePlayerNameState : ChangePlayerNameState option
     ChangePlayerTypeState : ChangePlayerTypeState option
     WithdrawPlayerState : WithdrawPlayerState option
     EliminateSquadState : EliminateSquadState option }
 
-let isAddPending draftPick =
-    match draftPick.DraftPickStatus with
-    | Some draftPickStatus -> match draftPickStatus with | AddPending -> true | RemovePending -> false
-    | None -> false
-let isRemovePending draftPick =
-    match draftPick.DraftPickStatus with
-    | Some draftPickStatus -> match draftPickStatus with | AddPending -> false | RemovePending -> true
-    | None -> false
+let isAdding pendingPick = match pendingPick.PendingPickStatus with | Adding -> true | Removing -> false
+let isRemoving pendingPick = match pendingPick.PendingPickStatus with | Adding -> false | Removing -> true

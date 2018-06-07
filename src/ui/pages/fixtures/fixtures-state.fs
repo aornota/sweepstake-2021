@@ -30,7 +30,7 @@ let transition input (fixturesProjection:Projection<_ * FixtureDic>) state =
             state, Cmd.none, false
         | SendUiAuthMsg _, Ready _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
-        | ReceiveServerFixturesMsg serverFixturesMsg, _ ->
+        | ReceiveServerFixturesMsg serverFixturesMsg, Ready _ ->
             let state, cmd = state |> handleServerFixturesMsg serverFixturesMsg
             state, cmd, false
         | ShowAllFixtures, Ready _ ->

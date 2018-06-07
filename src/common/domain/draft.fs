@@ -3,6 +3,7 @@ module Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Squad
+open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
 
@@ -23,17 +24,20 @@ type DraftStatus =
     | PendingFreeSelection
     | FreeSelection
 
-type DraftStatusDto =
-    | PendingOpenDto of starts : DateTimeOffset * ends : DateTimeOffset
-    | OpenedDto of ends : DateTimeOffset
-    | PendingProcessingDto
-    | FreeSelectionDto
-
-type CurrentDraftDto = { DraftId : DraftId ; DraftOrdinal : DraftOrdinal ; DraftStatusDto : DraftStatusDto }
+type DraftDto = { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
 
 type UserDraftPick =
     | TeamPick of squadId : SquadId
     | PlayerPick of squadId : SquadId * playerId : PlayerId
+
+type PriorityChanged = | Increased | Decreased
+
+type UserDraftKey = UserId * DraftId
+
+type UserDraftPickDto = { UserDraftPick : UserDraftPick ; Rank : int }
+type CurrentUserDraftDto = { UserDraftKey : UserDraftKey ; Rvn : Rvn ; UserDraftPickDtos : UserDraftPickDto list }
+
+type UserDraftSummaryDto = { UserDraftKey : UserDraftKey ; PickCount : int }
 
 let draftTextLower (DraftOrdinal draftOrdinal) =
     if draftOrdinal = 1 then "first draft"
@@ -41,4 +45,4 @@ let draftTextLower (DraftOrdinal draftOrdinal) =
     else if draftOrdinal = 4 then "third draft"
     else sprintf "draft #%i" draftOrdinal
 
-let draftStatus draftType = match draftType with | Constrained (starts, ends) -> (starts, ends) |> PendingOpen | Unconstrained -> PendingFreeSelection
+let defaultDraftStatus draftType = match draftType with | Constrained (starts, ends) -> (starts, ends) |> PendingOpen | Unconstrained -> PendingFreeSelection

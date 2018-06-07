@@ -223,7 +223,7 @@ let private renderUsers (useDefaultTheme, userDic:UserDic, authUser) dispatch =
                         th []
                         th [] ] ]
                 tbody [ yield! userRows ] ]
-        else yield [ str "There are no Users" ] |> para theme paraCentredSmaller ] // note: should never happen
+        else yield [ str "There are no users" ] |> para theme paraCentredSmallest ] // note: should never happen
 
 let private createUsers theme authUser dispatch =
     match authUser.Permissions.UserAdminPermissions with

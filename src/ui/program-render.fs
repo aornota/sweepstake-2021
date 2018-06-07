@@ -13,6 +13,8 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
+open Aornota.Sweepstake2018.Common.Domain.Draft
+open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Program.Common
@@ -43,7 +45,7 @@ let private headerPages (appState:AppState) =
     let newsText unseenNewsCount = if unseenNewsCount > 0 then sprintf "News (%i)" unseenNewsCount else "News"
     match appState with
     | Unauth unauthState ->
-        let unseenNewsCount = unauthState.UnauthPageStates.NewsState.UnseenCount
+        let unseenNewsCount = 0 // TEMP-NMB... unauthState.UnauthPageStates.NewsState.UnseenCount
         [
             unseenNewsCount |> newsText, unauthState.CurrentUnauthPage = NewsPage, UnauthPage NewsPage, NewsPage |> ShowUnauthPage |> UnauthInput
             "Scores", unauthState.CurrentUnauthPage = ScoresPage, UnauthPage ScoresPage, ScoresPage |> ShowUnauthPage |> UnauthInput
@@ -51,8 +53,8 @@ let private headerPages (appState:AppState) =
             "Fixtures", unauthState.CurrentUnauthPage = FixturesPage, UnauthPage FixturesPage, FixturesPage |> ShowUnauthPage |> UnauthInput
         ]
     | Auth authState ->
-        let unseenNewsCount = authState.UnauthPageStates.NewsState.UnseenCount
-        let unseenChatCount = authState.AuthPageStates.ChatState.UnseenCount
+        let unseenNewsCount = 0 // TEMP-NMB... authState.UnauthPageStates.NewsState.UnseenCount
+        let unseenChatCount = 0 // TEMP-NMB... authState.AuthPageStates.ChatState.UnseenCount
         let chatText = if unseenChatCount > 0 then sprintf "Chat (%i)" unseenChatCount else "Chat"
         [
             unseenNewsCount |> newsText, authState.CurrentPage = UnauthPage NewsPage, UnauthPage NewsPage, NewsPage |> UnauthPage |> ShowPage |> AuthInput
@@ -128,14 +130,15 @@ let private renderHeader (useDefaultTheme, navbarBurgerIsActive, serverStarted:D
                     navbarDropDownItem theme isActive [ [ userAdmin ] |> para theme paraDefaultSmallest ] |> Some
                 | None -> None
             let draftAdmin =
-                if authUser.Permissions.DraftAdminPermission then
+                match authUser.Permissions.DraftAdminPermissions with
+                | Some _ ->
                     let text, isActive, appInput =
                         match headerPages |> List.tryFind (fun (_, _, page, _) -> page = AuthPage DraftAdminPage) with
                         | Some (text, isActive, _, appInput) -> text, isActive, appInput
                         | None -> "Draft administration", false, DraftAdminPage |> AuthPage |> ShowPage |> AuthInput // note: should never happen
                     let draftAdmin = [ str text ] |> link theme (ClickableLink (fun _ -> appInput |> AppInput |> dispatch))
                     navbarDropDownItem theme isActive [ [ draftAdmin ] |> para theme paraDefaultSmallest ] |> Some
-                else None
+                | None -> None
             let hasDropDown = match userAdmin, draftAdmin with | None, None -> false | _ -> true
             if hasDropDown then navbarDropDown theme (icon iconAdminSmall) [ Rct.ofOption userAdmin ; Rct.ofOption draftAdmin ] |> Some
             else None
@@ -249,7 +252,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
 
         | SquadsPage ->
             let squadsState = unauthState.UnauthPageStates.SquadsState
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
             let fixturesState = unauthState.UnauthPageStates.FixturesState
             yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch) ]
@@ -300,14 +303,102 @@ let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
     cardModal theme [ [ bold "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
 
-// #region TEMP-NMB...renderScores | renderDrafts
-let private renderDraftAdmin useDefaultTheme =
-    let theme = getTheme useDefaultTheme
-    columnContent [ [ bold "Draft administration" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
+// #region TEMP-NMB...renderDrafts
 let private renderDrafts useDefaultTheme =
     let theme = getTheme useDefaultTheme
     columnContent [ [ bold "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
 // #endregion
+
+let private userDraftPickSummary theme (squadsProjection:Projection<_ * SquadDic>) (userDraftPickDtos:UserDraftPickDto list) =
+    let isTeamPick userDraftPick = match userDraftPick with | TeamPick _ -> true | PlayerPick _ -> false
+    let isGoalkeeper squadDic userDraftPick =
+        match userDraftPick with
+        | TeamPick _ -> false
+        | PlayerPick (squadId, playerId) -> match (squadId, playerId) |> playerType squadDic with | Some Goalkeeper -> true | _ -> false
+    let isOutfieldPlayer squadDic userDraftPick =
+        match userDraftPick with
+        | TeamPick _ -> false
+        | PlayerPick (squadId, playerId) -> match (squadId, playerId) |> playerType squadDic with | Some Defender | Some Midfielder | Some Forward -> true | _ -> false
+    let userDraftPicks = userDraftPickDtos |> List.map (fun userDraftPickDto -> userDraftPickDto.UserDraftPick)
+    match squadsProjection with
+    | Ready (_, squadDic) ->
+        let teamCount = userDraftPicks |> List.filter isTeamPick |> List.length
+        let goalkeeperCount = userDraftPicks |> List.filter (isGoalkeeper squadDic) |> List.length
+        let outfieldPlayerCount = userDraftPicks |> List.filter (isOutfieldPlayer squadDic) |> List.length
+        let counts = [
+            if teamCount > 0 then
+                let plural = if teamCount > 1 then "s" else String.Empty
+                yield sprintf "%i team%s" teamCount plural
+            if goalkeeperCount > 0 then
+                let plural = if goalkeeperCount > 1 then "s" else String.Empty
+                yield sprintf "%i goalkeeper%s" goalkeeperCount plural
+            if outfieldPlayerCount > 0 then
+                let plural = if outfieldPlayerCount > 1 then "s" else String.Empty
+                yield sprintf "%i outfield player%s" outfieldPlayerCount plural ]
+        let items = counts.Length
+        let counts = counts |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
+        let counts = counts |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
+        [ str (sprintf "You have selected %s for this draft." counts) ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
+    | Pending | Failed ->
+        let count = userDraftPickDtos.Length
+        let plural = if count > 1 then "s" else String.Empty
+        [ str (sprintf "You have made %i selection%s for this draft." count plural) ] |> para theme paraDefaultSmallest // note: should never happen
+
+let private currentDraftSummary useDefaultTheme authUser (_, draft) (currentUserDraftDto:CurrentUserDraftDto option) squadsProjection dispatch =
+    let theme = getTheme useDefaultTheme
+    let canDraft = match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
+    if canDraft then
+        let semanticAndContents =
+            let draftTextLower = draft.DraftOrdinal |> draftTextLower
+            match draft.DraftStatus with
+            | PendingOpen (starts, ends) ->
+                let starts, ends = starts.LocalDateTime |> dateAndTimeText, ends.LocalDateTime |> dateAndTimeText
+                let contents = [ [ bold (sprintf "The %s will open on %s and will close on %s" draftTextLower starts ends) ] |> para theme paraCentredSmaller ]
+                (Info, contents) |> Some
+            | Opened ends ->
+                let ends = ends.LocalDateTime |> dateAndTimeText
+                let semantic, userDraftPickSummary =
+                    match currentUserDraftDto with
+                    | Some currentUserDraftDto when currentUserDraftDto.UserDraftPickDtos.Length > 0 ->
+                        Info, currentUserDraftDto.UserDraftPickDtos |> userDraftPickSummary theme squadsProjection
+                    | Some _ | None ->
+                        Warning, [ bold "You have not made any selections for this draft." ] |> para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger }
+                let recommendation =
+                    if draft.DraftOrdinal = DraftOrdinal 1 then
+                        [
+                            br
+                            [ italic "We recommend making at least 25-30 selections for the first draft." ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
+                        ]
+                    else []
+                let contents = [
+                    yield [ bold (sprintf "The %s is now open and will close on %s" draftTextLower ends) ] |> para theme paraCentredSmaller
+                    yield br
+                    yield [
+                        str "Please select teams/coaches, goalkeepers and outfield players on the "
+                        [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
+                        str " page. You will be able to prioritize your selections on the "
+                        [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
+                        str " page soon."
+                    ] |> para theme paraDefaultSmallest
+                    yield br
+                    yield userDraftPickSummary
+                    yield! recommendation
+                ]
+                (semantic, contents) |> Some
+            | PendingProcessing ->
+                let contents = [ [ bold (sprintf "The %s is now closed and will be processed soon" draftTextLower) ] |> para theme paraCentredSmaller ]
+                (Info, contents) |> Some
+            | FreeSelection -> // TODO-SOON-ISH: Finesse this, e.g. only show if user needs more picks?...
+                let contents = [
+                    [ bold "There are no further drafts" ] |> para theme paraCentredSmaller
+                    br
+                    [ str "Please pick team/coach | goalkeeper | outfield players (as required) on the Squads page." ] |> para theme paraDefaultSmallest ]
+                (Info, contents) |> Some
+            | _ -> None // note: should never happen
+        match semanticAndContents with
+        | Some (semantic, contents) -> columnContent [ notification theme { notificationDefault with NotificationSemantic = semantic |> Some } contents ] |> Some
+        | None -> None
+        else None
 
 let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispatch =
     let hasModal = if hasStaticModal then true else match authState.ChangePasswordState, authState.SigningOut with | Some _, _ -> true | None, true -> true | None, false -> false
@@ -315,6 +406,11 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
     let usersProjection = authState.UnauthProjections.UsersProjection
     let squadsProjection = authState.UnauthProjections.SquadsProjection
     let fixturesProjection = authState.UnauthProjections.FixturesProjection
+    let draftsProjection = authState.AuthProjections.DraftsProjection
+    let currentDraft, currentUserDraftDto =
+        match draftsProjection with
+        | Ready (_, draftDic, currentUserDraftDto) -> draftDic |> currentDraft, currentUserDraftDto
+        | Pending | Failed -> None, None
     div divDefault [
         match hasStaticModal, authState.ChangePasswordState with
         | false, Some changePasswordState ->
@@ -323,6 +419,10 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         match hasStaticModal, authState.SigningOut with
         | false, true ->
             yield lazyViewOrHMR renderSigningOutModal useDefaultTheme
+        | _ -> ()
+        match currentDraft with
+        | Some currentDraft ->
+            yield Rct.ofOption (currentDraftSummary useDefaultTheme authState.AuthUser currentDraft currentUserDraftDto squadsProjection dispatch)
         | _ -> ()
         match authState.CurrentPage with
         | UnauthPage NewsPage ->
@@ -336,17 +436,16 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
 
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState
-            let currentDraftDto = match authState.AuthProjections.DraftsProjection with | Ready currentDraftDto -> currentDraftDto | Pending | Failed -> None
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraftDto, hasModal) (SquadsInput >> UPageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraft, currentUserDraftDto, hasModal)
+                (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
             let fixturesState = authState.UnauthPageStates.FixturesState
             yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
 
         | AuthPage DraftAdminPage ->
             match authState.AuthPageStates.DraftAdminState with
-            | Some _draftAdminState ->
-                yield renderDraftAdmin useDefaultTheme
-               // TODO-SOON...  yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, hasModal) (DraftAdminInput >> APageInput >> PageInput >> dispatch)
+            | Some draftAdminState ->
+                yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, authUser, draftsProjection, usersProjection, hasModal) (DraftAdminInput >> APageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage DraftAdminPage when AuthPageStates.DraftAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
@@ -419,20 +518,3 @@ let render state dispatch =
         yield lazyViewOrHMR2 renderNotificationMessages (state.UseDefaultTheme, SWEEPSTAKE_2018, state.NotificationMessages, state.Ticks) (DismissNotificationMessage >> dispatch)
         yield renderContent state dispatch // note: renderContent has its own lazyViewOrHMR[n] handling
         yield lazyViewOrHMR renderFooter state.UseDefaultTheme ]
-
-(*let private draftNotificationMessage currentDraftDto =
-    match currentDraftDto with
-    | Some currentDraftDto ->
-        let draftTextLower = currentDraftDto.DraftOrdinal |> draftTextLower
-        let text =
-            match currentDraftDto.DraftStatusDto with
-            | PendingOpenDto (starts, ends) ->
-                let starts, ends = starts.LocalDateTime, ends.LocalDateTime
-                sprintf "The %s will open on %s and will close on %s" draftTextLower (starts |> dateAndTimeText) (ends |> dateAndTimeText)
-            | OpenedDto ends ->
-                let ends = ends.LocalDateTime
-                sprintf "The %s is now open and will close on %s" draftTextLower (ends |> dateAndTimeText)
-            | PendingProcessingDto -> sprintf "The %s will be processed soon" draftTextLower
-            | FreeSelectionDto -> "There are no further drafts; please pick team/coach | goalkeeper | outfield players (as required)" // TODO-SOON: Finesse this...
-        infoMessage text false |> Some
-    | None -> None*)

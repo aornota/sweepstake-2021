@@ -202,7 +202,7 @@ let transition input (usersProjection:Projection<_ * UserDic>) state =
             state, Cmd.none, false
         | SendUiAuthMsg _, Ready _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
-        | ReceiveServerUserAdminMsg serverUserAdminMsg, _ ->
+        | ReceiveServerUserAdminMsg serverUserAdminMsg, Ready _ ->
             let state, cmd = state |> handleServerUserAdminMsg serverUserAdminMsg
             state, cmd, false
         | ShowCreateUsersModal userTypes, Ready _ ->

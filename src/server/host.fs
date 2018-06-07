@@ -77,6 +77,7 @@ createInitialPersistedEventsIfNecessary |> Async.RunSynchronously
 () |> Projections.Squads.squads.Start
 () |> Projections.Fixtures.fixtures.Start
 () |> Projections.Drafts.drafts.Start
+() |> Projections.UserDraftSummary.userDraftSummary.Start
 () |> Projections.Chat.chat.Start
 
 "reading persisted events" |> Info |> log

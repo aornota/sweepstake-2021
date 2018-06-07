@@ -21,6 +21,8 @@ type ChangeUserTypeToken private (userTarget, userTypes) =
 
 type DraftAdminToken private () =
     new (_:MetaToken) = DraftAdminToken ()   
+type ProcessDraftToken private () =
+    new (_:MetaToken) = ProcessDraftToken ()
 
 type ResultsAdminToken private () =
     new (_:MetaToken) = ResultsAdminToken ()   
@@ -60,6 +62,7 @@ type private ValidatedUserTokens = {
     ResetPasswordToken : ResetPasswordToken option
     ChangeUserTypeToken : ChangeUserTypeToken option
     DraftAdminToken : DraftAdminToken option
+    ProcessDraftToken : ProcessDraftToken option
     ResultsAdminToken : ResultsAdminToken option
     CreatePostToken : CreatePostToken option
     EditOrRemovePostToken : EditOrRemovePostToken option
@@ -90,7 +93,13 @@ type UserTokens private (vut:ValidatedUserTokens) =
                     | None -> None
                 createUserToken, resetPasswordToken, changeUserTypeToken
             | None -> None, None, None
-        let draftAdminToken = if permissions.DraftAdminPermission then MetaToken |> DraftAdminToken |> Some else None
+        let draftAdminToken, processDraftToken =
+            match permissions.DraftAdminPermissions with
+            | Some draftAdminPermissions ->
+                let draftAdminToken = MetaToken |> DraftAdminToken |> Some
+                let processDraftToken = if draftAdminPermissions.ProcessDraftPermission then MetaToken |> ProcessDraftToken |> Some else None
+                draftAdminToken, processDraftToken
+            | None -> None, None
         let resultsAdminToken = if permissions.ResultsAdminPermission then MetaToken |> ResultsAdminToken |> Some else None
         let createPostToken, editOrRemovePostToken =
             match permissions.NewsPermissions with
@@ -124,6 +133,7 @@ type UserTokens private (vut:ValidatedUserTokens) =
             ResetPasswordToken = resetPasswordToken
             ChangeUserTypeToken = changeUserTypeToken
             DraftAdminToken = draftAdminToken
+            ProcessDraftToken = processDraftToken
             ResultsAdminToken = resultsAdminToken
             CreatePostToken = createPostToken
             EditOrRemovePostToken = editOrRemovePostToken
@@ -141,6 +151,7 @@ type UserTokens private (vut:ValidatedUserTokens) =
     member __.ResetPasswordToken = vut.ResetPasswordToken
     member __.ChangeUserTypeToken = vut.ChangeUserTypeToken
     member __.DraftAdminToken = vut.DraftAdminToken
+    member __.ProcessDraftToken = vut.ProcessDraftToken
     member __.ResultsAdminToken = vut.ResultsAdminToken
     member __.CreatePostToken = vut.CreatePostToken
     member __.EditOrRemovePostToken = vut.EditOrRemovePostToken

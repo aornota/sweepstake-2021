@@ -19,6 +19,9 @@ type UserAdminPermissions = {
     ResetPasswordPermission : UserTarget option
     ChangeUserTypePermission : (UserTarget * UserType list) option }
 
+type DraftAdminPermissions = {
+    ProcessDraftPermission : bool }
+
 type NewsPermissions = {
     CreatePostPermission : bool
     EditOrRemovePostPermission : UserId option }
@@ -37,7 +40,7 @@ type FixturePermissions = {
 type Permissions = {
     ChangePasswordPermission : UserId option
     UserAdminPermissions : UserAdminPermissions option
-    DraftAdminPermission : bool
+    DraftAdminPermissions : DraftAdminPermissions option
     ResultsAdminPermission: bool
     NewsPermissions : NewsPermissions option
     SquadPermissions : SquadPermissions option
@@ -80,7 +83,11 @@ let permissions userId userType =
         match createUserPermission, resetPasswordPermission, changeUserTypePermission with
         | [], None, None -> None
         | _ -> { CreateUserPermission = createUserPermission ; ResetPasswordPermission = resetPasswordPermission ; ChangeUserTypePermission = changeUserTypePermission } |> Some
-    let draftAdminPermission = match userType with | SuperUser -> true | Administrator | Pleb | PersonaNonGrata -> false
+    let draftAdminPermissions =
+        match userType with
+        | SuperUser -> { ProcessDraftPermission = true } |> Some
+        | Administrator -> { ProcessDraftPermission = false } |> Some
+        | Pleb | PersonaNonGrata -> None
     let resultsAdminPermission = match userType with | SuperUser | Administrator -> true | Pleb | PersonaNonGrata -> false
     let createPostPermission, editOrRemovePostPermission = match userType with | SuperUser | Administrator -> true, userId |> Some | Pleb | PersonaNonGrata -> false, None    
     let newsPermissions =
@@ -108,7 +115,7 @@ let permissions userId userType =
     {
         ChangePasswordPermission = changePasswordPermission
         UserAdminPermissions = userAdminPermissions
-        DraftAdminPermission = draftAdminPermission
+        DraftAdminPermissions = draftAdminPermissions
         ResultsAdminPermission = resultsAdminPermission
         NewsPermissions = newsPermissions
         SquadPermissions = squadPermissions

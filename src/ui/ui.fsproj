@@ -42,6 +42,9 @@
     <Compile Include="pages/user-admin/user-admin-common.fs" />
     <Compile Include="pages/user-admin/user-admin-state.fs" />
     <Compile Include="pages/user-admin/user-admin-render.fs" />
+    <Compile Include="pages/draft-admin/draft-admin-common.fs" />
+    <Compile Include="pages/draft-admin/draft-admin-state.fs" />
+    <Compile Include="pages/draft-admin/draft-admin-render.fs" />
     <Compile Include="pages/news/news-common.fs" />
     <Compile Include="pages/news/news-state.fs" />
     <Compile Include="pages/news/news-render.fs" />
