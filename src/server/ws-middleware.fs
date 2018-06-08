@@ -71,7 +71,8 @@ type WsMiddleware (next:RequestDelegate) =
                 match ctx.WebSockets.IsWebSocketRequest with
                 | true ->
                     "new web socket request" |> Verbose |> log
-                    do! ifDebugSleepAsync 25 125
+                    (* TEMP-NMB...
+                    do! ifDebugSleepAsync 25 125 *)
                     let! ws = ctx.WebSockets.AcceptWebSocketAsync () |> Async.AwaitTask
                     let connectionId = ConnectionId.Create ()
                     sprintf "new web socket accepted -> %A" connectionId |> Verbose |> log

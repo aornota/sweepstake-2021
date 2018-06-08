@@ -121,6 +121,9 @@ type ServerSquadsMsg =
 type ServerFixturesMsg =
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>
 
+type ServerDraftsMsg =
+    | RemoveFromDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
+
 type ChatProjectionMsg =
     | ChatMessagesDeltaMsg of deltaRvn : Rvn * delta : Delta<ChatMessageId, ChatMessageDto> * hasMoreChatMessages : bool
 
@@ -138,6 +141,7 @@ type ServerMsg =
     | ServerNewsMsg of serverNewsMsg : ServerNewsMsg
     | ServerSquadsMsg of serverSquadsMsg : ServerSquadsMsg
     | ServerFixturesMsg of serverFixturesMsg : ServerFixturesMsg
+    | ServerDraftsMsg of serverDraftsMsg : ServerDraftsMsg
     | ServerChatMsg of serverChatMsg : ServerChatMsg
 
 let otherError source errorText = ifDebugSource source errorText |> OtherError |> Error

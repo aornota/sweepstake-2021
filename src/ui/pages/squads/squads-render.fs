@@ -27,8 +27,6 @@ type private UserDraftPickDic = Dictionary<UserDraftPick, int>
 let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ]
 
 let private playerTypeSortOrder playerType = match playerType with | Goalkeeper -> 1 | Defender -> 2 | Midfielder -> 3 | Forward -> 4
-let private playerTypeText playerType = match playerType with | Goalkeeper -> "Goalkeeper" | Defender -> "Defender" | Midfielder -> "Midfielder" | Forward -> "Forward"
-
 let private playerTypeRadios selectedPlayerType disabledPlayerType disableAll dispatch =
     let onChange playerType = (fun _ -> playerType |> dispatch)
     playerTypes
@@ -305,11 +303,11 @@ let private draftLeftAndRight theme draftId draftOrdinal isOpen userDraftPick (r
             | Some pendingPick ->
                 match pendingPick.PendingPickStatus with
                 | Adding -> None
-                | Removing -> if isOpen then [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } |> Some else None
+                | Removing -> if isOpen then [ [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } ] |> para theme paraDefaultSmallest |> Some else None
             | None ->
                 if isOpen then
                     let onClick = (fun _ -> (draftId, userDraftPick) |> RemoveFromDraft |> dispatch)
-                    [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Clickable (onClick, None) } |> Some
+                    [ [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Clickable (onClick, None) } ] |> para theme paraDefaultSmallest |> Some
                 else None
         | None -> None
     draftLeft, draftRight

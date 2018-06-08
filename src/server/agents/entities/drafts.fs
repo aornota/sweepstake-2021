@@ -301,7 +301,7 @@ type Drafts () =
                 let source = "OnDraftsEventsRead"
                 let draftDic, errors = initializeDrafts source draftsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) (%i draft/s) when pendingAllRead" source draftsEvents.Length draftDic.Count |> Info |> log
+                sprintf "%s (%i event/s) when pendingAllRead" source draftsEvents.Length |> Info |> log
                 let draftsRead = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) ->
                     { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus })
                 draftsRead |> DraftsRead |> broadcaster.Broadcast
@@ -314,7 +314,7 @@ type Drafts () =
                 let source = "OnUserDraftsEventsRead"
                 let userDraftDic, errors = initializeUserDrafts source userDraftsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) (%i user draft/s) when pendingAllRead" source userDraftsEvents.Length userDraftDic.Count |> Info |> log
+                sprintf "%s (%i event/s) when pendingAllRead" source userDraftsEvents.Length |> Info |> log
                 let userDraftsRead = userDraftDic |> List.ofSeq |> List.map (fun (KeyValue (userDraftId, userDraft)) ->
                     let userDraftPicksRead = userDraft.UserDraftPickDic |> List.ofSeq |> List.map (fun (KeyValue (userDraftPick, rank)) ->
                         { UserDraftPick = userDraftPick ; Rank = rank })

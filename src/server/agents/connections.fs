@@ -219,7 +219,8 @@ type Connections () =
             | OnSendMsg _ -> "SendMsg when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
         and managingConnections serverStarted connectionDic signedInUserDic = async {
             let! input = inbox.Receive ()
-            do! ifDebugSleepAsync 100 500
+            (* TEMP-NMB...
+            do! ifDebugSleepAsync 100 500 *)
             match input with
             | Start _ -> "Start when managingConnections" |> IgnoredInput |> Agent |> log ; return! managingConnections serverStarted connectionDic signedInUserDic
             | OnSendMsg (serverMsg, connectionIds) ->
@@ -250,7 +251,7 @@ type Connections () =
                 let serverMsg = exn.Message |> ReceiveUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
                 do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                 return! managingConnections serverStarted connectionDic signedInUserDic
-            | OnDeserializeUiMsgError (connectionId, exn) ->                
+            | OnDeserializeUiMsgError (connectionId, exn) ->
                 sprintf "OnDeserializeUiMsgError for %A when managingConnections (%i connection/s) (%i signed-in user/s)" connectionId connectionDic.Count signedInUserDic.Count |> Danger |> log
                 let serverMsg = exn.Message |> DeserializeUiMsgError |> ServerUiMsgErrorMsg |> ServerAppMsg
                 do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
@@ -758,8 +759,8 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthSquadsMsg (RemoveFromDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
-                    let source = "RemoveFromDraftCmd"
+                | UiAuthMsg (jwt, UiAuthSquadsMsg (UiAuthSquadsMsg.RemoveFromDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
+                    let source = "UiAuthSquadsMsg.RemoveFromDraftCmd"
                     sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
@@ -773,7 +774,7 @@ type Connections () =
                                     (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> tupleError userDraftPick |> thingAsync
                             | Error error -> error |> Error |> tupleError userDraftPick |> thingAsync
-                        let serverMsg = result |> RemoveFromDraftCmdResult |> ServerSquadsMsg
+                        let serverMsg = result |> ServerSquadsMsg.RemoveFromDraftCmdResult |> ServerSquadsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
@@ -794,6 +795,26 @@ type Connections () =
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> ConfirmParticipantCmdResult |> ServerFixturesMsg
+                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiAuthMsg (jwt, UiAuthDraftsMsg (UiAuthDraftsMsg.RemoveFromDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
+                    let source = "UiAuthDraftsMsg.RemoveFromDraftCmd"
+                    sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                        let! result =
+                            match result with
+                            | Ok userTokens ->
+                                match userTokens.DraftToken with
+                                | Some draftToken ->
+                                    (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmdAsync
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> tupleError userDraftPick |> thingAsync
+                            | Error error -> error |> Error |> tupleError userDraftPick |> thingAsync
+                        let serverMsg = result |> ServerDraftsMsg.RemoveFromDraftCmdResult |> ServerDraftsMsg
                         do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection

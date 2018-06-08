@@ -26,6 +26,7 @@ open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.UI.Pages
 open Aornota.Sweepstake2018.UI.Pages.Chat.Common
 open Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Common
+open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
 open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
 open Aornota.Sweepstake2018.UI.Pages.News.Common
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
@@ -53,7 +54,8 @@ let private setBodyClass useDefaultTheme = Browser.document.body.className <- ge
 
 let private readPreferencesCmd =
     let readPreferences () = async {
-        do! ifDebugSleepAsync 20 100
+        (* TEMP-NMB...
+        do! ifDebugSleepAsync 20 100 *)
         return Key APP_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> ofJson<Preferences>) }
     Cmd.ofAsync readPreferences () (Ok >> ReadingPreferencesInput >> AppInput) (Error >> ReadingPreferencesInput >> AppInput)
 
@@ -219,10 +221,8 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
             let draftAdminState, draftAdminCmd = DraftAdmin.State.initialize authUser
             draftAdminState |> Some, draftAdminCmd
         else None, Cmd.none
+    let draftsState, draftsCmd = Drafts.State.initialize ()
     let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
-
-    let tempDraftsState = ()
-
     let usersProjection = match unauthProjections with | Some unauthProjections -> unauthProjections.UsersProjection | None -> Pending
     let squadsProjection, squadsProjectionCmd =
         match unauthProjections with
@@ -237,7 +237,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
         UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
-        AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = draftAdminState ; DraftsState = tempDraftsState ; ChatState = chatState }
+        AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = draftAdminState ; DraftsState = draftsState ; ChatState = chatState }
         UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection ; FixturesProjection = fixturesProjection }
         AuthProjections = { DraftsProjection = Pending }
         ChangePasswordState =
@@ -255,8 +255,12 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
     let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let draftAdminCmd = draftAdminCmd |> Cmd.map (DraftAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+    let draftsCmd = draftsCmd |> Cmd.map (DraftsInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
-    let cmd = Cmd.batch [ usersProjectionAuthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; draftsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; draftAdminCmd ; chatCmd ]
+    let cmd =
+        Cmd.batch [
+            usersProjectionAuthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; draftsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; draftAdminCmd ; draftsCmd
+            chatCmd ]
     { state with AppState = Auth authState }, cmd
 
 let initialize () =
@@ -949,14 +953,28 @@ let private handleServerAppMsg serverAppMsg state =
                 | Some currentUserDraftDto ->
                     let userDraftPicks = currentUserDraftDto.UserDraftPickDtos |> List.map (fun userDraftPickDto -> userDraftPickDto.UserDraftPick)
                     let pendingPicks = pendingPicks |> List.filter (fun pendingPick ->
-                        if pendingPick |> isAdding && userDraftPicks |> List.contains pendingPick.UserDraftPick then false
-                        else (pendingPick |> isRemoving && userDraftPicks |> List.contains pendingPick.UserDraftPick |> not) |> not)
+                        if pendingPick |> Squads.Common.isAdding && userDraftPicks |> List.contains pendingPick.UserDraftPick then false
+                        else (pendingPick |> Squads.Common.isRemoving && userDraftPicks |> List.contains pendingPick.UserDraftPick |> not) |> not)
                     { pendingPicksState with PendingPicks = pendingPicks }
                 | None -> { PendingPicks = [] ; PendingRvn = None }
             let squadsState = { squadsState with PendingPicksState = pendingPicksState }
+            let authPageStates = authState.AuthPageStates
+            let draftsState = authPageStates.DraftsState
+            let pickOverridesState = draftsState.PickOverridesState
+            let pickOverrides = pickOverridesState.PickOverrides
+            let pickOverridesState =
+                match currentUserDraftDto with
+                | Some currentUserDraftDto ->
+                    let userDraftPicks = currentUserDraftDto.UserDraftPickDtos |> List.map (fun userDraftPickDto -> userDraftPickDto.UserDraftPick)
+                    let pickOverrides = pickOverrides |> List.filter (fun pickOverride ->
+                        (pickOverride |> Drafts.Common.isRemoving && userDraftPicks |> List.contains pickOverride.UserDraftPick |> not) |> not)
+                    { pickOverridesState with PickOverrides = pickOverrides }
+                | None -> { PickOverrides = [] ; PendingRvn = None }
+            let draftsState = { draftsState with PickOverridesState = pickOverridesState }
             let unauthPageStates = { unauthPageStates with SquadsState = squadsState }           
+            let authPageStates = { authPageStates with DraftsState = draftsState }           
             let authProjections = { authProjections with DraftsProjection = (changeRvn, draftDic, currentUserDraftDto) |> Ready }
-            let authState = { authState with UnauthPageStates = unauthPageStates ; AuthProjections = authProjections }
+            let authState = { authState with UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates ; AuthProjections = authProjections }
             { state with AppState = Auth authState }, Cmd.none
         | Pending | Failed -> // note: silently ignore CurrentUserDraftDtoChangedMsg if not Ready
             state, Cmd.none
@@ -987,18 +1005,22 @@ let private handleServerMsg serverMsg state =
         state, Cmd.none
     | ServerFixturesMsg serverFixturesMsg, Auth _ ->
         state, serverFixturesMsg |> ReceiveServerFixturesMsg |> FixturesInput |> UPageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerUserAdminMsg _, Unauth _ -> // note: silently ignore ServerUserAdminMsg if Unauth
+        state, Cmd.none
     | ServerUserAdminMsg serverUserAdminMsg, Auth _ ->
         state, serverUserAdminMsg |> ReceiveServerUserAdminMsg |> UserAdminInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | ServerUserAdminMsg _, Unauth _ -> // note: silently ignore ServerUserAdminMsg if Unauth
+    | ServerDraftAdminMsg _, Unauth _ -> // note: silently ignore ServerDraftAdminMsg if Unauth
         state, Cmd.none
     | ServerDraftAdminMsg serverDraftAdminMsg, Auth _ ->
         state, serverDraftAdminMsg |> ReceiveServerDraftAdminMsg |> DraftAdminInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | ServerDraftAdminMsg _, Unauth _ -> // note: silently ignore ServerDraftAdminMsg if Unauth
+    | ServerDraftsMsg _, Unauth _ -> // note: silently ignore ServerDraftsMsg if Unauth
+        state, Cmd.none
+    | ServerDraftsMsg serverDraftsMsg, Auth _ ->
+        state, serverDraftsMsg |> ReceiveServerDraftsMsg |> DraftsInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
+    | ServerChatMsg _, Unauth _ -> // note: silently ignore ServerChatMsg if Unauth
         state, Cmd.none
     | ServerChatMsg serverChatMsg, Auth _ ->
         state, serverChatMsg |> ReceiveServerChatMsg |> ChatInput |> APageInput |> PageInput |> AuthInput |> AppInput |> Cmd.ofMsg
-    | ServerChatMsg _, Unauth _ -> // note: silently ignore ServerChatMsg if Unauth
-        state, Cmd.none
     | _, _ ->
         state |> shouldNeverHappen (sprintf "Unexpected ServerMsg when %A -> %A" state.AppState serverMsg)
 
@@ -1100,11 +1122,14 @@ let private handleAuthInput authInput authState state =
     match authInput, authState.ChangePasswordState, authState.SigningOut with
     | ShowPage page, None, false ->
         if authState.CurrentPage <> page then
-            match page, authState.AuthUser.Permissions.UserAdminPermissions with
-            | AuthPage UserAdminPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
-                let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdministrationPage when UserAdministrationPermissions is None"
+            match page, authState.AuthUser.Permissions.UserAdminPermissions, page, authState.AuthUser.Permissions.DraftAdminPermissions with
+            | AuthPage UserAdminPage, None, _, _ -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
+                let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage UserAdminPage when UserAdminPermissions is None"
                 state, cmd, false
-            | _, _ ->
+            | _, _, AuthPage DraftAdminPage, None -> // note: would expect "Permissions mismatch" AutoSignInCmdResult error instead
+                let state, cmd = state |> shouldNeverHappen "Unexpected ShowPage DraftAdminPage when DraftAdminPermissions is None"
+                state, cmd, false
+            | _ ->
                 // TODO-ONGOING: Initialize other "optional" pages (if required) - and toggle "IsCurrent" for other relevant pages...
                 let newsCmd =
                     if page <> UnauthPage NewsPage && authState.CurrentPage = UnauthPage NewsPage then false |> ToggleNewsIsCurrentPage |> Cmd.ofMsg
@@ -1213,11 +1238,22 @@ let private handleAuthInput authInput authState state =
         | None ->
             let state, cmd = state |> shouldNeverHappen "Unexpected DraftAdminInput when AuthPageStates.DraftAdminState is None"
             state, cmd, false
-
-    | PageInput (APageInput (DraftsInput _)), _, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected DraftsInput -> NYI"
-        state, cmd, false
-
+    | PageInput (APageInput (DraftsInput (Drafts.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (APageInput (DraftsInput (Drafts.Common.SendUiAuthMsg uiAuthMsg))), _, false ->
+        let authState, cmd = uiAuthMsg |> sendAuthMsgCmd state.ConnectionState authState
+        { state with AppState = Auth authState }, cmd, false
+    | PageInput (APageInput (DraftsInput draftsInput)), _, _ ->
+        let draftsState = authState.AuthPageStates.DraftsState
+        let draftsState, draftsCmd, isUserNonApiActivity =
+            let currentUserDraftDto =
+                match authState.AuthProjections.DraftsProjection with
+                | Ready (_, _, currentUserDraftDto) -> currentUserDraftDto
+                | Pending | Failed -> None
+            draftsState |> Drafts.State.transition draftsInput (authState.AuthUser |> Some) authState.UnauthProjections.SquadsProjection currentUserDraftDto
+        let authPageStates = { authState.AuthPageStates with DraftsState = draftsState }
+        let draftsCmd = draftsCmd |> Cmd.map (DraftsInput >> APageInput >> PageInput >> AuthInput >> AppInput)
+        { state with AppState = Auth { authState with AuthPageStates = authPageStates } }, draftsCmd, isUserNonApiActivity
     | PageInput (APageInput (ChatInput (Chat.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (APageInput (ChatInput Chat.Common.ShowMarkdownSyntaxModal)), None, false ->

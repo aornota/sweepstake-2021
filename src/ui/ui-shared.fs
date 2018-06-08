@@ -85,3 +85,12 @@ let activeDraft (draftDic:DraftDic) =
         | Opened _ | PendingProcessing -> (draftId, draft) |> Some
         | PendingOpen _ | Processed | PendingFreeSelection | FreeSelection -> None
     | [] -> None
+
+let userDraftPickText (squadDic:SquadDic) userDraftPick =
+    match userDraftPick with
+    | TeamPick squadId ->
+        let (SquadName squadName) = squadId |> squadName squadDic
+        squadName
+    | PlayerPick (squadId, playerId) ->
+        let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
+        playerName

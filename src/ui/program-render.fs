@@ -303,12 +303,6 @@ let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
     cardModal theme [ [ bold "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
 
-// #region TEMP-NMB...renderDrafts
-let private renderDrafts useDefaultTheme =
-    let theme = getTheme useDefaultTheme
-    columnContent [ [ bold "Drafts" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-// #endregion
-
 let private userDraftPickSummary theme (squadsProjection:Projection<_ * SquadDic>) (userDraftPickDtos:UserDraftPickDto list) =
     let isTeamPick userDraftPick = match userDraftPick with | TeamPick _ -> true | PlayerPick _ -> false
     let isGoalkeeper squadDic userDraftPick =
@@ -441,15 +435,6 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | UnauthPage FixturesPage ->
             let fixturesState = authState.UnauthPageStates.FixturesState
             yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
-
-        | AuthPage DraftAdminPage ->
-            match authState.AuthPageStates.DraftAdminState with
-            | Some draftAdminState ->
-                yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, authUser, draftsProjection, usersProjection, hasModal) (DraftAdminInput >> APageInput >> PageInput >> dispatch)
-            | None ->
-                let message = debugMessage "CurrentPage is AuthPage DraftAdminPage when AuthPageStates.DraftAdminState is None" false
-                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
-
         | AuthPage UserAdminPage ->
             match authState.AuthPageStates.UserAdminState with
             | Some userAdminState ->
@@ -457,12 +442,17 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage UserAdminPage when AuthPageStates.UserAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
-
+        | AuthPage DraftAdminPage ->
+            match authState.AuthPageStates.DraftAdminState with
+            | Some draftAdminState ->
+                yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, authUser, draftsProjection, usersProjection, hasModal) (DraftAdminInput >> APageInput >> PageInput >> dispatch)
+            | None ->
+                let message = debugMessage "CurrentPage is AuthPage DraftAdminPage when AuthPageStates.DraftAdminState is None" false
+                yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
-            let _draftsState = authState.AuthPageStates.DraftsState
-            yield renderDrafts useDefaultTheme
-            // TODO-SOON...  yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, hasModal) (DraftsInput >> APageInput >> PageInput >> dispatch)
-
+            let draftsState = authState.AuthPageStates.DraftsState
+            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, squadsProjection, currentDraft, currentUserDraftDto, hasModal)
+                (DraftsInput >> APageInput >> PageInput >> dispatch)
         | AuthPage ChatPage ->
             let chatState = authState.AuthPageStates.ChatState
             yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, usersProjection, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]

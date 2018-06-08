@@ -58,8 +58,9 @@ type UiAuthSquadsMsg =
 type UiAuthFixturesMsg =
     | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
 
-(* TODO-SOON... type UiAuthDraftsMsg =
-    | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChanged : PriorityChanged *)
+type UiAuthDraftsMsg =
+    | RemoveFromDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    // TODO-SOON... | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChanged : PriorityChanged
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry
@@ -74,7 +75,7 @@ type UiAuthMsg =
     | UiAuthNewsMsg of uiAuthNewsMsg : UiAuthNewsMsg
     | UiAuthSquadsMsg of uiAuthSquadsMsg : UiAuthSquadsMsg
     | UiAuthFixturesMsg of uiAuthFixturesMsg : UiAuthFixturesMsg
-    // TODO-SOON... | UiAuthDraftsMsg of uiAuthDraftsMsg : UiAuthDraftsMsg
+    | UiAuthDraftsMsg of uiAuthDraftsMsg : UiAuthDraftsMsg
     | UiAuthChatMsg of uiAuthChatMsg : UiAuthChatMsg
 
 type UiMsg =

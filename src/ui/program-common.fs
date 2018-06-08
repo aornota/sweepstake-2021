@@ -74,7 +74,7 @@ type UnauthInput =
 type AuthPageInput =
     | UserAdminInput of userAdminInput : UserAdmin.Common.Input
     | DraftAdminInput of draftAdminInput : DraftAdmin.Common.Input
-    | DraftsInput of draftsInput : ToDo
+    | DraftsInput of draftsInput : Drafts.Common.Input
     | ChatInput of chatInput : Chat.Common.Input
 
 type PageInput =
@@ -174,7 +174,7 @@ type ChangePasswordState = {
 type AuthPageStates = {
     UserAdminState : UserAdmin.Common.State option
     DraftAdminState : DraftAdmin.Common.State option
-    DraftsState : ToDo
+    DraftsState : Drafts.Common.State
     ChatState : Chat.Common.State }
 
 type AuthProjections = { DraftsProjection : Projection<Rvn * DraftDic * CurrentUserDraftDto option> }

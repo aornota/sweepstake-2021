@@ -129,15 +129,6 @@ let private handleEliminateSquadCmdResult (result:Result<SquadName, AuthCmdError
     | _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadCmdResult when EliminateSquadState is None -> %A" result)
 
-let private userDraftPickText (squadDic:SquadDic) userDraftPick =
-    match userDraftPick with
-    | TeamPick squadId ->
-        let (SquadName squadName) = squadId |> squadName squadDic
-        squadName
-    | PlayerPick (squadId, playerId) ->
-        let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
-        playerName
-
 let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : State * Cmd<Input> =
     match serverSquadsMsg with
     | AddPlayerCmdResult result ->
@@ -166,24 +157,24 @@ let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : St
             let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
             { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
         else state, shouldNeverHappenCmd (sprintf "Unexpected AddToDraftCmdResult Error when not Adding %A" userDraftPick)
-    | RemoveFromDraftCmdResult (Ok userDraftPick) ->
+    | ServerSquadsMsg.RemoveFromDraftCmdResult (Ok userDraftPick) ->
         let pendingPicks = state.PendingPicksState.PendingPicks
         if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isRemoving) then
             state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
-        else state, shouldNeverHappenCmd (sprintf "Unexpected RemoveFromDraftCmdResult Ok when not Removing %A" userDraftPick)
-    | RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
+        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerSquadsMsg.RemoveFromDraftCmdResult Ok when not Removing %A" userDraftPick)
+    | ServerSquadsMsg.RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
         let pendingPicksState = state.PendingPicksState
         let pendingPicks = pendingPicksState.PendingPicks
         if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isRemoving) then
-            let errorText = ifDebug (sprintf "RemoveFromDraftCmdResult error -> %A" error) (error |> cmdErrorText)
+            let errorText = ifDebug (sprintf "ServerSquadsMsg.RemoveFromDraftCmdResult error -> %A" error) (error |> cmdErrorText)
             let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
             let errorToastCmd = sprintf "Unable to remove <strong>%s</strong> from draft" (userDraftPick |> userDraftPickText squadDic) |> errorToastCmd
             let pendingPicks = pendingPicks |> List.filter (fun pendingPick -> pendingPick.UserDraftPick <> userDraftPick || pendingPick |> isRemoving |> not)
             let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
             { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        else state, shouldNeverHappenCmd (sprintf "Unexpected RemoveFromDraftCmdResult Error when not Removing %A" userDraftPick)
+        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerSquadsMsg.RemoveFromDraftCmdResult Error when not Removing %A" userDraftPick)
 
-let handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
+let private handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match addPlayersInput, state.AddPlayersState with
     | NewPlayerNameTextChanged newPlayerNameText, Some addPlayersState ->
         let squadId = addPlayersState.SquadId
@@ -214,7 +205,7 @@ let handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cm
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected AddPlayersInput when AddPlayersState is None -> %A" addPlayersInput), false
 
-let handleChangePlayerNameInput changePlayerNameInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
+let private handleChangePlayerNameInput changePlayerNameInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match changePlayerNameInput, state.ChangePlayerNameState with
     | PlayerNameTextChanged playerNameText, Some changePlayerNameState ->
         let squadId = changePlayerNameState.SquadId
@@ -239,7 +230,7 @@ let handleChangePlayerNameInput changePlayerNameInput (squadDic:SquadDic) state 
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerNameInput when ChangePlayerNameState is None -> %A" changePlayerNameInput), false
 
-let handleChangePlayerTypeInput changePlayerTypeInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
+let private handleChangePlayerTypeInput changePlayerTypeInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match changePlayerTypeInput, state.ChangePlayerTypeState with
     | PlayerTypeChanged playerType, Some changePlayerTypeState ->
         let changePlayerTypeState = { changePlayerTypeState with PlayerType = playerType |> Some }
@@ -264,7 +255,7 @@ let handleChangePlayerTypeInput changePlayerTypeInput (squadDic:SquadDic) state 
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ChangePlayerTypeInput when ChangePlayerTypeState is None -> %A" changePlayerTypeInput), false
 
-let handleWithdrawPlayerInput withdrawPlayer (squadDic:SquadDic) state : State * Cmd<Input> * bool =
+let private handleWithdrawPlayerInput withdrawPlayer (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match withdrawPlayer, state.WithdrawPlayerState with
     | ConfirmWithdrawPlayer, Some withdrawPlayerState ->
         let withdrawPlayerState = { withdrawPlayerState with WithdrawPlayerStatus = WithdrawPlayerPending |> Some }   
@@ -281,7 +272,7 @@ let handleWithdrawPlayerInput withdrawPlayer (squadDic:SquadDic) state : State *
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected WithdrawPlayerInput when WithdrawPlayerState is None -> %A" withdrawPlayer), false
 
-let handleEliminateSquadInput eliminateSquadInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
+let private handleEliminateSquadInput eliminateSquadInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match eliminateSquadInput, state.EliminateSquadState with
     | ConfirmEliminateSquad, Some eliminateSquadState ->
         let eliminateSquadState = { eliminateSquadState with EliminateSquadStatus = EliminateSquadPending |> Some }   
@@ -355,7 +346,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                                 let (Rvn currentRvn) = currentUserDraftDto.Rvn
                                 match pendingPicksState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
                             | None -> match pendingPicksState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
-                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> RemoveFromDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> UiAuthSquadsMsg.RemoveFromDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
                         let pendingPicksState = { pendingPicksState with PendingPicks = pendingPick :: pendingPicks ; PendingRvn = currentRvn |> incrementRvn |> Some }
                         { state with PendingPicksState = pendingPicksState }, cmd, true
                     else state, UNEXPECTED_ERROR |> errorToastCmd, true
