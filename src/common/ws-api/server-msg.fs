@@ -122,6 +122,7 @@ type ServerFixturesMsg =
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>
 
 type ServerDraftsMsg =
+    | ChangePriorityCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
     | RemoveFromDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
 
 type ChatProjectionMsg =

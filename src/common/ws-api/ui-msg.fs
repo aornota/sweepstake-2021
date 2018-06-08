@@ -59,8 +59,8 @@ type UiAuthFixturesMsg =
     | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
 
 type UiAuthDraftsMsg =
+    | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChange : PriorityChange
     | RemoveFromDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
-    // TODO-SOON... | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChanged : PriorityChanged
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry

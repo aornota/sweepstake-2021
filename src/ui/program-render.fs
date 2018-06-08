@@ -370,14 +370,13 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft) (currentUser
                     yield [
                         str "Please select teams/coaches, goalkeepers and outfield players on the "
                         [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
-                        str " page. You will be able to prioritize your selections on the "
+                        str " page. You can prioritize your selections on the "
                         [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
-                        str " page soon."
+                        str " page."
                     ] |> para theme paraDefaultSmallest
                     yield br
                     yield userDraftPickSummary
-                    yield! recommendation
-                ]
+                    yield! recommendation ]
                 (semantic, contents) |> Some
             | PendingProcessing ->
                 let contents = [ [ bold (sprintf "The %s is now closed and will be processed soon" draftTextLower) ] |> para theme paraCentredSmaller ]

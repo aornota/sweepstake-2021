@@ -299,10 +299,10 @@ type Drafts () =
                                                     (userDraftPick, i + 1) |> updatedUserDraftPickDic.Add)
                                                 { userDraft with Rvn = rvn ; UserDraftPickDic = updatedUserDraftPickDic }
                                             else userDraft // note: should never happen
-                                        | PriorityChanged (_, userDraftPick, priorityChanged) ->
+                                        | PriorityChanged (_, userDraftPick, priorityChange) ->
                                             let userDraftPickDic = userDraft.UserDraftPickDic
                                             if userDraftPick |> userDraftPickDic.ContainsKey then
-                                                let adjustment = match priorityChanged with | Increased -> -1.5 | Decreased -> 1.5
+                                                let adjustment = match priorityChange with | Increase -> -1.5 | Decrease -> 1.5
                                                 let updatedUserDraftPickDic = UserDraftPickDic ()
                                                 userDraftPickDic
                                                 |> List.ofSeq

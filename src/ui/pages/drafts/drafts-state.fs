@@ -17,30 +17,40 @@ open Aornota.Sweepstake2018.UI.Shared
 
 open Elmish
 
-let initialize () =
-    let pickOverridesState = { PickOverrides = [] ; PendingRvn = None }
-    { PickOverridesState = pickOverridesState }, Cmd.none
+let initialize () = { RemovalPending = None ; ChangePriorityPending = None ; LastPriorityChanged = None }, Cmd.none
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private handleServerDraftsMsg serverDraftsMsg (squadDic:SquadDic) state : State * Cmd<Input> =
     match serverDraftsMsg with
+    | ChangePriorityCmdResult (Ok userDraftPick) ->
+        match state.ChangePriorityPending with
+        | Some (pendingPick, changePriority, _) when pendingPick = userDraftPick ->
+            // Note: ChangePriorityPending will be "reset" when Program.State handles DraftsProjectionMsg.CurrentUserDraftDtoChangedMsg.
+            { state with LastPriorityChanged = (userDraftPick, changePriority) |> Some }, Cmd.none
+        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ChangePriorityCmdResult Ok when %A not RemovalPending" userDraftPick)
+    | ChangePriorityCmdResult (Error (userDraftPick, error)) ->
+        match state.ChangePriorityPending with
+        | Some (pendingPick, _, _) when pendingPick = userDraftPick ->
+            let errorText = ifDebug (sprintf "ChangePriorityCmdResult error -> %A" error) (error |> cmdErrorText)
+            let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+            let errorToastCmd = UNEXPECTED_ERROR |> errorToastCmd
+            { state with ChangePriorityPending = None }, Cmd.batch [ errorCmd ; errorToastCmd ]
+        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ChangePriorityCmdResult Error when %A not ChangePriorityPending" userDraftPick)
     | ServerDraftsMsg.RemoveFromDraftCmdResult (Ok userDraftPick) ->
-        let pickOverrides = state.PickOverridesState.PickOverrides
-        if pickOverrides |> List.exists (fun pickOverride -> pickOverride.UserDraftPick = userDraftPick && pickOverride |> isRemoving) then
+        match state.RemovalPending with
+        | Some (pendingPick, _) when pendingPick = userDraftPick ->
+            // Note: RemovalPending will be "reset" when Program.State handles DraftsProjectionMsg.CurrentUserDraftDtoChangedMsg.
             state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
-        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Ok when not Removing %A" userDraftPick)
+        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Ok when %A not RemovalPending" userDraftPick)
     | ServerDraftsMsg.RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
-        let pickOverridesState = state.PickOverridesState
-        let pickOverrides = pickOverridesState.PickOverrides
-        if pickOverrides |> List.exists (fun pickOverride -> pickOverride.UserDraftPick = userDraftPick && pickOverride |> isRemoving) then
+        match state.RemovalPending with
+        | Some (pendingPick, _) when pendingPick = userDraftPick ->
             let errorText = ifDebug (sprintf "ServerDraftsMsg.RemoveFromDraftCmdResult error -> %A" error) (error |> cmdErrorText)
             let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
             let errorToastCmd = sprintf "Unable to remove <strong>%s</strong> from draft" (userDraftPick |> userDraftPickText squadDic) |> errorToastCmd
-            let pickOverrides = pickOverrides |> List.filter (fun pickOverride -> pickOverride.UserDraftPick <> userDraftPick || pickOverride |> isRemoving |> not)
-            let pickOverridesState = { pickOverridesState with PickOverrides = pickOverrides }
-            { state with PickOverridesState = pickOverridesState }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Error when not Removing %A" userDraftPick)
+            { state with RemovalPending = None }, Cmd.batch [ errorCmd ; errorToastCmd ]
+        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Error when %A not RemovalPending" userDraftPick)
 
 let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (currentUserDraftDto:CurrentUserDraftDto option) state =
     let state, cmd, isUserNonApiActivity =
@@ -52,33 +62,41 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
         | ReceiveServerDraftsMsg serverDraftsMsg, Ready (_, squadDic) ->
             let state, cmd = state |> handleServerDraftsMsg serverDraftsMsg squadDic
             state, cmd, false
-        | RemoveFromDraft (draftId, userDraftPick), Ready _ ->
-            match authUser with
-            | Some authUser ->
-                let isPicked =
+        | ChangePriority (draftId, userDraftPick, priorityChange), Ready _ ->
+            match authUser, state.RemovalPending, state.ChangePriorityPending with
+            | Some authUser, None, None ->
+                let isPickedRvn =
                     match currentUserDraftDto with
-                    | Some currentUserDraftDto -> currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick)
-                    | None -> false
-                if isPicked then
-                    let pickOverridesState = state.PickOverridesState
-                    let pickOverrides = pickOverridesState.PickOverrides
-
-                    // TODO-NEXT: What if overridden for another reason?...
-
-                    if pickOverrides |> List.exists (fun pickOverride -> pickOverride.UserDraftPick = userDraftPick) |> not then
-                        let pickOverride = { UserDraftPick = userDraftPick ; PickOverrideStatus = Removing }
-                        let currentRvn =
-                            match currentUserDraftDto with
-                            | Some currentUserDraftDto ->
-                                let (Rvn currentRvn) = currentUserDraftDto.Rvn
-                                match pickOverridesState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
-                            | None -> match pickOverridesState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
-                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> UiAuthDraftsMsg.RemoveFromDraftCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
-                        let pickOverridesState = { pickOverridesState with PickOverrides = pickOverride :: pickOverrides ; PendingRvn = currentRvn |> incrementRvn |> Some }
-                        { state with PickOverridesState = pickOverridesState }, cmd, true
-                    else state, UNEXPECTED_ERROR |> errorToastCmd, true
-                else state, UNEXPECTED_ERROR |> errorToastCmd, true
-            | None -> // note: should never happen
+                    | Some currentUserDraftDto ->
+                        if currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick) then
+                            currentUserDraftDto.Rvn |> Some
+                        else None
+                    | None -> None
+                match isPickedRvn with
+                | Some rvn ->
+                    let cmd = (authUser.UserId, draftId, rvn, userDraftPick, priorityChange) |> UiAuthDraftsMsg.ChangePriorityCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                    let changePriorityPending = (userDraftPick, priorityChange, rvn |> incrementRvn)
+                    { state with ChangePriorityPending = changePriorityPending |> Some }, cmd, true
+                | None -> state, UNEXPECTED_ERROR |> errorToastCmd, true
+            | _ -> // note: should never happen
+                state, Cmd.none, false
+        | RemoveFromDraft (draftId, userDraftPick), Ready _ ->
+            match authUser, state.RemovalPending, state.ChangePriorityPending with
+            | Some authUser, None, None ->
+                let isPickedRvn =
+                    match currentUserDraftDto with
+                    | Some currentUserDraftDto ->
+                        if currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick) then
+                            currentUserDraftDto.Rvn |> Some
+                        else None
+                    | None -> None
+                match isPickedRvn with
+                | Some rvn ->
+                    let cmd = (authUser.UserId, draftId, rvn, userDraftPick) |> UiAuthDraftsMsg.RemoveFromDraftCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                    let removalPending = (userDraftPick, rvn |> incrementRvn)
+                    { state with RemovalPending = removalPending |> Some }, cmd, true
+                | _ -> state, UNEXPECTED_ERROR |> errorToastCmd, true
+            | _ -> // note: should never happen
                 state, Cmd.none, false
         | _, _ ->
             state, shouldNeverHappenCmd (sprintf "Unexpected Input when %A -> %A" squadsProjection input), false

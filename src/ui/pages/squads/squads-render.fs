@@ -184,7 +184,7 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
         | Some (WithdrawPlayerFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match withdrawPlayerState.WithdrawPlayerStatus with | Some (WithdrawPlayerFailed errorText) -> errorText |> Some | Some WithdrawPlayerPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmallest
+        [ bold "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -217,7 +217,7 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
         | Some (EliminateSquadFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match eliminateSquadState.EliminateSquadStatus with | Some (EliminateSquadFailed errorText) -> errorText |> Some | Some EliminateSquadPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmallest
+        [ bold "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [

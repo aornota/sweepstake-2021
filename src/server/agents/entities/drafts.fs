@@ -47,6 +47,8 @@ type private DraftsInput =
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleProcessDraftCmd of token : ProcessDraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
+    | HandleChangePriorityCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+        * priorityChange : PriorityChange * reply : AsyncReplyChannel<Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>>
     | HandleAddToDraftCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
         * reply : AsyncReplyChannel<Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>>
     | HandleRemoveFromDraftCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
@@ -183,10 +185,10 @@ let private applyUserDraftEvent source idAndUserDraftResult (nextRvn, userDraftE
                 (userDraftPick, i + 1) |> updatedUserDraftPickDic.Add)
             (userDraftId, { userDraft with Rvn = nextRvn ; UserDraftPickDic = updatedUserDraftPickDic } |> Some) |> Ok
         else ifDebug (sprintf "%A not already drafted for %A (%A) -> %A" userDraftPick userDraftId userDraft userDraftEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (userDraftId, Some userDraft), PriorityChanged (_, userDraftPick, priorityChanged) ->
+    | Ok (userDraftId, Some userDraft), PriorityChanged (_, userDraftPick, priorityChange) ->
         let userDraftPickDic = userDraft.UserDraftPickDic
         if userDraftPick |> userDraftPickDic.ContainsKey then
-            let adjustment = match priorityChanged with | Increased -> -1.5 | Decreased -> 1.5
+            let adjustment = match priorityChange with | Increase -> -1.5 | Decrease -> 1.5
             let updatedUserDraftPickDic = UserDraftPickDic ()
             userDraftPickDic
             |> List.ofSeq
@@ -277,6 +279,7 @@ type Drafts () =
             | OnUserDraftsEventsRead _ -> "OnUserDraftsEventsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleCreateDraftCmd _ -> "HandleCreateDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleProcessDraftCmd _ -> "HandleProcessDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | HandleChangePriorityCmd _ -> "HandleChangePriorityCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleAddToDraftCmd _ -> "HandleAddToDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
         and pendingAllRead draftDic userDraftDic squadsRead = async {
@@ -327,6 +330,7 @@ type Drafts () =
                 | None -> return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleCreateDraftCmd _ -> "HandleCreateDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleProcessDraftCmd _ -> "HandleProcessDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
+            | HandleChangePriorityCmd _ -> "HandleChangePriorityCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleAddToDraftCmd _ -> "HandleAddToDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead }
         and managingDrafts draftDic userDraftDic userDraftLookupDic squadDic = async {
@@ -443,6 +447,29 @@ type Drafts () =
                 result |> discardOk |> reply.Reply
                 match result with | Ok (draftId, draft) -> draftDic |> updateDraft draftId draft | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
+            | HandleChangePriorityCmd (_, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, reply) ->
+                let source = "HandleChangePriorityCmd"
+                sprintf "%s for %A %A (%A %A %A) when managingDrafts (%i draft/s) (%i user-draft/s) (%i squads/s)" source userId draftId currentRvn userDraftPick priorityChange draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
+                let result =
+                    tryFindDraft draftId (otherCmdError source) draftDic
+                    |> Result.bind (fun (_, draft) -> match draft.DraftStatus with | Opened _ -> () |> Ok | _ -> ifDebug (sprintf "%A is not Opened" draftId) UNEXPECTED_ERROR |> otherCmdError source)
+                    |> Result.bind (fun _ -> tryFindUserDraft userId draftId (otherCmdError source) userDraftDic userDraftLookupDic)
+                    |> Result.bind (fun (_, userDraftId, userDraft) ->
+                        if userDraftPick |> userDraft.UserDraftPickDic.ContainsKey then (userDraftId, userDraft, userDraft.UserDraftPickDic.[userDraftPick]) |> Ok
+                        else ifDebug (sprintf "%A not drafted" userDraftPick) UNEXPECTED_ERROR |> otherCmdError source)
+                    |> Result.bind (fun (userDraftId, userDraft, rank) ->
+                        let count = userDraft.UserDraftPickDic.Count
+                        match priorityChange with
+                        | Increase when rank < 2 -> ifDebug (sprintf "%A already has the highest rank" userDraftPick) UNEXPECTED_ERROR |> otherCmdError source
+                        | Decrease when rank > count - 1 -> ifDebug (sprintf "%A already has the lowest rank" userDraftPick) UNEXPECTED_ERROR |> otherCmdError source
+                        | _ -> (userDraftId, userDraft) |> Ok)
+                    |> Result.bind (fun (userDraftId, userDraft) ->
+                        (userDraftId, userDraftPick, priorityChange) |> PriorityChanged |> tryApplyUserDraftEvent source userDraftId (userDraft |> Some) (incrementRvn currentRvn) userDraftPick)
+                let! result = match result with | Ok (userDraft, rvn, userDraftEvent, userDraftPick) -> tryWriteUserDraftEventAsync auditUserId rvn userDraftEvent userDraft userDraftPick | Error error -> error |> Error |> thingAsync
+                result |> logResult source (fun (userDraftId, userDraft, _) -> sprintf "Audit%A %A %A" auditUserId userDraftId userDraft |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                result |> Result.bind (fun (_, _, userDraftPick) -> userDraftPick |> Ok) |> tupleError userDraftPick |> reply.Reply
+                match result with | Ok (userDraftId, userDraft, _) -> userDraftDic |> updateUserDraft userDraftId userDraft | Error _ -> ()
+                return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
             | HandleAddToDraftCmd (_, auditUserId, userId, draftId, currentRvn, userDraftPick, reply) ->
                 let source = "HandleAddToDraftCmd"
                 sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user-draft/s) (%i squads/s)" source userId draftId currentRvn userDraftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
@@ -532,6 +559,8 @@ type Drafts () =
         (fun reply -> (token, auditUserId, draftId, draftOrdinal, draftType, reply) |> HandleCreateDraftCmd) |> agent.PostAndAsyncReply
     member __.HandleProcessDraftCmdAsync (token, auditUserId, draftId, currentRvn) =
         (fun reply -> (token, auditUserId, draftId, currentRvn, reply) |> HandleProcessDraftCmd) |> agent.PostAndAsyncReply
+    member __.HandleChangePriorityCmdAsync (token, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange) =
+        (fun reply -> (token, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, reply) |> HandleChangePriorityCmd) |> agent.PostAndAsyncReply
     member __.HandleAddToDraftCmdAsync (token, auditUserId, userId, draftId, currentRvn, userDraftPick) =
         (fun reply -> (token, auditUserId, userId, draftId, currentRvn, userDraftPick, reply) |> HandleAddToDraftCmd) |> agent.PostAndAsyncReply
     member __.HandleRemoveFromDraftCmdAsync (token, auditUserId, userId, draftId, currentRvn, userDraftPick) =

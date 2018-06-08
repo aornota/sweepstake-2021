@@ -960,17 +960,21 @@ let private handleServerAppMsg serverAppMsg state =
             let squadsState = { squadsState with PendingPicksState = pendingPicksState }
             let authPageStates = authState.AuthPageStates
             let draftsState = authPageStates.DraftsState
-            let pickOverridesState = draftsState.PickOverridesState
-            let pickOverrides = pickOverridesState.PickOverrides
-            let pickOverridesState =
-                match currentUserDraftDto with
-                | Some currentUserDraftDto ->
-                    let userDraftPicks = currentUserDraftDto.UserDraftPickDtos |> List.map (fun userDraftPickDto -> userDraftPickDto.UserDraftPick)
-                    let pickOverrides = pickOverrides |> List.filter (fun pickOverride ->
-                        (pickOverride |> Drafts.Common.isRemoving && userDraftPicks |> List.contains pickOverride.UserDraftPick |> not) |> not)
-                    { pickOverridesState with PickOverrides = pickOverrides }
-                | None -> { PickOverrides = [] ; PendingRvn = None }
-            let draftsState = { draftsState with PickOverridesState = pickOverridesState }
+            let removalPending = draftsState.RemovalPending
+            let removalPending =
+                match currentUserDraftDto, removalPending with
+                | Some currentUserDraftDto, Some (_, Rvn pendingRvn) ->
+                    let (Rvn rvn) = currentUserDraftDto.Rvn
+                    if pendingRvn <= rvn then None else removalPending
+                | _ -> removalPending
+            let changePriorityPending = draftsState.ChangePriorityPending
+            let changePriorityPending =
+                match currentUserDraftDto, changePriorityPending with
+                | Some currentUserDraftDto, Some (_, _, Rvn pendingRvn) ->
+                    let (Rvn rvn) = currentUserDraftDto.Rvn
+                    if pendingRvn <= rvn then None else changePriorityPending
+                | _ -> changePriorityPending
+            let draftsState = { draftsState with RemovalPending = removalPending ; ChangePriorityPending = changePriorityPending }
             let unauthPageStates = { unauthPageStates with SquadsState = squadsState }           
             let authPageStates = { authPageStates with DraftsState = draftsState }           
             let authProjections = { authProjections with DraftsProjection = (changeRvn, draftDic, currentUserDraftDto) |> Ready }

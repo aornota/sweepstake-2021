@@ -39,10 +39,43 @@ let private playerDescriptionAndExtraAndWithdrawn (squadDic:SquadDic) (squadId, 
         else UNKNOWN, UNKNOWN, false
     else UNKNOWN, UNKNOWN, false
 
-let private renderOpenedDraft (useDefaultTheme, draftId, draft:Draft, userDraftPickDic:UserDraftPickDic, pickOverrides:PickOverride list, squadDic:SquadDic) dispatch =
+let private renderOpenedDraft (useDefaultTheme, state, draftId, draft:Draft, userDraftPickDic:UserDraftPickDic, squadDic:SquadDic) dispatch =
     let theme = getTheme useDefaultTheme
     let draftText = draft.DraftOrdinal |> draftTextLower
     let userDraftPickRow (userDraftPick, rank) =
+        let count = userDraftPickDic.Count
+        let increasePriorityButton =
+            let interaction, highlight =
+                if rank < 2 then None, false
+                else
+                    match state.ChangePriorityPending, state.RemovalPending with
+                    | None, None ->
+                        let highlight = match state.LastPriorityChanged with | Some (lastPick, Increase) when lastPick = userDraftPick -> true | Some _ | None -> false
+                        Clickable ((fun _ -> (draftId, userDraftPick, Increase) |> ChangePriority |> dispatch), None) |> Some, highlight
+                    | Some (pendingPick, Increase, _), _ when pendingPick = userDraftPick -> Loading |> Some, true
+                    | _ -> NotEnabled None |> Some, false
+            let buttonData = if highlight then buttonPrimarySmall else buttonLinkSmall
+            match interaction with
+            | Some interaction ->
+                [ button theme { buttonData with Interaction = interaction ; IconLeft = iconAscendingSmall |> Some } [] ]
+                |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
+            | None -> None
+        let decreasePriorityButton =
+            let interaction, highlight =
+                if rank > count - 1 then None, false
+                else
+                    match state.ChangePriorityPending, state.RemovalPending with
+                    | None, None ->
+                        let highlight = match state.LastPriorityChanged with | Some (lastPick, Decrease) when lastPick = userDraftPick -> true | Some _ | None -> false
+                        Clickable ((fun _ -> (draftId, userDraftPick, Decrease) |> ChangePriority |> dispatch), None) |> Some, highlight
+                    | Some (pendingPick, Decrease, _), _ when pendingPick = userDraftPick -> Loading |> Some, true
+                    | _ -> NotEnabled None |> Some, false
+            let buttonData = if highlight then buttonPrimarySmall else buttonLinkSmall
+            match interaction with
+            | Some interaction ->
+                [ button theme { buttonData with Interaction = interaction ; IconLeft = iconDescendingSmall |> Some } [] ]
+                |> para theme paraDefaultSmallest |> Some
+            | None -> None
         let description, extra, withdrawn =
             match userDraftPick with
             | TeamPick squadId ->
@@ -55,17 +88,20 @@ let private renderOpenedDraft (useDefaultTheme, draftId, draft:Draft, userDraftP
                         [ [ str "Withdrawn" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
                     else None
                 [ str description ] |> para theme paraDefaultSmallest, [ str extra ] |> para theme paraCentredSmallest |> Some, withdrawn
-        let remove =
-            let removeText = sprintf "Remove from %s" draftText
-            if pickOverrides |> List.exists (fun pickOverride -> pickOverride.UserDraftPick = userDraftPick && pickOverride |> isRemoving) |> not then
-                let onClick = (fun _ -> (draftId, userDraftPick) |> RemoveFromDraft |> dispatch)
-                [ [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Clickable (onClick, None) } ] |> para theme paraDefaultSmallest
-            else [ [ str removeText ] |> button theme { buttonDangerSmall with Interaction = Loading } ] |> para theme paraDefaultSmallest
+        let removeButton =
+            let interaction =
+                match state.RemovalPending, state.ChangePriorityPending with
+                | None, None -> Clickable ((fun _ -> (draftId, userDraftPick) |> RemoveFromDraft |> dispatch), None)
+                | Some (pendingPick, _), _ when pendingPick = userDraftPick -> Loading
+                | _ -> NotEnabled None
+            [ [ str (sprintf "Remove from %s" draftText) ] |> button theme { buttonDangerSmall with Interaction = interaction } ] |> para theme paraDefaultSmallest
         tr false [
-            td [ [ str (sprintf "#%i" rank) ] |> para theme paraDefaultSmallest ]
+            td [ Rct.ofOption increasePriorityButton ]
+            td [ [ str (sprintf "#%i" rank) ] |> para theme paraCentredSmallest ]
+            td [ Rct.ofOption decreasePriorityButton ]
             td [ description ]
             td [ Rct.ofOption extra ]
-            td [ remove ]
+            td [ removeButton ]
             td [ Rct.ofOption withdrawn ] ]
     let userDraftPickRows =
         userDraftPickDic |> List.ofSeq |> List.sortBy (fun (KeyValue (_, rank)) -> rank) |> List.map (fun (KeyValue (userDraftPick, rank)) -> (userDraftPick, rank) |> userDraftPickRow)
@@ -74,7 +110,9 @@ let private renderOpenedDraft (useDefaultTheme, draftId, draft:Draft, userDraftP
             yield table theme false { tableDefault with IsNarrow = true } [
                 thead [ 
                     tr false [
-                        th [ [ bold "Rank" ] |> para theme paraDefaultSmallest ]
+                        th []
+                        th [ [ bold "Rank" ] |> para theme paraCentredSmallest ]
+                        th []
                         th []
                         th []
                         th []
@@ -82,7 +120,7 @@ let private renderOpenedDraft (useDefaultTheme, draftId, draft:Draft, userDraftP
                 tbody [ yield! userDraftPickRows ] ]
         else yield [ bold (sprintf "You have not made any selections for the %s" draftText) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger } ]
 
-let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto, _hasModal) dispatch =
+let render (useDefaultTheme, state, _authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto, _hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     let userDraftPickDic =
         match currentUserDraftDto with
@@ -107,7 +145,6 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
                 | None -> None
             match openedDraft with
             | Some (draftId, draft) ->
-                let pickOverrides = state.PickOverridesState.PickOverrides
-                yield lazyViewOrHMR2 renderOpenedDraft (useDefaultTheme, draftId, draft, userDraftPickDic, pickOverrides, squadDic) dispatch
+                yield lazyViewOrHMR2 renderOpenedDraft (useDefaultTheme, state, draftId, draft, userDraftPickDic, squadDic) dispatch
             | None ->
                 yield [ str "Coming soon" ] |> para theme paraCentredSmaller ]

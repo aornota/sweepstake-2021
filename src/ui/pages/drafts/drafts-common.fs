@@ -12,17 +12,10 @@ type Input =
     | AddNotificationMessage of notificationMessage : NotificationMessage
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
     | ReceiveServerDraftsMsg of serverDraftsMsg : ServerDraftsMsg
+    | ChangePriority of draftId : DraftId * userDraftPick : UserDraftPick * priorityChange : PriorityChange
     | RemoveFromDraft of draftId : DraftId * userDraftPick : UserDraftPick
 
-type PickOverrideStatus = | Removing
-
-type PickOverride = { UserDraftPick : UserDraftPick ; PickOverrideStatus : PickOverrideStatus }
-
-type PickOverridesState = {
-    PickOverrides : PickOverride list
-    PendingRvn : Rvn option }
-
 type State = {
-    PickOverridesState : PickOverridesState }
-
-let isRemoving pickOverride = match pickOverride.PickOverrideStatus with | Removing -> true
+    RemovalPending : (UserDraftPick * Rvn) option
+    ChangePriorityPending : (UserDraftPick * PriorityChange * Rvn) option
+    LastPriorityChanged : (UserDraftPick * PriorityChange) option }

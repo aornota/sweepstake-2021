@@ -30,7 +30,7 @@ type UserDraftPick =
     | TeamPick of squadId : SquadId
     | PlayerPick of squadId : SquadId * playerId : PlayerId
 
-type PriorityChanged = | Increased | Decreased
+type PriorityChange = | Increase | Decrease
 
 type UserDraftKey = UserId * DraftId
 
