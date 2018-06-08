@@ -23,13 +23,13 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, _authUser) _dispat
         let draftOrdinal, status, starts, ends =
             match draft.DraftStatus with
             | PendingOpen (starts, ends) ->
-                let status = [ italic "Pending opening" ] |> para theme paraDefaultSmallest
+                let status = [ italic "Pending" ] |> para theme paraDefaultSmallest
                 let starts, ends = starts.LocalDateTime |> dateAndTimeText, ends.LocalDateTime |> dateAndTimeText
                 let starts = [ str starts ] |> para theme paraDefaultSmallest
                 let ends = [ str ends ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, starts |> Some, ends |> Some
             | Opened ends ->
-                let status = [ bold "Open" ] |> para theme paraDefaultSmallest
+                let status = [ str "Open" ] |> para theme paraDefaultSmallest
                 let ends = ends.LocalDateTime |> dateAndTimeText
                 let ends = [ str ends ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, ends |> Some
@@ -88,7 +88,7 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
                             thead [ 
                                 tr false [
                                     th [ [ bold "User" ] |> para theme paraDefaultSmallest ]
-                                    th [ [ bold "Picks" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
+                                    th [ [ bold "Selections" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
                             tbody [ yield! userDraftSummaryRows ] ] ]
                 else yield [ str "There are no user draft picks" ] |> para theme paraCentredSmallest
             ]
