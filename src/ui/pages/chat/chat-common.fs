@@ -19,6 +19,8 @@ type Input =
     | AddNotificationMessage of notificationMessage : NotificationMessage
     | ShowMarkdownSyntaxModal
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
+    | ReadPreferencesResult of result : Result<DateTimeOffset option, exn>
+    | WritePreferencesResult of result : Result<unit, exn>
     | ReceiveServerChatMsg of serverChatMsg : ServerChatMsg
     | ToggleChatIsCurrentPage of isCurrentPage : bool
     | DismissChatMessage of chatMessageId : ChatMessageId
@@ -47,5 +49,7 @@ type ReadyState = {
 type State = {
     AuthUser : AuthUser
     ChatProjection : Projection<Rvn * ChatMessageDic * ReadyState>
+    PreferencesRead : bool
+    LastChatSeen : DateTimeOffset option    
     IsCurrentPage : bool
     UnseenCount : int }

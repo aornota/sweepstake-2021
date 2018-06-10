@@ -2,10 +2,12 @@ module Aornota.Sweepstake2018.UI.Pages.Chat.State
 
 open Aornota.Common.Delta
 open Aornota.Common.IfDebug
+open Aornota.Common.Json
 open Aornota.Common.Markdown
 open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
+open Aornota.UI.Common.LocalStorage
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.ShouldNeverHappen
 open Aornota.UI.Common.Toasts
@@ -21,13 +23,46 @@ open System
 
 open Elmish
 
-let initialize (authUser:AuthUser) isCurrentPage : State * Cmd<Input> =
-    let chatProjection, cmd = if authUser.Permissions.ChatPermission then Pending, InitializeChatProjectionQry |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg else Failed, Cmd.none
-    { AuthUser = authUser ; ChatProjection = chatProjection ; IsCurrentPage = isCurrentPage ; UnseenCount = 0 }, cmd
+open Fable.Core.JsInterop
 
-let defaultNewChatMessageState () = { NewChatMessageId = ChatMessageId.Create () ; NewMessageText = String.Empty ; NewMessageErrorText = None ; SendChatMessageStatus = None }
+let [<Literal>] private CHAT_PREFERENCES_KEY = "sweepstake-2018-ui-chat-preferences"
+
+let private readPreferencesCmd =
+    let readPreferences () = async {
+        return Key CHAT_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> ofJson<DateTimeOffset>) }
+    Cmd.ofAsync readPreferences () (Ok >> ReadPreferencesResult) (Error >> ReadPreferencesResult)
+
+let private writePreferencesCmd state =
+    let writePreferences (lastChatSeen:DateTimeOffset) = async {
+        do lastChatSeen |> toJson |> Json |> writeJson (Key CHAT_PREFERENCES_KEY) }
+    match state.LastChatSeen with
+    | Some lastChatSeen -> Cmd.ofAsync writePreferences lastChatSeen (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
+    | None -> Cmd.none
+
+let initialize (authUser:AuthUser) isCurrentPage readPreferences lastChatSeen : State * Cmd<Input> =
+    let chatProjection, chatProjectionCmd =
+        if authUser.Permissions.ChatPermission then Pending, InitializeChatProjectionQry |> UiAuthChatMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        else Failed, Cmd.none
+    let state =
+        { AuthUser = authUser; ChatProjection = chatProjection ; PreferencesRead = readPreferences |> not ; LastChatSeen = lastChatSeen ; IsCurrentPage = isCurrentPage ; UnseenCount = 0 }
+    let readPreferencesCmd = if readPreferences then readPreferencesCmd else Cmd.none
+    state, Cmd.batch [ readPreferencesCmd ; chatProjectionCmd ]
+
+let private defaultNewChatMessageState () = { NewChatMessageId = ChatMessageId.Create () ; NewMessageText = String.Empty ; NewMessageErrorText = None ; SendChatMessageStatus = None }
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+
+let private updateLastChatSeen state =
+    let lastChatSeen = if state.IsCurrentPage && state.PreferencesRead then DateTimeOffset.UtcNow |> Some else state.LastChatSeen
+    let unseenCount =
+        match state.PreferencesRead, state.ChatProjection with
+        | true, Ready (_, chatMessageDic, _) ->
+            match lastChatSeen with
+            | Some lastChatSeen -> chatMessageDic |> List.ofSeq |> List.filter (fun (KeyValue (_, chatMessage)) -> chatMessage.Timestamp > lastChatSeen) |> List.length
+            | None -> chatMessageDic.Count
+        | _ -> state.UnseenCount
+    let state = { state with LastChatSeen = lastChatSeen ; UnseenCount = unseenCount }
+    state, state |> writePreferencesCmd
 
 let private chatMessage (chatMessageDto:ChatMessageDto) =
     { UserId = chatMessageDto.UserId ; MessageText = chatMessageDto.MessageText ; Timestamp = chatMessageDto.Timestamp ; Expired = false }
@@ -64,8 +99,8 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
     match serverChatMsg, state.ChatProjection with
     | InitializeChatProjectionQryResult (Ok (chatMessageDtos, hasMoreChatMessages)), Pending ->
         let readyState = { HasMoreChatMessages = hasMoreChatMessages ; MoreChatMessagesPending = false ; NewChatMessageState = defaultNewChatMessageState () }
-        let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatMessageDtos.Length
-        { state with ChatProjection = (initialRvn, chatMessageDtos |> chatMessageDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+        let state = { state with ChatProjection = (initialRvn, chatMessageDtos |> chatMessageDic, readyState) |> Ready }
+        state |> updateLastChatSeen
     | InitializeChatProjectionQryResult (Error error), Pending ->
         { state with ChatProjection = Failed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
     | MoreChatMessagesQryResult (Ok (newRvn, chatMessageDtos, hasMoreChatMessages)), Ready (rvn, chatMessageDic, readyState) ->
@@ -80,11 +115,11 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
             match chatMessageDic |> applyChatMessagesDelta rvn newRvn chatMessageDtoDelta with
             | Ok chatMessageDic ->
                 let readyState = { readyState with HasMoreChatMessages = hasMoreChatMessages ; MoreChatMessagesPending = false }
-                let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatMessageDtos.Length // note: probably superfluous since will usually be current page
-                { state with ChatProjection = (newRvn, chatMessageDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+                let state = { state with ChatProjection = (newRvn, chatMessageDic, readyState) |> Ready }
+                state |> updateLastChatSeen
             | Error error ->
                 let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" chatMessageDtoDelta chatMessageDic error)
-                let state, cmd = initialize state.AuthUser state.IsCurrentPage
+                let state, cmd = initialize state.AuthUser state.IsCurrentPage false state.LastChatSeen
                 state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | MoreChatMessagesQryResult (Error error), Ready (rvn, chatMessageDic, readyState) ->
         if readyState.MoreChatMessagesPending |> not then // note: silently ignore unexpected result
@@ -111,11 +146,11 @@ let private handleServerChatMsg serverChatMsg state : State * Cmd<Input> =
         match chatMessageDic |> applyChatMessagesDelta rvn deltaRvn chatMessageDtoDelta with
         | Ok chatMessageDic ->
             let readyState = { readyState with HasMoreChatMessages = hasMoreChatMessages }
-            let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else chatMessageDtoDelta.Added.Length
-            { state with ChatProjection = (deltaRvn, chatMessageDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+            let state = { state with ChatProjection = (deltaRvn, chatMessageDic, readyState) |> Ready }
+            state |> updateLastChatSeen
         | Error error ->
             let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" chatMessageDtoDelta chatMessageDic error)
-            let state, cmd = initialize state.AuthUser state.IsCurrentPage
+            let state, cmd = initialize state.AuthUser state.IsCurrentPage false state.LastChatSeen
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | ChatProjectionMsg _, _ -> // note: silently ignore ChatProjectionMsg if not Ready
         state, Cmd.none
@@ -131,11 +166,21 @@ let transition input state =
             state, Cmd.none, false
         | SendUiAuthMsg _, Ready _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
+        | ReadPreferencesResult (Ok lastChatSeen), _ ->
+            let state = { state with PreferencesRead = true ; LastChatSeen = lastChatSeen }
+            let state, cmd = state |> updateLastChatSeen
+            state, cmd, false
+        | ReadPreferencesResult (Error _), _ -> // note: silently ignore error
+            state, None |> Ok |> ReadPreferencesResult |> Cmd.ofMsg, false
+        | WritePreferencesResult _, _ -> // note: nothing to do here
+            state, Cmd.none, false
         | ReceiveServerChatMsg serverChatMsg, _ ->
             let state, cmd = state |> handleServerChatMsg serverChatMsg
             state, cmd, false
         | ToggleChatIsCurrentPage isCurrentPage, _ ->
-            { state with IsCurrentPage = isCurrentPage ; UnseenCount = if isCurrentPage then 0 else state.UnseenCount }, Cmd.none, false
+            let state = { state with IsCurrentPage = isCurrentPage }
+            let state, cmd = state |> updateLastChatSeen
+            state, cmd, false
         | DismissChatMessage chatMessageId, Ready (_, chatMessageDic, _) -> // note: silently ignore unknown chatMessageId (should never happen)
             if chatMessageId |> chatMessageDic.ContainsKey then chatMessageId |> chatMessageDic.Remove |> ignore
             state, Cmd.none, true

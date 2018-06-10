@@ -25,7 +25,7 @@ open Aornota.Sweepstake2018.Server.Signal
 open System
 open System.Collections.Generic
 
-type private SquadsInput =
+type private DraftsInput =
     | Start of reply : AsyncReplyChannel<unit>
     | OnDraftsRead of draftsRead : DraftRead list
     | OnDraftEventWritten of rvn : Rvn * draftEvent : DraftEvent

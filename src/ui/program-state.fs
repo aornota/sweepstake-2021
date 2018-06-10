@@ -150,7 +150,10 @@ let defaultSignInState userName signInStatus = {
 
 let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) signInState state =
     let currentPage = match currentUnauthPage with | Some currentPage -> currentPage | None -> NewsPage
-    let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = NewsPage)
+    let newsState, newsCmd =
+        match unauthPageStates with
+        | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none
+        | None -> News.State.initialize (currentPage = NewsPage) true None
     let squadsState, squadsCmd =
         match unauthPageStates with
         | Some unauthPageStates ->
@@ -203,7 +206,10 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
 
 let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
-    let newsState, newsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none | None -> News.State.initialize (currentPage = UnauthPage NewsPage)
+    let newsState, newsCmd =
+        match unauthPageStates with
+        | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none
+        | None -> News.State.initialize (currentPage = UnauthPage NewsPage) true None
     let squadsState, squadsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState, Cmd.none | None -> Squads.State.initialize None
 
     let tempScoresState = ()
@@ -222,7 +228,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
             draftAdminState |> Some, draftAdminCmd
         else None, Cmd.none
     let draftsState, draftsCmd = Drafts.State.initialize ()
-    let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage)
+    let chatState, chatCmd = Chat.State.initialize authUser (currentPage = AuthPage ChatPage) true None
     let usersProjection = match unauthProjections with | Some unauthProjections -> unauthProjections.UsersProjection | None -> Pending
     let squadsProjection, squadsProjectionCmd =
         match unauthProjections with
@@ -463,7 +469,7 @@ let private applyUsersDeltaAuth currentRvn deltaRvn (delta:Delta<UserId, UserDto
 // #endregion
 
 // #region Squad/s
-let private player (playerDto:PlayerDto) = { PlayerName = playerDto.PlayerName ; PlayerType = playerDto.PlayerType ; PlayerStatus = playerDto.PlayerStatus }
+let private player (playerDto:PlayerDto) = { PlayerName = playerDto.PlayerName ; PlayerType = playerDto.PlayerType ; PlayerStatus = playerDto.PlayerStatus ; PickedBy = playerDto.PickedBy }
 
 let private squad (squadDto:SquadDto) =
     let playerDic = PlayerDic ()
@@ -473,7 +479,7 @@ let private squad (squadDto:SquadDto) =
             (playerId, playerDto |> player) |> playerDic.Add)
     let squadOnlyDto = squadDto.SquadOnlyDto
     { Rvn = squadOnlyDto.Rvn ; SquadName = squadOnlyDto.SquadName ; Group = squadOnlyDto.Group ; Seeding = squadOnlyDto.Seeding ; CoachName = squadOnlyDto.CoachName
-      Eliminated = squadOnlyDto.Eliminated ; PlayerDic = playerDic }
+      Eliminated = squadOnlyDto.Eliminated ; PlayerDic = playerDic ; PickedBy = squadOnlyDto.PickedBy }
 
 let private updateSquad (squadOnlyDto:SquadOnlyDto) (squad:Squad) =
     { squad with Rvn = squadOnlyDto.Rvn ; SquadName = squadOnlyDto.SquadName ; Group = squadOnlyDto.Group ; Seeding = squadOnlyDto.Seeding ; CoachName = squadOnlyDto.CoachName
@@ -967,14 +973,14 @@ let private handleServerAppMsg serverAppMsg state =
                     let (Rvn rvn) = currentUserDraftDto.Rvn
                     if pendingRvn <= rvn then None else removalPending
                 | _ -> removalPending
-            let changePriorityPending = draftsState.ChangePriorityPending
-            let changePriorityPending =
+            let changePriorityPending, lastPriorityChanged = draftsState.ChangePriorityPending, draftsState.LastPriorityChanged
+            let changePriorityPending, lastPriorityChanged =
                 match currentUserDraftDto, changePriorityPending with
-                | Some currentUserDraftDto, Some (_, _, Rvn pendingRvn) ->
+                | Some currentUserDraftDto, Some (userDraftPick, priorityChange, Rvn pendingRvn) ->
                     let (Rvn rvn) = currentUserDraftDto.Rvn
-                    if pendingRvn <= rvn then None else changePriorityPending
-                | _ -> changePriorityPending
-            let draftsState = { draftsState with RemovalPending = removalPending ; ChangePriorityPending = changePriorityPending }
+                    if pendingRvn <= rvn then None, (userDraftPick, priorityChange) |> Some else changePriorityPending, lastPriorityChanged
+                | _ -> changePriorityPending, lastPriorityChanged
+            let draftsState = { draftsState with RemovalPending = removalPending ; ChangePriorityPending = changePriorityPending ; LastPriorityChanged = lastPriorityChanged }
             let unauthPageStates = { unauthPageStates with SquadsState = squadsState }           
             let authPageStates = { authPageStates with DraftsState = draftsState }           
             let authProjections = { authProjections with DraftsProjection = (changeRvn, draftDic, currentUserDraftDto) |> Ready }

@@ -3,6 +3,7 @@ module Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Common.Revision
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
 
@@ -23,9 +24,9 @@ type PlayerType = | Goalkeeper | Defender | Midfielder | Forward
 
 type PlayerStatus = | Active | Withdrawn of dateWithdrawn : DateTimeOffset option
 
-type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
+type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : UserId option }
 
-type SquadOnlyDto = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool }
+type SquadOnlyDto = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PickedBy : UserId option }
 
 type SquadDto = { SquadOnlyDto : SquadOnlyDto ; PlayerDtos : PlayerDto list }
 

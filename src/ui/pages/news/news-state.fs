@@ -2,10 +2,12 @@ module Aornota.Sweepstake2018.UI.Pages.News.State
 
 open Aornota.Common.Delta
 open Aornota.Common.IfDebug
+open Aornota.Common.Json
 open Aornota.Common.Markdown
 open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
+open Aornota.UI.Common.LocalStorage
 open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.ShouldNeverHappen
 open Aornota.UI.Common.Toasts
@@ -20,11 +22,41 @@ open System
 
 open Elmish
 
-let initialize isCurrentPage : State * Cmd<Input> =
-    let state = { NewsProjection = Pending ; IsCurrentPage = isCurrentPage ; UnseenCount = 0 }
-    state, InitializeNewsProjectionQry |> UiUnauthNewsMsg |> SendUiUnauthMsg |> Cmd.ofMsg
+open Fable.Core.JsInterop
+
+let [<Literal>] private NEWS_PREFERENCES_KEY = "sweepstake-2018-ui-news-preferences"
+
+let private readPreferencesCmd =
+    let readPreferences () = async {
+        return Key NEWS_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> ofJson<DateTimeOffset>) }
+    Cmd.ofAsync readPreferences () (Ok >> ReadPreferencesResult) (Error >> ReadPreferencesResult)
+
+let private writePreferencesCmd state =
+    let writePreferences (lastNewsSeen:DateTimeOffset) = async {
+        do lastNewsSeen |> toJson |> Json |> writeJson (Key NEWS_PREFERENCES_KEY) }
+    match state.LastNewsSeen with
+    | Some lastNewsSeen -> Cmd.ofAsync writePreferences lastNewsSeen (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
+    | None -> Cmd.none
+
+let initialize isCurrentPage readPreferences lastNewsSeen : State * Cmd<Input> =
+    let state = { NewsProjection = Pending ; PreferencesRead = readPreferences |> not ; LastNewsSeen = lastNewsSeen ; IsCurrentPage = isCurrentPage ; UnseenCount = 0 }
+    let readPreferencesCmd = if readPreferences then readPreferencesCmd else Cmd.none
+    let newsProjectionCmd = InitializeNewsProjectionQry |> UiUnauthNewsMsg |> SendUiUnauthMsg |> Cmd.ofMsg
+    state, Cmd.batch [ readPreferencesCmd ; newsProjectionCmd ]
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+
+let private updateLastNewsSeen state =
+    let lastNewsSeen = if state.IsCurrentPage && state.PreferencesRead then DateTimeOffset.UtcNow |> Some else state.LastNewsSeen
+    let unseenCount =
+        match state.PreferencesRead, state.NewsProjection with
+        | true, Ready (_, newsDic, _) ->
+            match lastNewsSeen with
+            | Some lastNewsSeen -> newsDic |> List.ofSeq |> List.filter (fun (KeyValue (_, post)) -> post.Timestamp > lastNewsSeen) |> List.length
+            | None -> newsDic.Count
+        | _ -> state.UnseenCount
+    let state = { state with LastNewsSeen = lastNewsSeen ; UnseenCount = unseenCount }
+    state, state |> writePreferencesCmd
 
 let private post (postDto:PostDto) = { Rvn = postDto.Rvn ; UserId = postDto.UserId ; PostTypeDto = postDto.PostTypeDto ; Timestamp = postDto.Timestamp ; Removed = false }
 
@@ -117,8 +149,8 @@ let private handleServerNewsMsg serverNewsMsg state : State * Cmd<Input> =
     match serverNewsMsg, state.NewsProjection with
     | InitializeNewsProjectionQryResult (Ok (postDtos, hasMorePosts)), Pending ->
         let readyState = { HasMorePosts = hasMorePosts ; MorePostsPending = false ; AddPostState = None ; EditPostState = None ; RemovePostState = None }
-        let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else postDtos.Length
-        { state with NewsProjection = (initialRvn, postDtos |> postDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+        let state = { state with NewsProjection = (initialRvn, postDtos |> postDic, readyState) |> Ready }
+        state |> updateLastNewsSeen
     | InitializeNewsProjectionQryResult (Error (OtherError errorText)), Pending ->
         { state with NewsProjection = Failed }, errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
     | MorePostsQryResult (Ok (newRvn, postDtos, hasMorePosts)), Ready (rvn, postDic, readyState) ->
@@ -133,11 +165,11 @@ let private handleServerNewsMsg serverNewsMsg state : State * Cmd<Input> =
             match postDic |> applyPostsDelta rvn newRvn postDtoDelta with
             | Ok postDic ->
                 let readyState = { readyState with HasMorePosts = hasMorePosts ; MorePostsPending = false }
-                let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else postDtos.Length // note: probably superfluous since will usually be current page
-                { state with NewsProjection = (newRvn, postDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+                let state = { state with NewsProjection = (newRvn, postDic, readyState) |> Ready }
+                state |> updateLastNewsSeen
             | Error error ->
                 let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" postDtoDelta postDic error)
-                let state, cmd = initialize state.IsCurrentPage
+                let state, cmd = initialize state.IsCurrentPage false state.LastNewsSeen
                 state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | MorePostsQryResult (Error error), Ready (rvn, postDic, readyState) ->
         if readyState.MorePostsPending |> not then // note: silently ignore unexpected result
@@ -155,11 +187,11 @@ let private handleServerNewsMsg serverNewsMsg state : State * Cmd<Input> =
         match postDic |> applyPostsDelta rvn deltaRvn postDtoDelta with
         | Ok postDic ->
             let readyState = { readyState with HasMorePosts = hasMorePosts }
-            let unseenCount = state.UnseenCount + if state.IsCurrentPage then 0 else postDtoDelta.Added.Length
-            { state with NewsProjection = (deltaRvn, postDic, readyState) |> Ready ; UnseenCount = unseenCount }, Cmd.none
+            let state = { state with NewsProjection = (deltaRvn, postDic, readyState) |> Ready }
+            state |> updateLastNewsSeen
         | Error error ->
             let shouldNeverHappenCmd = shouldNeverHappenCmd (sprintf "Unable to apply %A to %A -> %A" postDtoDelta postDic error)
-            let state, cmd = initialize state.IsCurrentPage
+            let state, cmd = initialize state.IsCurrentPage false state.LastNewsSeen
             state, Cmd.batch [ cmd ; shouldNeverHappenCmd ; UNEXPECTED_ERROR |> errorToastCmd ]
     | NewsProjectionMsg _, _ -> // note: silently ignore NewsProjectionMsg if not Ready
         state, Cmd.none
@@ -244,11 +276,21 @@ let transition input state =
             state, Cmd.none, false
         | SendUiAuthMsg _, Ready _ -> // note: expected to be handled by Program.State.transition
             state, Cmd.none, false
+        | ReadPreferencesResult (Ok lastNewsSeen), _ ->
+            let state = { state with PreferencesRead = true ; LastNewsSeen = lastNewsSeen }
+            let state, cmd = state |> updateLastNewsSeen
+            state, cmd, false
+        | ReadPreferencesResult (Error _), _ -> // note: silently ignore error
+            state, None |> Ok |> ReadPreferencesResult |> Cmd.ofMsg, false
+        | WritePreferencesResult _, _ -> // note: nothing to do here
+            state, Cmd.none, false
         | ReceiveServerNewsMsg serverNewsMsg, _ ->
             let state, cmd = state |> handleServerNewsMsg serverNewsMsg
             state, cmd, false
         | ToggleNewsIsCurrentPage isCurrentPage, _ ->
-            { state with IsCurrentPage = isCurrentPage ; UnseenCount = if isCurrentPage then 0 else state.UnseenCount }, Cmd.none, false
+            let state = { state with IsCurrentPage = isCurrentPage }
+            let state, cmd = state |> updateLastNewsSeen
+            state, cmd, false
         | DismissPost postId, Ready (_, postDic, _) -> // note: silently ignore unknown postId (should never happen)
             if postId |> postDic.ContainsKey then postId |> postDic.Remove |> ignore
             state, Cmd.none, true

@@ -142,10 +142,7 @@ let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : St
     | EliminateSquadCmdResult result ->
         state |> handleEliminateSquadCmdResult result
     | AddToDraftCmdResult (Ok userDraftPick) ->
-        let pendingPicks = state.PendingPicksState.PendingPicks
-        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isAdding) then
-            state, sprintf "<strong>%s</strong> has been added to draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
-        else state, shouldNeverHappenCmd (sprintf "Unexpected AddToDraftCmdResult Ok when not Adding %A" userDraftPick)
+        state, sprintf "<strong>%s</strong> has been added to draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
     | AddToDraftCmdResult (Error (userDraftPick, error)) ->
         let pendingPicksState = state.PendingPicksState
         let pendingPicks = pendingPicksState.PendingPicks
@@ -156,12 +153,9 @@ let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : St
             let pendingPicks = pendingPicks |> List.filter (fun pendingPick -> pendingPick.UserDraftPick <> userDraftPick || pendingPick |> isAdding |> not)
             let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
             { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        else state, shouldNeverHappenCmd (sprintf "Unexpected AddToDraftCmdResult Error when not Adding %A" userDraftPick)
+        else state, Cmd.none
     | ServerSquadsMsg.RemoveFromDraftCmdResult (Ok userDraftPick) ->
-        let pendingPicks = state.PendingPicksState.PendingPicks
-        if pendingPicks |> List.exists (fun pendingPick -> pendingPick.UserDraftPick = userDraftPick && pendingPick |> isRemoving) then
-            state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
-        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerSquadsMsg.RemoveFromDraftCmdResult Ok when not Removing %A" userDraftPick)
+        state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
     | ServerSquadsMsg.RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
         let pendingPicksState = state.PendingPicksState
         let pendingPicks = pendingPicksState.PendingPicks
@@ -172,7 +166,7 @@ let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : St
             let pendingPicks = pendingPicks |> List.filter (fun pendingPick -> pendingPick.UserDraftPick <> userDraftPick || pendingPick |> isRemoving |> not)
             let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
             { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        else state, shouldNeverHappenCmd (sprintf "Unexpected ServerSquadsMsg.RemoveFromDraftCmdResult Error when not Removing %A" userDraftPick)
+        else state, Cmd.none
 
 let private handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match addPlayersInput, state.AddPlayersState with

@@ -32,6 +32,8 @@ type Input =
     | ShowMarkdownSyntaxModal
     | SendUiUnauthMsg of uiUnauthMsg : UiUnauthMsg
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
+    | ReadPreferencesResult of result : Result<DateTimeOffset option, exn>
+    | WritePreferencesResult of result : Result<unit, exn>
     | ReceiveServerNewsMsg of serverNewsMsg : ServerNewsMsg
     | ToggleNewsIsCurrentPage of isCurrentPage : bool
     | DismissPost of postId : PostId
@@ -83,5 +85,7 @@ type ReadyState = {
 
 type State = {
     NewsProjection : Projection<Rvn * PostDic * ReadyState>
+    PreferencesRead : bool
+    LastNewsSeen : DateTimeOffset option    
     IsCurrentPage : bool
     UnseenCount : int }

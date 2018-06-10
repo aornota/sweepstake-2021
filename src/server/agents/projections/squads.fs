@@ -3,8 +3,8 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Squads
 (* Broadcasts: SendMsg
    Subscribes: SquadsRead
                SquadEventWritten (PlayerAdded | PlayerNameChanged | PlayerTypeChanged | PlayerWithdrawn | SquadEliminated)
-               TODO-SOON... DraftsRead
-               TODO-SOON... DraftEventWritten (Picked)
+               DraftsRead
+               DraftEventWritten (Picked)
                ConnectionsSignedOut | Disconnected *)
 
 open Aornota.Common.Revision
@@ -12,11 +12,14 @@ open Aornota.Common.Revision
 open Aornota.Server.Common.DeltaHelper
 
 open Aornota.Sweepstake2018.Common.Domain.Core
+open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
+open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
 open Aornota.Sweepstake2018.Server.Connection
+open Aornota.Sweepstake2018.Server.Events.DraftEvents
 open Aornota.Sweepstake2018.Server.Events.SquadEvents
 open Aornota.Sweepstake2018.Server.Signal
 
@@ -31,14 +34,16 @@ type private SquadsInput =
     | OnPlayerTypeChanged of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * playerType : PlayerType
     | OnPlayerWithdrawn of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * dateWithdrawn : DateTimeOffset option
     | OnSquadEliminated of squadId : SquadId * squadRvn : Rvn
+    | OnDraftsRead of draftsRead : DraftRead list
+    | OnPicked of draftPick : DraftPick * userId : UserId
     | RemoveConnection of connectionId : ConnectionId
     | HandleInitializeSquadsProjectionQry of connectionId : ConnectionId
         * reply : AsyncReplyChannel<Result<SquadDto list, OtherError<string>>>
 
-type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
+type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : UserId option }
 type private PlayerDic = Dictionary<PlayerId, Player>
 
-type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic }
+type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : UserId option }
 type private SquadDic = Dictionary<SquadId, Squad>
 
 type private Projectee = { LastRvn : Rvn }
@@ -65,7 +70,8 @@ let private logResult source successText result =
 
 let private playerDto (playerId, player:Player) =
     match player.PlayerStatus with
-    | Active | Withdrawn (Some _) -> { PlayerDto.PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; PlayerStatus = player.PlayerStatus } |> Some
+    | Active | Withdrawn (Some _) ->
+        { PlayerDto.PlayerId = playerId ; PlayerName = player.PlayerName ; PlayerType = player.PlayerType ; PlayerStatus = player.PlayerStatus ; PickedBy = player.PickedBy } |> Some
     | Withdrawn None -> None
 
 let private playerDtoDic (playerDic:PlayerDic) =
@@ -75,7 +81,8 @@ let private playerDtoDic (playerDic:PlayerDic) =
     playerDtoDic
 
 let private squadOnlyDto (squadId, squad:Squad) =
-    { SquadId = squadId ; Rvn = squad.Rvn ; SquadName = squad.SquadName ; Group = squad.Group ; Seeding = squad.Seeding ; CoachName = squad.CoachName ; Eliminated = squad.Eliminated }
+    { SquadId = squadId ; Rvn = squad.Rvn ; SquadName = squad.SquadName ; Group = squad.Group ; Seeding = squad.Seeding ; CoachName = squad.CoachName ; Eliminated = squad.Eliminated
+      PickedBy = squad.PickedBy }
 
 let private squadOnlyDtoDic (squadDic:SquadDic) =
     let squadOnlyDtoDic = SquadOnlyDtoDic ()
@@ -157,50 +164,81 @@ let private updateState source (projecteeDic:ProjecteeDic) stateChangeType =
                 state
     newState
 
+let private ifAllRead source (squadsRead:(SquadRead list) option, draftsRead:(DraftRead list) option) =
+    match squadsRead, draftsRead with
+    | Some squadsRead, Some draftsRead ->
+        let draftPicks = draftsRead |> List.map (fun draftRead -> draftRead.DraftPicks) |> List.collect id
+        let teamPickedBy squadId =
+            let pickedBy = draftPicks |> List.tryFind (fun (draftPick, _) -> match draftPick with | TeamPicked pickedSquadId when pickedSquadId = squadId -> true | _ -> false)
+            match pickedBy with | Some (_, userId) -> userId |> Some | None -> None
+        let playerPickedBy (squadId, playerId) =
+            let pickedBy = draftPicks |> List.tryFind (fun (draftPick, _) ->
+                match draftPick with | PlayerPicked (pickedSquadId, pickedPlayerId) when pickedSquadId = squadId && pickedPlayerId = playerId -> true | _ -> false)
+            match pickedBy with | Some (_, userId) -> userId |> Some | None -> None
+        let squadDic = SquadDic ()
+        squadsRead |> List.iter (fun squadRead ->
+            let playerDic = PlayerDic ()
+            squadRead.PlayersRead |> List.iter (fun playerRead ->
+                let playerPickedBy = (squadRead.SquadId, playerRead.PlayerId) |> playerPickedBy
+                let player = { PlayerName = playerRead.PlayerName ; PlayerType = playerRead.PlayerType ; PlayerStatus = playerRead.PlayerStatus ; PickedBy = playerPickedBy }
+                (playerRead.PlayerId, player) |> playerDic.Add)
+            let teamPickedBy = squadRead.SquadId |> teamPickedBy
+            let squad = {
+                Rvn = squadRead.Rvn ; SquadName = squadRead.SquadName ; Group = squadRead.Group ; Seeding = squadRead.Seeding ; CoachName = squadRead.CoachName
+                Eliminated = squadRead.Eliminated ; PlayerDic = playerDic ; PickedBy = teamPickedBy }
+            (squadRead.SquadId, squad) |> squadDic.Add)
+        let projecteeDic = ProjecteeDic ()
+        let state = squadDic |> Initialization |> updateState source projecteeDic
+        (state, squadDic, projecteeDic) |> Some
+    | _ -> None
+
 type Squads () =
     let agent = MailboxProcessor.Start (fun inbox ->
         let rec awaitingStart () = async {
             let! input = inbox.Receive ()
             match input with
             | Start reply ->
-                "Start when awaitingStart -> pendingSquadsRead (0 squads) (0 projectees)" |> Info |> log
+                "Start when awaitingStart -> pendingAllRead (0 squads) (0 projectees)" |> Info |> log
                 () |> reply.Reply
-                return! pendingSquadsRead ()
+                return! pendingAllRead None None
             | OnSquadsRead _ -> "OnSquadsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnPlayerAdded _ -> "OnPlayerAdded when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnPlayerNameChanged _ -> "OnPlayerNameChanged when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnPlayerTypeChanged _ -> "OnPlayerTypeChanged when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnPlayerWithdrawn _ -> "OnPlayerWithdrawn when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | OnSquadEliminated _ -> "OnSquadEliminated when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | OnDraftsRead _ -> "OnDraftsRead when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | OnPicked _ -> "OnPicked when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | RemoveConnection _ -> "RemoveConnection when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleInitializeSquadsProjectionQry _ -> "HandleInitializeSquadsProjectionQry when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
-        and pendingSquadsRead squadsRead = async {
+        and pendingAllRead squadsRead draftsRead = async {
             let! input = inbox.Receive ()
             match input with
-            | Start _ -> "Start when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
+            | Start _ -> "Start when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
             | OnSquadsRead squadsRead ->
                 let source = "OnSquadsRead"
-                sprintf "%s (%i squads/s) when pendingSquadsRead" source squadsRead.Length |> Info |> log
-                let squadDic = SquadDic ()
-                squadsRead |> List.iter (fun squadRead ->
-                    let playerDic = PlayerDic ()
-                    squadRead.PlayersRead |> List.iter (fun playerRead ->
-                        let player = { PlayerName = playerRead.PlayerName ; PlayerType = playerRead.PlayerType ; PlayerStatus = playerRead.PlayerStatus }
-                        (playerRead.PlayerId, player) |> playerDic.Add)
-                    let squad = {
-                        Rvn = squadRead.Rvn ; SquadName = squadRead.SquadName ; Group = squadRead.Group ; Seeding = squadRead.Seeding ; CoachName = squadRead.CoachName
-                        Eliminated = squadRead.Eliminated ; PlayerDic = playerDic }
-                    (squadRead.SquadId, squad) |> squadDic.Add)
-                let projecteeDic = ProjecteeDic ()
-                let state = squadDic |> Initialization |> updateState source projecteeDic
-                return! projectingSquads state squadDic projecteeDic
-            | OnPlayerAdded _ -> "OnPlayerAdded when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | OnPlayerNameChanged _ -> "OnPlayerNameChanged when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | OnPlayerTypeChanged _ -> "OnPlayerTypeChanged when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | OnPlayerWithdrawn _ -> "OnPlayerWithdrawn when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | OnSquadEliminated _ -> "OnSquadEliminated when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | RemoveConnection _ -> "RemoveConnection when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead
-            | HandleInitializeSquadsProjectionQry _ -> "HandleInitializeSquadsProjectionQry when pendingSquadsRead" |> IgnoredInput |> Agent |> log ; return! pendingSquadsRead squadsRead }
+                sprintf "%s (%i squad/s) when pendingAllRead" source squadsRead.Length |> Info |> log
+                let squadsRead = squadsRead |> Some
+                match (squadsRead, draftsRead) |> ifAllRead source with
+                | Some (state, squadDic, projecteeDic) ->
+                    return! projectingSquads state squadDic projecteeDic
+                | None -> return! pendingAllRead squadsRead draftsRead
+            | OnPlayerAdded _ -> "OnPlayerAdded when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | OnPlayerNameChanged _ -> "OnPlayerNameChanged when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | OnPlayerTypeChanged _ -> "OnPlayerTypeChanged when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | OnPlayerWithdrawn _ -> "OnPlayerWithdrawn when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | OnSquadEliminated _ -> "OnSquadEliminated when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | OnDraftsRead draftsRead ->
+                let source = "OnDraftsRead"
+                sprintf "%s (%i draft/s) when pendingAllRead" source draftsRead.Length |> Info |> log
+                let draftsRead = draftsRead |> Some
+                match (squadsRead, draftsRead) |> ifAllRead source with
+                | Some (state, squadDic, projecteeDic) ->
+                    return! projectingSquads state squadDic projecteeDic
+                | None -> return! pendingAllRead squadsRead draftsRead
+            | OnPicked _ -> "OnPicked when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | RemoveConnection _ -> "RemoveConnection when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead
+            | HandleInitializeSquadsProjectionQry _ -> "HandleInitializeSquadsProjectionQry when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead squadsRead draftsRead }
         and projectingSquads state squadDic projecteeDic = async {
             let! input = inbox.Receive ()
             match input with
@@ -208,20 +246,20 @@ type Squads () =
             | OnSquadsRead _ -> "OnSquadsRead when projectingSquads" |> IgnoredInput |> Agent |> log ; return! projectingSquads state squadDic projecteeDic
             | OnPlayerAdded (squadId, squadRvn, playerId, playerName, playerType) ->
                 let source = "OnPlayerAdded"
-                sprintf "%s (%A %A %A %A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn playerId playerName playerType squadDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A %A %A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source squadId squadRvn playerId playerName playerType squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                         let squad = squadDic.[squadId]
                         let playerDic = squad.PlayerDic
                         if playerId |> playerDic.ContainsKey |> not then // note: silently ignore already-known playerId (should never happen)
-                            (playerId, { PlayerName = playerName ; PlayerType = playerType ; PlayerStatus = Active }) |> playerDic.Add
+                            (playerId, { PlayerName = playerName ; PlayerType = playerType ; PlayerStatus = Active ; PickedBy = None }) |> playerDic.Add
                             (squadId, squadRvn, playerDic, state) |> PlayerChange |> updateState source projecteeDic
                         else state
                     else state
                 return! projectingSquads state squadDic projecteeDic
             | OnPlayerNameChanged (squadId, squadRvn, playerId, playerName) ->
                 let source = "OnPlayerNameChanged"
-                sprintf "%s (%A %A %A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn playerId playerName squadDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A %A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source squadId squadRvn playerId playerName squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                         let squad = squadDic.[squadId]
@@ -235,7 +273,7 @@ type Squads () =
                 return! projectingSquads state squadDic projecteeDic
             | OnPlayerTypeChanged (squadId, squadRvn, playerId, playerType) ->
                 let source = "OnPlayerTypeChanged"
-                sprintf "%s (%A %A %A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn playerId playerType squadDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A %A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source squadId squadRvn playerId playerType squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                         let squad = squadDic.[squadId]
@@ -249,7 +287,7 @@ type Squads () =
                 return! projectingSquads state squadDic projecteeDic
             | OnPlayerWithdrawn (squadId, squadRvn, playerId, dateWithdrawn) ->
                 let source = "OnPlayerWithdrawn"
-                sprintf "%s (%A %A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn playerId squadDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source squadId squadRvn playerId squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                         let squad = squadDic.[squadId]
@@ -263,13 +301,36 @@ type Squads () =
                 return! projectingSquads state squadDic projecteeDic
             | OnSquadEliminated (squadId, squadRvn) ->
                 let source = "OnSquadEliminated"
-                sprintf "%s (%A %A) when projectingSquads (%i squads/s) (%i projectee/s)" source squadId squadRvn squadDic.Count projecteeDic.Count |> Info |> log
+                sprintf "%s (%A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source squadId squadRvn squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
                     if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                         let squad = squadDic.[squadId]
                         squadDic.[squadId] <- { squad with Rvn = squadRvn ; Eliminated = true }
                         (squadDic, state) |> SquadChange |> updateState source projecteeDic
                     else state
+                return! projectingSquads state squadDic projecteeDic
+            | OnDraftsRead _ -> "OnDraftsRead when projectingSquads" |> IgnoredInput |> Agent |> log ; return! projectingSquads state squadDic projecteeDic
+            | OnPicked (draftPick, userId) ->
+                let source = "OnPicked"
+                sprintf "%s (%A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source draftPick userId squadDic.Count projecteeDic.Count |> Info |> log
+                let state =
+                    match draftPick with
+                    | TeamPicked squadId ->
+                        if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
+                            let squad = squadDic.[squadId]
+                            squadDic.[squadId] <- { squad with PickedBy = userId |> Some }
+                            (squadDic, state) |> SquadChange |> updateState source projecteeDic
+                        else state
+                    | PlayerPicked (squadId, playerId) ->
+                        if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
+                            let squad = squadDic.[squadId]
+                            let playerDic = squad.PlayerDic
+                            if playerId |> playerDic.ContainsKey then // note: silently ignore unknown playerId (should never happen)
+                                let player = playerDic.[playerId]
+                                playerDic.[playerId] <- { player with PickedBy = userId |> Some }
+                                (squadId, squad.Rvn, playerDic, state) |> PlayerChange |> updateState source projecteeDic
+                            else state
+                        else state
                 return! projectingSquads state squadDic projecteeDic
             | RemoveConnection connectionId ->
                 let source = "RemoveConnection"
@@ -303,10 +364,15 @@ type Squads () =
                 | PlayerTypeChanged (squadId, playerId, playerType) -> (squadId, rvn, playerId, playerType) |> OnPlayerTypeChanged |> agent.Post
                 | PlayerWithdrawn (squadId, playerId, dateWithdrawn) -> (squadId, rvn, playerId, dateWithdrawn) |> OnPlayerWithdrawn |> agent.Post
                 | SquadEliminated squadId -> (squadId, rvn) |> OnSquadEliminated |> agent.Post
+            | DraftsRead draftsRead -> draftsRead |> OnDraftsRead |> agent.Post
+            | DraftEventWritten (_, draftEvent) ->
+                match draftEvent with
+                | Picked (_, draftPick, userId, _) -> (draftPick, userId) |> OnPicked |> agent.Post
+                | _ -> ()
             | Disconnected connectionId -> connectionId |> RemoveConnection |> agent.Post
             | _ -> ())
         let subscriptionId = onEvent |> broadcaster.SubscribeAsync |> Async.RunSynchronously
-        sprintf "agent subscribed to SquadsRead | SquadEventWritten (subset) | Disconnected broadcasts -> %A" subscriptionId |> Info |> log
+        sprintf "agent subscribed to SquadsRead | SquadEventWritten (subset) | DraftsRead | DraftEventWritten (subset) | Disconnected broadcasts -> %A" subscriptionId |> Info |> log
         Start |> agent.PostAndReply // note: not async (since need to start agents deterministically)
     member __.HandleInitializeSquadsProjectionQryAsync (connectionId) =
         (fun reply -> (connectionId, reply) |> HandleInitializeSquadsProjectionQry) |> agent.PostAndAsyncReply

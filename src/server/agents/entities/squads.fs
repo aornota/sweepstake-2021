@@ -172,7 +172,7 @@ type Squads () =
                 let source = "OnSquadsEventsRead"
                 let squads, errors = initializeSquads source squadsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i squads/s) when pendingOnSquadsEventsRead -> managingSquads (%i squads/s)" source squadsEvents.Length squads.Count |> Info |> log
+                sprintf "%s (%i squad/s) when pendingOnSquadsEventsRead -> managingSquads (%i squad/s)" source squadsEvents.Length squads.Count |> Info |> log
                 let squadsRead =
                     squads
                     |> List.ofSeq
@@ -195,15 +195,15 @@ type Squads () =
             let! input = inbox.Receive ()
             match input with
             | IsAwaitingStart reply -> false |> reply.Reply ; return! managingSquads squadDic
-            | Start _ -> sprintf "Start when managingSquads (%i squads/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
+            | Start _ -> sprintf "Start when managingSquads (%i squad/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
             | Reset reply ->
-                sprintf "Reset when managingSquads (%i squads/s) -> pendingOnSquadsEventsRead" squadDic.Count |> Info |> log
+                sprintf "Reset when managingSquads (%i squad/s) -> pendingOnSquadsEventsRead" squadDic.Count |> Info |> log
                 () |> reply.Reply
                 return! pendingOnSquadsEventsRead ()
-            | OnSquadsEventsRead _ -> sprintf "OnSquadsEventsRead when managingSquads (%i squads/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
+            | OnSquadsEventsRead _ -> sprintf "OnSquadsEventsRead when managingSquads (%i squad/s)" squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingSquads squadDic
             | HandleCreateSquadCmd (_, auditUserId, squadId, SquadName squadName, group, seeding, CoachName coachName, reply) ->
                 let source = "HandleCreateSquadCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId squadName group squadDic.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squad/s)" source squadId squadName group squadDic.Count |> Verbose |> log
                 let squadName = SquadName (squadName.Trim ())
                 let coachName = CoachName (coachName.Trim ())
                 let result =
@@ -222,7 +222,7 @@ type Squads () =
                 return! managingSquads squadDic
             | HandleAddPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, PlayerName playerName, playerType, reply) ->
                 let source = "HandleAddPlayerCmd"
-                sprintf "%s for %A (%A %A %A) when managingSquads (%i squads/s)" source squadId playerId playerName playerType squadDic.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A %A) when managingSquads (%i squad/s)" source squadId playerId playerName playerType squadDic.Count |> Verbose |> log
                 let playerName = PlayerName (playerName.Trim ())
                 let result =
                     squadDic |> tryFindSquad squadId (otherCmdError source)
@@ -246,7 +246,7 @@ type Squads () =
                 return! managingSquads squadDic
             | HandleChangePlayerNameCmd (_, auditUserId, squadId, currentRvn, playerId, PlayerName playerName, reply) ->
                 let source = "HandleChangePlayerNameCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerName squadDic.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squad/s)" source squadId playerId playerName squadDic.Count |> Verbose |> log
                 let playerName = PlayerName (playerName.Trim ())
                 let result =
                     squadDic |> tryFindSquad squadId (otherCmdError source)
@@ -271,7 +271,7 @@ type Squads () =
                 return! managingSquads squadDic
             | HandleChangePlayerTypeCmd (_, auditUserId, squadId, currentRvn, playerId, playerType, reply) ->
                 let source = "HandleChangePlayerTypeCmd"
-                sprintf "%s for %A (%A %A) when managingSquads (%i squads/s)" source squadId playerId playerType squadDic.Count |> Verbose |> log
+                sprintf "%s for %A (%A %A) when managingSquads (%i squad/s)" source squadId playerId playerType squadDic.Count |> Verbose |> log
                 let result =
                     squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
@@ -290,7 +290,7 @@ type Squads () =
                 return! managingSquads squadDic
             | HandleWithdrawPlayerCmd (_, auditUserId, squadId, currentRvn, playerId, reply) ->
                 let source = "HandleWithdrawPlayerCmd"
-                sprintf "%s for %A (%A) when managingSquads (%i squads/s)" source squadId playerId squadDic.Count |> Verbose |> log
+                sprintf "%s for %A (%A) when managingSquads (%i squad/s)" source squadId playerId squadDic.Count |> Verbose |> log
                 let result =
                     squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->
@@ -310,7 +310,7 @@ type Squads () =
                 return! managingSquads squadDic
             | HandleEliminateSquadCmd (_, auditUserId, squadId, currentRvn, reply) ->
                 let source = "HandleEliminateSquadCmd"
-                sprintf "%s for %A when managingSquads (%i squads/s)" source squadId squadDic.Count |> Verbose |> log
+                sprintf "%s for %A when managingSquads (%i squad/s)" source squadId squadDic.Count |> Verbose |> log
                 let result =
                     squadDic |> tryFindSquad squadId (otherCmdError source)
                     |> Result.bind (fun (squadId, squad) ->

@@ -23,12 +23,8 @@ let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText 
 
 let private handleServerDraftsMsg serverDraftsMsg (squadDic:SquadDic) state : State * Cmd<Input> =
     match serverDraftsMsg with
-    | ChangePriorityCmdResult (Ok userDraftPick) ->
-        match state.ChangePriorityPending with
-        | Some (pendingPick, changePriority, _) when pendingPick = userDraftPick ->
-            // Note: ChangePriorityPending will be "reset" when Program.State handles DraftsProjectionMsg.CurrentUserDraftDtoChangedMsg.
-            { state with LastPriorityChanged = (userDraftPick, changePriority) |> Some }, Cmd.none
-        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ChangePriorityCmdResult Ok when %A not RemovalPending" userDraftPick)
+    | ChangePriorityCmdResult (Ok _) -> // note: nothing to do here
+        state, Cmd.none
     | ChangePriorityCmdResult (Error (userDraftPick, error)) ->
         match state.ChangePriorityPending with
         | Some (pendingPick, _, _) when pendingPick = userDraftPick ->
@@ -36,13 +32,9 @@ let private handleServerDraftsMsg serverDraftsMsg (squadDic:SquadDic) state : St
             let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
             let errorToastCmd = UNEXPECTED_ERROR |> errorToastCmd
             { state with ChangePriorityPending = None }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ChangePriorityCmdResult Error when %A not ChangePriorityPending" userDraftPick)
+        | Some _ | None -> state, Cmd.none
     | ServerDraftsMsg.RemoveFromDraftCmdResult (Ok userDraftPick) ->
-        match state.RemovalPending with
-        | Some (pendingPick, _) when pendingPick = userDraftPick ->
-            // Note: RemovalPending will be "reset" when Program.State handles DraftsProjectionMsg.CurrentUserDraftDtoChangedMsg.
-            state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
-        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Ok when %A not RemovalPending" userDraftPick)
+        state, sprintf "<strong>%s</strong> has been removed from draft" (userDraftPick |> userDraftPickText squadDic) |> successToastCmd
     | ServerDraftsMsg.RemoveFromDraftCmdResult (Error (userDraftPick, error)) ->
         match state.RemovalPending with
         | Some (pendingPick, _) when pendingPick = userDraftPick ->
@@ -50,7 +42,7 @@ let private handleServerDraftsMsg serverDraftsMsg (squadDic:SquadDic) state : St
             let errorCmd = errorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
             let errorToastCmd = sprintf "Unable to remove <strong>%s</strong> from draft" (userDraftPick |> userDraftPickText squadDic) |> errorToastCmd
             { state with RemovalPending = None }, Cmd.batch [ errorCmd ; errorToastCmd ]
-        | Some _ | None -> state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftsMsg.RemoveFromDraftCmdResult Error when %A not RemovalPending" userDraftPick)
+        | Some _ | None -> state, Cmd.none
 
 let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (currentUserDraftDto:CurrentUserDraftDto option) state =
     let state, cmd, isUserNonApiActivity =

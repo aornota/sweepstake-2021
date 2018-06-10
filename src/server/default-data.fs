@@ -228,15 +228,15 @@ let private createInitialUsersEventsIfNecessary = async {
 let private createInitialSquadsEventsIfNecessary = async {
     let squadsDir = directory EntityType.Squads
 
-    // #region: Force re-creation of initial Squads/s events if directory already exists (if requested)
+    // #region: Force re-creation of initial Squad/s events if directory already exists (if requested)
     if deleteExistingSquadsEvents && Directory.Exists squadsDir then
         sprintf "deleting existing Squad/s events -> %s" squadsDir |> Info |> log
         delete squadsDir
     // #endregion
 
-    if Directory.Exists squadsDir then sprintf "preserving existing Squads/s events -> %s" squadsDir |> Info |> log
+    if Directory.Exists squadsDir then sprintf "preserving existing Squad/s events -> %s" squadsDir |> Info |> log
     else
-        sprintf "creating initial Squads/s events -> %s" squadsDir |> Info |> log
+        sprintf "creating initial Squad/s events -> %s" squadsDir |> Info |> log
         "starting Squads agent" |> Info |> log
         () |> squads.Start
         // Note: Send dummy OnSquadsEventsRead to Squads agent to ensure that it transitions [from pendingOnSquadsEventsRead] to managingSquads; otherwise HandleCreateSquadCmdAsync (&c.) would be ignored (and block).

@@ -218,7 +218,7 @@ let private renderUsers (useDefaultTheme, userDic:UserDic, authUser) dispatch =
             yield table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
                 thead [ 
                     tr false [
-                        th [ [ bold "User" ] |> para theme paraDefaultSmallest ]
+                        th [ [ bold "User name" ] |> para theme paraDefaultSmallest ]
                         th [ [ bold "Type" ] |> para theme paraCentredSmallest ]
                         th []
                         th [] ] ]

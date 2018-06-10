@@ -163,5 +163,5 @@ let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * Dra
             match activeDraftSummary useDefaultTheme state.UserDraftSummaryProjection draftDic userDic with
             | h :: t ->
                 yield br
-                yield! h :: t
+                yield columnContent (h :: t)
             | [] -> () ]
