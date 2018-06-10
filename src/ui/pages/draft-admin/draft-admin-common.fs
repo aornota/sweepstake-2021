@@ -11,8 +11,8 @@ open Aornota.Sweepstake2018.UI.Shared
 
 open System.Collections.Generic
 
-type ProcessDraftInput = // TODO-SOON-ISH...
-    | ProcessDraft
+type ProcessDraftInput =
+    | ConfirmProcessDraft
     | CancelProcessDraft
 
 type Input =
@@ -28,7 +28,8 @@ type ProcessDraftStatus =
     | ProcessDraftPending
     | ProcessDraftFailed of errorText : string
 
-type ProcessDraftState = { // TODO-SOON-ISH...
+type ProcessDraftState = {
+    DraftId : DraftId
     ProcessDraftStatus : ProcessDraftStatus option }
 
 type State = {

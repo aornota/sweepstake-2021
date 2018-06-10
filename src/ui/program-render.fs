@@ -378,8 +378,9 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft) (currentUser
                     yield userDraftPickSummary
                     yield! recommendation ]
                 (semantic, contents) |> Some
-            | PendingProcessing ->
-                let contents = [ [ bold (sprintf "The %s is now closed and will be processed soon" draftTextLower) ] |> para theme paraCentredSmaller ]
+            | PendingProcessing processingStarted ->
+                let status = if processingStarted then "is currently being processed" else "will be processed soon"
+                let contents = [ [ bold (sprintf "The %s is now closed and %s" draftTextLower status) ] |> para theme paraCentredSmaller ]
                 (Info, contents) |> Some
             | FreeSelection -> // TODO-SOON-ISH: Finesse this, e.g. only show if user needs more picks?...
                 let contents = [

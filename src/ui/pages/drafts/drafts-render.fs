@@ -43,10 +43,23 @@ let private renderOpenedDraft (useDefaultTheme, state, draftId, draft:Draft, use
     let theme = getTheme useDefaultTheme
     let draftText = draft.DraftOrdinal |> draftTextLower
     let userDraftPickRow (userDraftPick, rank) =
+        let description, extra, withdrawn =
+            match userDraftPick with
+            | TeamPick squadId ->
+                let description = squadId |> squadDescription squadDic
+                [ str description ] |> para theme paraDefaultSmallest, None, None
+            | PlayerPick (squadId, playerId) ->
+                let (description, extra, withdrawn) = (squadId, playerId) |> playerDescriptionAndExtraAndWithdrawn squadDic
+                let withdrawn =
+                    if withdrawn then
+                        [ [ str "Withdrawn" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
+                    else None
+                [ str description ] |> para theme paraDefaultSmallest, [ str extra ] |> para theme paraCentredSmallest |> Some, withdrawn
+        let isWithdrawn = match withdrawn with | Some _ -> true | _ -> false
         let count = userDraftPickDic.Count
         let increasePriorityButton =
             let interaction, highlight =
-                if rank < 2 then None, false
+                if rank < 2 || isWithdrawn then None, false
                 else
                     match state.ChangePriorityPending, state.RemovalPending with
                     | None, None ->
@@ -62,7 +75,7 @@ let private renderOpenedDraft (useDefaultTheme, state, draftId, draft:Draft, use
             | None -> None
         let decreasePriorityButton =
             let interaction, highlight =
-                if rank > count - 1 then None, false
+                if rank > count - 1 || isWithdrawn then None, false
                 else
                     match state.ChangePriorityPending, state.RemovalPending with
                     | None, None ->
@@ -76,18 +89,6 @@ let private renderOpenedDraft (useDefaultTheme, state, draftId, draft:Draft, use
                 [ button theme { buttonData with Interaction = interaction ; IconLeft = iconDescendingSmall |> Some } [] ]
                 |> para theme paraDefaultSmallest |> Some
             | None -> None
-        let description, extra, withdrawn =
-            match userDraftPick with
-            | TeamPick squadId ->
-                let description = squadId |> squadDescription squadDic
-                [ str description ] |> para theme paraDefaultSmallest, None, None
-            | PlayerPick (squadId, playerId) ->
-                let (description, extra, withdrawn) = (squadId, playerId) |> playerDescriptionAndExtraAndWithdrawn squadDic
-                let withdrawn =
-                    if withdrawn then
-                        [ [ str "Withdrawn" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } |> Some
-                    else None
-                [ str description ] |> para theme paraDefaultSmallest, [ str extra ] |> para theme paraCentredSmallest |> Some, withdrawn
         let removeButton =
             let interaction =
                 match state.RemovalPending, state.ChangePriorityPending with

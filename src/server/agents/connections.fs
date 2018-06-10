@@ -78,8 +78,7 @@ let private addSignedInUser (authUser:AuthUser) (signedInUserDic:SignedInUserDic
 
 let private removeSignedInUser userId (signedInUserDic:SignedInUserDic) =
     if userId |> signedInUserDic.Remove then userId |> UserSignedOut |> broadcaster.Broadcast
-    else // note: should never happen
-        sprintf "removeSignedInUser -> %A not found in signedInUsers" userId |> Danger |> log
+    // Note: Silently ignore non-signed-in user.
 
 let private removeConnection connectionId (connectionDic:ConnectionDic, signedInUserDic:SignedInUserDic) =
     match connectionId |> connectionDic.TryGetValue with
@@ -566,17 +565,18 @@ type Connections () =
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
                             else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
-                        let! result =
-                            match result with
-                            | Ok userTokens ->
+                            |> Result.bind (fun userTokens ->
                                 match userTokens.ProcessDraftToken with
                                 | Some processDraftToken ->
-                                    (processDraftToken, auditUserId, draftId, currentRvn) |> Entities.Drafts.drafts.HandleProcessDraftCmdAsync
-                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
-                            | Error error -> error |> Error |> thingAsync
-                        let serverMsg = result |> ProcessDraftCmdResult |> ServerDraftAdminMsg
-                        do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
-                        result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
+                                    (processDraftToken, auditUserId, draftId, currentRvn, connectionId) |> Entities.Drafts.drafts.HandleProcessDraftCmd
+                                    () |> Ok
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error)                        
+                        match result with
+                        | Ok _ -> ()
+                        | Error error ->
+                            let serverMsg = error |> Error |> ProcessDraftCmdResult |> ServerDraftAdminMsg
+                            do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                            error |> Error |> logResult source (sprintf "%A" >> Some) })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
                 | UiAuthMsg (jwt, UiAuthNewsMsg (CreatePostCmd (postId, postType, messageText))) ->

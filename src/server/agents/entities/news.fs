@@ -123,7 +123,7 @@ type News () =
                 let source = "OnNewsEventsRead"
                 let posts, errors = initializePosts source newsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) when pendingOnNewsEventsRead -> managingNews (%i post/s)" source newsEvents.Length posts.Count |> Info |> log
+                sprintf "%s (%i post/s) when pendingOnNewsEventsRead -> managingNews (%i post/s)" source newsEvents.Length posts.Count |> Info |> log
                 let newsRead =
                     posts
                     |> List.ofSeq

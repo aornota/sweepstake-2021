@@ -3,6 +3,8 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Squads
 (* Broadcasts: SendMsg
    Subscribes: SquadsRead
                SquadEventWritten (PlayerAdded | PlayerNameChanged | PlayerTypeChanged | PlayerWithdrawn | SquadEliminated)
+               TODO-SOON... DraftsRead
+               TODO-SOON... DraftEventWritten (Picked)
                ConnectionsSignedOut | Disconnected *)
 
 open Aornota.Common.Revision

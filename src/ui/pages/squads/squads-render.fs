@@ -262,7 +262,7 @@ let private activeDraftIdAndOrdinalAndIsOpen authUser currentDraft =
     | true, Some (draftId, draft) ->
         match draft.DraftStatus with
         | Opened _ -> (draftId, draft.DraftOrdinal, true) |> Some
-        | PendingProcessing -> (draftId, draft.DraftOrdinal, false) |> Some
+        | PendingProcessing _ -> (draftId, draft.DraftOrdinal, false) |> Some
         | _ -> None
     | _ -> None
 

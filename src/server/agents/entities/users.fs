@@ -160,7 +160,7 @@ type Users () =
                 let source = "OnUsersEventsRead"
                 let users, errors = initializeUsers source usersEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) when pendingOnUsersEventsRead -> managingUsers (%i user/s)" source usersEvents.Length users.Count |> Info |> log
+                sprintf "%s (%i user/s) when pendingOnUsersEventsRead -> managingUsers (%i user/s)" source usersEvents.Length users.Count |> Info |> log
                 let usersRead =
                     users
                     |> List.ofSeq

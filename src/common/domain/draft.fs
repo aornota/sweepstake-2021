@@ -19,10 +19,14 @@ type DraftType =
 type DraftStatus =
     | PendingOpen of starts : DateTimeOffset * ends : DateTimeOffset
     | Opened of ends : DateTimeOffset
-    | PendingProcessing
+    | PendingProcessing of processingStarted : bool
     | Processed
     | PendingFreeSelection
     | FreeSelection
+
+type DraftPick =
+    | TeamPicked of squadId : SquadId
+    | PlayerPicked of squadId : SquadId * playerId : PlayerId
 
 type DraftDto = { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
 
@@ -39,6 +43,10 @@ type CurrentUserDraftDto = { UserDraftKey : UserDraftKey ; Rvn : Rvn ; UserDraft
 
 type UserDraftSummaryDto = { UserDraftKey : UserDraftKey ; PickCount : int }
 
+let [<Literal>] MAX_TEAM_PICKS = 1
+let [<Literal>] MAX_GOALKEEPER_PICKS = 1
+let [<Literal>] MAX_OUTFIELD_PLAYER_PICKS = 10
+
 let draftTextLower (DraftOrdinal draftOrdinal) =
     if draftOrdinal = 1 then "first draft"
     else if draftOrdinal = 2 then "second draft"
@@ -46,3 +54,5 @@ let draftTextLower (DraftOrdinal draftOrdinal) =
     else sprintf "draft #%i" draftOrdinal
 
 let defaultDraftStatus draftType = match draftType with | Constrained (starts, ends) -> (starts, ends) |> PendingOpen | Unconstrained -> PendingFreeSelection
+
+let isActive draftStatus = match draftStatus with | Opened _ | PendingProcessing _ -> true | PendingOpen _ | Processed | PendingFreeSelection | FreeSelection -> false

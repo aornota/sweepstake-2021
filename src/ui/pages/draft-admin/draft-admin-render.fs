@@ -15,11 +15,52 @@ open Aornota.Sweepstake2018.Common.Domain.User
 
 module Rct = Fable.Helpers.React
 
-let private renderDrafts (useDefaultTheme, draftDic:DraftDic, _authUser) _dispatch =
+let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, processDraftState:ProcessDraftState) dispatch =
     let theme = getTheme useDefaultTheme
-    let draftRow (_draftId, draft:Draft) =
+    let draftId = processDraftState.DraftId
+    let draft = if draftId |> draftDic.ContainsKey then draftDic.[draftId] |> Some else None
+    let titleText =
+        match draft with
+        | Some draft -> sprintf "Process %s" (draft.DraftOrdinal |> draftTextLower)
+        | None -> "Process draft" // note: should never happen
+    let confirmInteraction, onDismiss =
+        let confirm = (fun _ -> ConfirmProcessDraft |> dispatch)
+        let cancel = (fun _ -> CancelProcessDraft |> dispatch)
+        match processDraftState.ProcessDraftStatus with
+        | Some ProcessDraftPending -> Loading, None
+        | Some (ProcessDraftFailed _) | None -> Clickable (confirm, None), cancel |> Some
+    let errorText = match processDraftState.ProcessDraftStatus with | Some (ProcessDraftFailed errorText) -> errorText |> Some | Some ProcessDraftPending | None -> None
+    let warning = [
+        [ bold "Are you sure you want to process this draft?" ] |> para theme paraCentredSmaller
+        br
+        [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield notification theme notificationWarning warning
+        yield br
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            [ str "Process draft" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
+    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+
+let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch =
+    let theme = getTheme useDefaultTheme
+    let canProcessDraft =
+        match authUser with
+        | Some authUser -> match authUser.Permissions.DraftAdminPermissions with | Some draftAdminPermissions -> draftAdminPermissions.ProcessDraftPermission | None -> false
+        | None -> false
+    let processDraft (draftId, draft:Draft) =
+        let isPendingProcessing = match draft.DraftStatus with | PendingProcessing false -> true | _ -> false
+        if canProcessDraft && isPendingProcessing then
+            let onClick = (fun _ -> draftId |> ShowProcessDraftModal |> dispatch)
+            [ [ str "Process" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
+        else None
+    let draftRow (draftId, draft:Draft) =
         let (DraftOrdinal draftOrdinal) = draft.DraftOrdinal
-        let draftOrdinal = [ str (sprintf "#%i" draftOrdinal) ] |> para theme paraDefaultSmallest
+        let draftOrdinal = [ str (sprintf "#%i" draftOrdinal) ] |> para theme paraCentredSmallest
         let draftOrdinal, status, starts, ends =
             match draft.DraftStatus with
             | PendingOpen (starts, ends) ->
@@ -33,8 +74,14 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, _authUser) _dispat
                 let ends = ends.LocalDateTime |> dateAndTimeText
                 let ends = [ str ends ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, ends |> Some
-            | PendingProcessing ->
+            | PendingProcessing false ->
                 let status = [ italic "Pending processing" ] |> para theme paraDefaultSmallest
+                draftOrdinal |> Some, status |> Some, None, None
+            | PendingProcessing true ->
+                let status = [ bold "Processing in progress" ] |> para theme paraDefaultSmallest
+                draftOrdinal |> Some, status |> Some, None, None
+            | Processed ->
+                let status = [ str "Processed" ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, None
             | FreeSelection ->
                 let status = [ str "No more drafts" ] |> para theme paraDefaultSmallest
@@ -44,7 +91,8 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, _authUser) _dispat
             td [ Rct.ofOption draftOrdinal ]
             td [ Rct.ofOption status ]
             td [ Rct.ofOption starts ]
-            td [ Rct.ofOption ends ] ]
+            td [ Rct.ofOption ends ]
+            td [ Rct.ofOption ((draftId, draft) |> processDraft) ] ]
     let drafts = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> draftId, draft) |> List.sortBy (fun (_, draft) -> draft.DraftOrdinal)
     let draftRows = drafts |> List.map draftRow
     div divCentred [
@@ -52,10 +100,11 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, _authUser) _dispat
             yield table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
                 thead [ 
                     tr false [
-                        th [ [ bold "Draft" ] |> para theme paraDefaultSmallest ]
+                        th [ [ bold "Draft" ] |> para theme paraCentredSmallest ]
                         th [ [ bold "Status" ] |> para theme paraDefaultSmallest ]
                         th [ [ bold "Starts" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Ends" ] |> para theme paraDefaultSmallest ] ] ]
+                        th [ [ bold "Ends" ] |> para theme paraDefaultSmallest ]
+                        th [] ] ]
                 tbody [ yield! draftRows ] ]
         else yield [ str "There are no drafts" ] |> para theme paraCentredSmaller ] // note: should never happen
 
@@ -94,7 +143,7 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
             ]
         | None -> []
 
-let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * DraftDic * _>, userProjection:Projection<_ * UserDic>, _hasModal) dispatch =
+let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * DraftDic * _>, userProjection:Projection<_ * UserDic>, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     let userDic = match userProjection with | Ready (_, userDic) -> userDic | Pending | Failed -> UserDic ()
     columnContent [
@@ -106,6 +155,10 @@ let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * Dra
         | Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Ready (_, draftDic, _) ->
+            match hasModal, state.ProcessDraftState with
+            | false, Some processDraftState ->
+                yield div divDefault [ lazyViewOrHMR2 renderProcessDraftModal (useDefaultTheme, draftDic, processDraftState) (ProcessDraftInput >> dispatch) ]
+            | _ -> ()
             yield lazyViewOrHMR2 renderDrafts (useDefaultTheme, draftDic, authUser) dispatch
             match activeDraftSummary useDefaultTheme state.UserDraftSummaryProjection draftDic userDic with
             | h :: t ->

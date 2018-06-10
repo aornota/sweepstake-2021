@@ -172,7 +172,7 @@ type Squads () =
                 let source = "OnSquadsEventsRead"
                 let squads, errors = initializeSquads source squadsEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) when pendingOnSquadsEventsRead -> managingSquads (%i squads/s)" source squadsEvents.Length squads.Count |> Info |> log
+                sprintf "%s (%i squads/s) when pendingOnSquadsEventsRead -> managingSquads (%i squads/s)" source squadsEvents.Length squads.Count |> Info |> log
                 let squadsRead =
                     squads
                     |> List.ofSeq

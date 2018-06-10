@@ -128,7 +128,7 @@ type Fixtures () =
                 let source = "OnFixturesEventsRead"
                 let fixtures, errors = initializeFixtures source fixturesEvents
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
-                sprintf "%s (%i event/s) when pendingOnFixturesEventsRead -> managingFixtures (%i fixture/s)" source fixturesEvents.Length fixtures.Count |> Info |> log
+                sprintf "%s (%i fixture/s) when pendingOnFixturesEventsRead -> managingFixtures (%i fixture/s)" source fixturesEvents.Length fixtures.Count |> Info |> log
                 let fixturesRead =
                     fixtures
                     |> List.ofSeq

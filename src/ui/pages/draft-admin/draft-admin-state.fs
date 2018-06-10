@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.UI.Pages.DraftAdmin.State
 
 open Aornota.Common.Delta
+open Aornota.Common.IfDebug
 open Aornota.Common.Revision
 open Aornota.Common.UnexpectedError
 
@@ -48,12 +49,31 @@ let private applyUserDraftSummariesDelta currentRvn deltaRvn (delta:Delta<UserDr
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> userDraftSummaryDic |> Ok)
 
+let private handleProcessDraftCmdResult (result:Result<unit, AuthCmdError<string>>) state : State * Cmd<Input> =
+    match state.ProcessDraftState with
+    | Some processDraftState ->
+        match processDraftState.ProcessDraftStatus with
+        | Some ProcessDraftPending ->
+            match result with
+            | Ok _ ->
+                { state with ProcessDraftState = None }, "Draft has been processed" |> successToastCmd
+            | Error error ->
+                let errorText = ifDebug (sprintf "ProcessDraftCmdResult error -> %A" error) (error |> cmdErrorText)
+                let processDraftState = { processDraftState with ProcessDraftStatus = errorText |> ProcessDraftFailed |> Some }
+                { state with ProcessDraftState = processDraftState |> Some }, "Unable to process draft" |> errorToastCmd
+        | Some (ProcessDraftFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected ProcessDraftCmdResult when ProcessDraftStatus is not ProcessDraftPending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ProcessDraftCmdResult when ProcessDraftState is None -> %A" result)
+
 let private handleServerDraftAdminMsg serverDraftAdminMsg authUser state : State * Cmd<Input> =
     match serverDraftAdminMsg, state.UserDraftSummaryProjection with
     | InitializeUserDraftSummaryProjectionQryResult (Ok userDraftSummaryDtos), Pending ->
         { state with UserDraftSummaryProjection = (initialRvn, userDraftSummaryDtos |> userDraftSummaryDic) |> Ready }, Cmd.none
     | InitializeUserDraftSummaryProjectionQryResult (Error error), Pending ->
         { state with UserDraftSummaryProjection = Failed }, error |> qryErrorText |> dangerDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
+    | ProcessDraftCmdResult result, _ ->
+        state |> handleProcessDraftCmdResult result
     | UserDraftSummaryProjectionMsg (UserDraftSummariesDeltaMsg (deltaRvn, userDraftSummaryDtoDelta)), Ready (rvn, userDraftSummaryDic) ->
         match userDraftSummaryDic |> applyUserDraftSummariesDelta rvn deltaRvn userDraftSummaryDtoDelta with
         | Ok userDraftSummaryDic ->
@@ -67,6 +87,23 @@ let private handleServerDraftAdminMsg serverDraftAdminMsg authUser state : State
     | _, _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected ServerDraftAdminMsg when %A -> %A" state.UserDraftSummaryProjection serverDraftAdminMsg)
 
+let private handleProcessDraftInput processDraftInput (draftDic:DraftDic) state : State * Cmd<Input> * bool =
+    match processDraftInput, state.ProcessDraftState with
+    | ConfirmProcessDraft, Some processDraftState ->
+        let processDraftState = { processDraftState with ProcessDraftStatus = ProcessDraftPending |> Some }   
+        let draftId = processDraftState.DraftId
+        let currentRvn = if draftId |> draftDic.ContainsKey then draftDic.[draftId].Rvn else initialRvn
+        let cmd = (draftId, currentRvn) |> ProcessDraftCmd |> UiAuthDraftAdminMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        { state with ProcessDraftState = processDraftState |> Some }, cmd, true
+    | CancelProcessDraft, Some processDraftState ->
+        match processDraftState.ProcessDraftStatus with
+        | Some ProcessDraftPending ->
+            state, shouldNeverHappenCmd "Unexpected CancelProcessDraft when ProcessDraftPending", false
+        | Some (ProcessDraftFailed _) | None ->
+            { state with ProcessDraftState = None }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected ProcessDraftInput when ProcessDraftState is None -> %A" processDraftInput), false
+
 let transition input authUser (draftsProjection:Projection<_ * DraftDic * _>) state =
     let state, cmd, isUserNonApiActivity =
         match input, draftsProjection with
@@ -77,12 +114,11 @@ let transition input authUser (draftsProjection:Projection<_ * DraftDic * _>) st
         | ReceiveServerDraftAdminMsg serverDraftAdminMsg, Ready _ ->
             let state, cmd = state |> handleServerDraftAdminMsg serverDraftAdminMsg authUser
             state, cmd, false
-        | ShowProcessDraftModal _draftId, Ready _ -> // note: no need to check for unknown draftId (should never happen)
-            // TODO-SOON-ISH...
-            state, Cmd.none, true
-        | ProcessDraftInput _processDraftInput, Ready (_, _draftDic, _) ->
-            // TODO-SOON-ISH...
-            state, Cmd.none, true
+        | ShowProcessDraftModal draftId, Ready _ -> // note: no need to check for unknown draftId (should never happen)
+            let processDraftState = { DraftId = draftId ; ProcessDraftStatus = None }
+            { state with ProcessDraftState = processDraftState |> Some }, Cmd.none, true
+        | ProcessDraftInput processDraftInput, Ready (_, draftDic, _) ->
+            state |> handleProcessDraftInput processDraftInput draftDic
         | _, _ ->
             state, shouldNeverHappenCmd (sprintf "Unexpected Input when %A -> %A" draftsProjection input), false
     state, cmd, isUserNonApiActivity

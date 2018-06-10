@@ -69,21 +69,18 @@ let playerNames (playerDic:PlayerDic) = playerDic |> List.ofSeq |> List.map (fun
 
 let currentDraft (draftDic:DraftDic) =
     let drafts = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> draftId, draft) |> List.sortBy (fun (_, draft) ->
-        match draft.DraftStatus with | Opened _ -> 1 | PendingProcessing -> 2 | PendingOpen _ -> 3 | FreeSelection -> 4 | _ -> 5)
+        match draft.DraftStatus with | Opened _ -> 1 | PendingProcessing false -> 2 | PendingProcessing true -> 3 | PendingOpen _ -> 4 | FreeSelection -> 5 | _ -> 6)
     match drafts with
     | (draftId, draft) :: _ ->
         match draft.DraftStatus with
-        | PendingOpen _ | Opened _ | PendingProcessing | FreeSelection -> (draftId, draft) |> Some
+        | PendingOpen _ | Opened _ | PendingProcessing _ | FreeSelection -> (draftId, draft) |> Some
         | Processed | PendingFreeSelection -> None
     | [] -> None
 let activeDraft (draftDic:DraftDic) =
     let drafts = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> draftId, draft) |> List.sortBy (fun (_, draft) ->
-        match draft.DraftStatus with | Opened _ -> 1 | PendingProcessing -> 2 | _ -> 3)
+        match draft.DraftStatus with | Opened _ -> 1 | PendingProcessing false -> 2 | PendingProcessing true -> 3 | _ -> 4)
     match drafts with
-    | (draftId, draft) :: _ ->
-        match draft.DraftStatus with
-        | Opened _ | PendingProcessing -> (draftId, draft) |> Some
-        | PendingOpen _ | Processed | PendingFreeSelection | FreeSelection -> None
+    | (draftId, draft) :: _ -> if draft.DraftStatus |> isActive then (draftId, draft) |> Some else None
     | [] -> None
 
 let userDraftPickText (squadDic:SquadDic) userDraftPick =

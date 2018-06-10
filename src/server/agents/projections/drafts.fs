@@ -153,10 +153,8 @@ let private isOpened draftId (draftDic:DraftDic) =
         let draft = draftDic.[draftId]
         match draft.DraftStatus with | Opened _ -> true | _ -> false
     else false
-let private isActive draftId (draftDic:DraftDic) =
-    if draftId |> draftDic.ContainsKey then
-        let draft = draftDic.[draftId]
-        match draft.DraftStatus with | Opened _ | PendingProcessing -> true | _ -> false
+let private isActive draftId (draftDic:DraftDic) = 
+    if draftId |> draftDic.ContainsKey then draftDic.[draftId].DraftStatus |> isActive
     else false
 
 let private ifAllRead source (draftsRead:(DraftRead list) option, userDraftsRead:(UserDraftRead list) option) =
@@ -239,18 +237,20 @@ type Drafts () =
                             let draft = draftDic.[draftId]
                             let draft, userDraftChanged =
                                 match draftEvent with
+                                | DraftCreated _ -> draft, false // note: should never happen
                                 | DraftOpened _ -> (match draft.DraftStatus with | PendingOpen (_, ends) -> { draft with Rvn = rvn ; DraftStatus = ends |> Opened } | _ -> draft), false
-                                | DraftPendingProcessing _ -> (match draft.DraftStatus with | Opened _ -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing } | _ -> draft), false
+                                | DraftPendingProcessing _ -> (match draft.DraftStatus with | Opened _ -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing false } | _ -> draft), false
                                 | DraftProcessed _ ->
                                     match draft.DraftStatus with                                   
-                                    | PendingProcessing ->
+                                    | PendingProcessing true ->
                                         // Note: When Draft changes from PendingProcessing to Processed, clear UserDraftDic and UserDraftLookupDic.
                                         userDraftDic.Clear ()
                                         userDraftLookupDic.Clear ()
                                         { draft with Rvn = rvn ; DraftStatus = Processed }, true
                                     | _ -> draft, false
                                 | DraftFreeSelection _ -> (match draft.DraftStatus with | PendingFreeSelection -> { draft with Rvn = rvn ; DraftStatus = FreeSelection } | _ -> draft), false
-                                | _ -> draft, false // note: should never happen
+                                | ProcessingStarted _ -> (match draft.DraftStatus with | PendingProcessing false -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing true } | _ -> draft), false
+                                | _ -> draft, false
                             draftDic.[draftId] <- draft
                             let state = (draftDic, state) |> DraftChange |> updateState source projecteeDic
                             if userDraftChanged then (userDraftDic, state) |> UserDraftChange |> updateState source projecteeDic else state
