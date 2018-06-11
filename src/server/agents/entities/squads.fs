@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.Squads
 
-(* Broadcasts: SquadsRead
+(* Broadcasts: TODO:SendMsg
+               SquadsRead
    Subscribes: SquadsEventsRead *)
 
 open Aornota.Common.IfDebug

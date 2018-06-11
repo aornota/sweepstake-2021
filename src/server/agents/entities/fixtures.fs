@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.Fixtures
 
-(* Broadcasts: FixturesRead
+(* Broadcasts: TODO:SendMsg
+               FixturesRead
    Subscribes: FixturesEventsRead *)
 
 open Aornota.Common.IfDebug

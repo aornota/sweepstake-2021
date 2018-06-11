@@ -47,7 +47,7 @@ let initialize isCurrentPage readPreferences lastNewsSeen : State * Cmd<Input> =
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private updateLastNewsSeen state =
-    let lastNewsSeen = if state.IsCurrentPage && state.PreferencesRead then DateTimeOffset.UtcNow |> Some else state.LastNewsSeen
+    let lastNewsSeen = if state.IsCurrentPage && state.PreferencesRead then (DateTimeOffset.UtcNow.AddSeconds 10.) |> Some else state.LastNewsSeen
     let unseenCount =
         match state.PreferencesRead, state.NewsProjection with
         | true, Ready (_, newsDic, _) ->

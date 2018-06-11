@@ -48,6 +48,9 @@
     <Compile Include="pages/news/news-common.fs" />
     <Compile Include="pages/news/news-state.fs" />
     <Compile Include="pages/news/news-render.fs" />
+    <Compile Include="pages/scores/scores-common.fs" />
+    <Compile Include="pages/scores/scores-state.fs" />
+    <Compile Include="pages/scores/scores-render.fs" />
     <Compile Include="pages/squads/squads-common.fs" />
     <Compile Include="pages/squads/squads-state.fs" />
     <Compile Include="pages/squads/squads-render.fs" />

@@ -16,6 +16,7 @@ open Aornota.Common.UnitsOfMeasure
 
 open Aornota.Server.Common.Helpers
 
+open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -61,7 +62,7 @@ type private Player = { PlayerType : PlayerType ; Withdrawn : bool }
 type private PlayerDic = Dictionary<PlayerId, Player>
 type private SquadDic = Dictionary<SquadId, PlayerDic>
 
-type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * UserId) list }
+type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * (UserId * DraftOrdinal option)) list }
 type private DraftDic = Dictionary<DraftId, Draft>
 
 type private UserDraftPickDic = Dictionary<UserDraftPick, int>
@@ -123,9 +124,9 @@ let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft opti
         | PendingProcessing false ->
             (draftId, { draft with Rvn = nextRvn ; DraftStatus = PendingProcessing true } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (draftId, Some draft), Picked (_, draftPick, userId, _) ->
+    | Ok (draftId, Some draft), Picked (_, draftOrdinal, draftPick, userId, _) ->
         match draft.DraftStatus with
-        | PendingProcessing true | FreeSelection -> (draftId, { draft with Rvn = nextRvn ; DraftPicks = (draftPick, userId) :: draft.DraftPicks } |> Some) |> Ok
+        | PendingProcessing true | FreeSelection -> (draftId, { draft with Rvn = nextRvn ; DraftPicks = (draftPick, (userId, draftOrdinal)) :: draft.DraftPicks } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, Some draft), _ ->
         match draft.DraftStatus with
@@ -245,10 +246,13 @@ let private ignoreAlreadyPicked draftId (allPicked:DraftPickSet) (userStatuses:U
         else []
     userStatuses, events
 
-let private playerType (squadDic:SquadDic) (squadId, playerId) =
+let private playerTypeAndWithdrawn (squadDic:SquadDic) (squadId, playerId) =
     if squadId |> squadDic.ContainsKey then
         let playerDic = squadDic.[squadId]
-        if playerId |> playerDic.ContainsKey then playerDic.[playerId].PlayerType |> Some else None
+        if playerId |> playerDic.ContainsKey then
+            let player = playerDic.[playerId]
+            (player.PlayerType, player.Withdrawn) |> Some
+        else None
     else None
 
 let private teamPickCount (alreadyPicked:DraftPickSet) =
@@ -258,20 +262,21 @@ let private goalkeeperPickCount (squadDic:SquadDic) (alreadyPicked:DraftPickSet)
     alreadyPicked |> List.ofSeq |> List.filter (fun draftPick ->
         match draftPick with
         | TeamPicked _ -> false
-        | PlayerPicked (squadId, playerId) -> match (squadId, playerId) |> playerType squadDic with | Some Goalkeeper -> true | _ -> false) |> List.length
+        | PlayerPicked (squadId, playerId) -> match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with | Some (Goalkeeper, false) -> true | _ -> false) |> List.length
 
 let private outfieldPlayerPickCount (squadDic:SquadDic) (alreadyPicked:DraftPickSet) =
     alreadyPicked |> List.ofSeq |> List.filter (fun draftPick ->
         match draftPick with
         | TeamPicked _ -> false
-        | PlayerPicked (squadId, playerId) -> match (squadId, playerId) |> playerType squadDic with | Some Goalkeeper -> false | _ -> true) |> List.length
+        | PlayerPicked (squadId, playerId) ->
+            match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with | Some (Goalkeeper, _) -> false | Some (_, false) -> true | _ -> false) |> List.length
 
 let private ignoreNoLongerRequired draftId (squadDic:SquadDic) (userStatuses:UserStatus list) =
     let isTeamRequired (alreadyPicked:DraftPickSet) = alreadyPicked |> teamPickCount < MAX_TEAM_PICKS
     let isPlayerRequired (alreadyPicked:DraftPickSet) (squadId, playerId) =
-        match (squadId, playerId) |> playerType squadDic with
-        | Some Goalkeeper -> alreadyPicked |> goalkeeperPickCount squadDic < MAX_GOALKEEPER_PICKS
-        | Some _ -> alreadyPicked |> outfieldPlayerPickCount squadDic < MAX_OUTFIELD_PLAYER_PICKS
+        match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with
+        | Some (Goalkeeper, _) -> alreadyPicked |> goalkeeperPickCount squadDic < MAX_GOALKEEPER_PICKS
+        | Some (_) -> alreadyPicked |> outfieldPlayerPickCount squadDic < MAX_OUTFIELD_PLAYER_PICKS
         | None -> false // note: should never happen
     let ignored = Dictionary<UserId, HashSet<DraftPick>> ()
     let userStatuses =
@@ -299,7 +304,7 @@ let private ignoreNoLongerRequired draftId (squadDic:SquadDic) (userStatuses:Use
         else []
     userStatuses, events
 
-let private processTopPicks (random:Random) draftId (allPicked:DraftPickSet) (userStatuses:UserStatus list) =
+let private processTopPicks (random:Random) draftId draftOrdinal (allPicked:DraftPickSet) (userStatuses:UserStatus list) =
     let draftPick userDraftPick = match userDraftPick with | TeamPick squadId -> squadId |> TeamPicked | PlayerPick (squadId, playerId) -> (squadId, playerId) |> PlayerPicked
     let events = HashSet<DraftEvent> ()
     let topPicks =
@@ -311,7 +316,7 @@ let private processTopPicks (random:Random) draftId (allPicked:DraftPickSet) (us
             match uncontestedPicks |> List.filter (fun (_, userId) -> userId = userStatus.UserId) with
             | (draftPick, _) :: _ ->
                 (draftId, draftPick, userStatus.UserId) |> UncontestedPick |> events.Add |> ignore
-                (draftId, draftPick, userStatus.UserId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
+                (draftId, draftOrdinal |> Some, draftPick, userStatus.UserId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
                 draftPick |> allPicked.Add |> ignore
                 draftPick |> userStatus.AlreadyPicked.Add |> ignore
                 userStatus
@@ -339,7 +344,7 @@ let private processTopPicks (random:Random) draftId (allPicked:DraftPickSet) (us
                 let isWinner = winner = userId
                 let pickPriority =
                     if isWinner then
-                        (draftId, draftPick, userId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
+                        (draftId, draftOrdinal |> Some, draftPick, userId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
                         draftPick |> allPicked.Add |> ignore
                         draftPick |> userStatus.AlreadyPicked.Add |> ignore
                         userStatus.PickPriority
@@ -356,7 +361,7 @@ let private processTopPicks (random:Random) draftId (allPicked:DraftPickSet) (us
             if pendingPicks.Length > 0 then { userStatus with PendingPicks = pendingPicks } |> Some else None)
     userStatuses, events |> List.ofSeq
 
-let rec private processRounds (random:Random) draftId (userStatuses:UserStatus list) (allPicked:DraftPickSet) squadDic round (allEvents:DraftEvent list) =
+let rec private processRounds (random:Random) draftId draftOrdinal (userStatuses:UserStatus list) (allPicked:DraftPickSet) squadDic round (allEvents:DraftEvent list) =
     let initialPendingCount = userStatuses |> pendingCount
     sprintf "Processing round #%i -> (%i user status/es) (%i pending pick/s) (%i already picked)" round userStatuses.Length initialPendingCount allPicked.Count |> Verbose |> log
     let roundEvents = [ (draftId, round) |> RoundStarted ]
@@ -368,15 +373,15 @@ let rec private processRounds (random:Random) draftId (userStatuses:UserStatus l
     let roundEvents = roundEvents @ events
     if userStatuses.Length > 0 then
         sprintf "Processing top picks for round #%i (%i user status/es)" round userStatuses.Length |> Verbose |> log
-        let userStatuses, events = userStatuses |> processTopPicks random draftId allPicked
+        let userStatuses, events = userStatuses |> processTopPicks random draftId draftOrdinal allPicked
         let roundEvents = roundEvents @ events
         if userStatuses |> pendingCount = initialPendingCount then sprintf "Pending pick/s count (%i) did not change during round #%i" initialPendingCount round |> OtherError |> Error
-        else processRounds random draftId userStatuses allPicked squadDic (round + 1u) (allEvents @ roundEvents)
+        else processRounds random draftId draftOrdinal userStatuses allPicked squadDic (round + 1u) (allEvents @ roundEvents)
     else
         "All user draft picks processed" |> Verbose |> log
         (allEvents @ roundEvents) |> Ok
 
-let private processDraft source draftId (userDrafts:UserDraft list) (existingPicks:(DraftPick * UserId) list) squadDic : Result<DraftEvent list, OtherError<string>> =
+let private processDraft source draftId draftOrdinal (userDrafts:UserDraft list) (existingPicks:(DraftPick * UserId) list) squadDic : Result<DraftEvent list, OtherError<string>> =
     sprintf "%s for %A (%i user draft/s) (%i already picked)" source draftId userDrafts.Length existingPicks.Length |> Verbose |> log
     let userStatuses =
         userDrafts |> List.map (fun userDraft ->
@@ -392,7 +397,7 @@ let private processDraft source draftId (userDrafts:UserDraft list) (existingPic
     let seed = 87654321
     sprintf "Using random seed %i" seed |> Verbose |> log
     let random = Random seed
-    processRounds random draftId userStatuses allPicked squadDic 1u ([ (draftId, seed) |> ProcessingStarted ] @ events)
+    processRounds random draftId draftOrdinal userStatuses allPicked squadDic 1u ([ (draftId, seed) |> ProcessingStarted ] @ events)
 // #endregion
 
 // #region UserDrafts
@@ -685,11 +690,13 @@ type Drafts () =
                         | PendingProcessing true -> ifDebug (sprintf "%A (%A) is already being processed" draftId draft) UNEXPECTED_ERROR |> otherCmdError source
                         | _ -> ifDebug (sprintf "%A (%A) is not PendingProcessing" draftId draft) UNEXPECTED_ERROR |> otherCmdError source)
                     |> Result.bind (fun (draftId, draft) ->
-                        let existingPicks = draftDic |> List.ofSeq |> List.map (fun (KeyValue (_, draft)) -> draft.DraftPicks) |> List.collect id
+                        let existingPicks =
+                            draftDic |> List.ofSeq |> List.map (fun (KeyValue (_, draft)) -> draft.DraftPicks) |> List.collect id
+                            |> List.map (fun (draftPick, (userId, _)) -> draftPick, userId)
                         let userDraftIds = userDraftLookupDic |> List.ofSeq |> List.choose (fun (KeyValue ((_, forDraftId), userDraftId)) ->
                             if forDraftId = draftId then userDraftId |> Some else None)
                         let userDrafts = userDraftIds |> List.choose (fun userDraftId -> if userDraftId |> userDraftDic.ContainsKey then userDraftDic.[userDraftId] |> Some else None)
-                        match processDraft source draftId userDrafts existingPicks squadDic with
+                        match processDraft source draftId draft.DraftOrdinal userDrafts existingPicks squadDic with
                         | Ok draftEvents -> (draftId, draft, draftEvents) |> Ok
                         | Error error -> error |> OtherAuthCmdError |> Error)
                 let! result =

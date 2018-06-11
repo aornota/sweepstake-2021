@@ -2,7 +2,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Drafts
 
 (* Broadcasts: SendMsg
    Subscribes: DraftsRead
-               DraftEventWritten (DraftCreated | DraftOpened | DraftPendingProcessing | DraftProcessed | DraftFreeSelection)
+               DraftEventWritten (DraftCreated | DraftOpened | DraftPendingProcessing | DraftProcessed | DraftFreeSelection | ProcessingStarted | ...)
                UserDraftsRead
                UserDraftEventWritten  (UserDraftCreated | Drafted | Undrafted | PriorityChanged)
                ConnectionsSignedOut | Disconnected *)
@@ -11,6 +11,7 @@ open Aornota.Common.Revision
 
 open Aornota.Server.Common.DeltaHelper
 
+open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg

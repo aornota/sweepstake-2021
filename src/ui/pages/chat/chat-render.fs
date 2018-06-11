@@ -78,13 +78,12 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, has
     columnContent [
         yield [ bold "Chat" ] |> para theme paraCentredSmall
         yield hr theme false
-        match state.ChatProjection with
-        | Pending ->
+        match usersProjection, state.ChatProjection with
+        | Pending, _ | _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed -> // note: should never happen
+        | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, chatMessageDic, readyState) ->
-            let userDic = match usersProjection with | Ready (_, userDic) -> userDic | Pending | Failed -> UserDic ()
+        | Ready (_, userDic), Ready (_, chatMessageDic, readyState) ->
             let newChatMessageState = readyState.NewChatMessageState
             let (ChatMessageId newChatMessageKey), newMessageText = newChatMessageState.NewChatMessageId, newChatMessageState.NewMessageText
             let helpInfo = [

@@ -18,8 +18,6 @@ open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 open Aornota.Sweepstake2018.Server.Agents
 open Aornota.Sweepstake2018.Server.Agents.Broadcaster
 open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Agents.Entities.Users
-open Aornota.Sweepstake2018.Server.Agents.Projections.Chat
 open Aornota.Sweepstake2018.Server.Authorization
 open Aornota.Sweepstake2018.Server.Connection
 open Aornota.Sweepstake2018.Server.Jwt
@@ -266,7 +264,7 @@ type Connections () =
                     let fWithWs = (fun ws -> async {
                         let! result =
                             if debugFakeError () then sprintf "Fake %s error -> %A (%A)" source userName sessionId |> OtherError |> OtherSignInCmdError |> Error |> thingAsync
-                            else (userName, password) |> users.HandleSignInCmdAsync
+                            else (userName, password) |> Entities.Users.users.HandleSignInCmdAsync
                         let result =
                             result
                             |> Result.bind (fun authUser ->
@@ -299,7 +297,7 @@ type Connections () =
                                 | Error errorText -> ifDebug errorText UNEXPECTED_ERROR |> JwtError |> AutoSignInCmdJwtError |> Error
                         let! result =
                             match result with
-                            | Ok (userIdFromJwt, permissionsFromJwt) -> (userIdFromJwt, permissionsFromJwt) |> users.HandleAutoSignInCmdAsync
+                            | Ok (userIdFromJwt, permissionsFromJwt) -> (userIdFromJwt, permissionsFromJwt) |> Entities.Users.users.HandleAutoSignInCmdAsync
                             | Error error -> error |> Error |> thingAsync
                         let result =
                             result
@@ -429,7 +427,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChangePasswordToken with
-                                | Some changePasswordToken -> (changePasswordToken, userId, currentRvn, password) |> users.HandleChangePasswordCmdAsync
+                                | Some changePasswordToken -> (changePasswordToken, userId, currentRvn, password) |> Entities.Users.users.HandleChangePasswordCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> ChangePasswordCmdResult |> ServerAppMsg
@@ -852,7 +850,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleInitializeChatProjectionQryAsync
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> Projections.Chat.chat.HandleInitializeChatProjectionQryAsync
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> InitializeChatProjectionQryResult |> ServerChatMsg
@@ -871,7 +869,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> chat.HandleMoreChatMessagesQryAsync
+                                | Some chatProjectionQryToken -> (chatProjectionQryToken, connectionId) |> Projections.Chat.chat.HandleMoreChatMessagesQryAsync
                                 | None -> NotAuthorized |> AuthQryAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> MoreChatMessagesQryResult |> ServerChatMsg
@@ -890,7 +888,7 @@ type Connections () =
                             match result with
                             | Ok userTokens ->
                                 match userTokens.ChatToken with
-                                | Some sendChatMessageToken -> (sendChatMessageToken, userId, chatMessageId, messageText) |> chat.HandleSendChatMessageCmdAsync
+                                | Some sendChatMessageToken -> (sendChatMessageToken, userId, chatMessageId, messageText) |> Projections.Chat.chat.HandleSendChatMessageCmdAsync
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error |> thingAsync
                             | Error error -> error |> Error |> thingAsync
                         let serverMsg = result |> SendChatMessageCmdResult |> ServerChatMsg

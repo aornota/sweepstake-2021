@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.News
 
-(* Broadcasts: NewsRead
+(* Broadcasts: TODO:SendMsg
+               NewsRead
    Subscribes: NewsEventsRead *)
 
 open Aornota.Common.IfDebug

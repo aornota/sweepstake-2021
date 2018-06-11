@@ -154,6 +154,10 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
         match unauthPageStates with
         | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none
         | None -> News.State.initialize (currentPage = NewsPage) true None
+    let scoresState, scoresCmd =
+        match unauthPageStates with
+        | Some unauthPageStates -> unauthPageStates.ScoresState, Cmd.none
+        | None -> Scores.State.initialize None
     let squadsState, squadsCmd =
         match unauthPageStates with
         | Some unauthPageStates ->
@@ -161,9 +165,6 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
             let pendingPicksState = { PendingPicks = [] ; PendingRvn = None }
             { squadsState with PendingPicksState = pendingPicksState }, Cmd.none
         | None -> Squads.State.initialize None
-
-    let tempScoresState = ()
-
     let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
     let usersProjection =
         match unauthProjections with
@@ -185,14 +186,15 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
         | None -> Pending, InitializeFixturesProjectionQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
     let unauthState = {
         CurrentUnauthPage = currentPage
-        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = scoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
         UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection ; FixturesProjection = fixturesProjection }
         SignInState = signInState }
     let usersProjectionUnauthCmd = InitializeUsersProjectionUnauthQry |> UiUnauthAppMsg |> sendUnauthMsgCmd state.ConnectionState
     let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+    let scoresCmd = scoresCmd |> Cmd.map (ScoresInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
-    let cmd = Cmd.batch [ usersProjectionUnauthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ]
+    let cmd = Cmd.batch [ usersProjectionUnauthCmd ; scoresCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ]
     { state with AppState = Unauth unauthState }, cmd
 let private defaultChangePasswordState mustChangePasswordReason changePasswordStatus = {
     MustChangePasswordReason = mustChangePasswordReason
@@ -204,16 +206,20 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
     ConfirmPasswordErrorText = None
     ChangePasswordStatus = changePasswordStatus }
 
-let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) state =
+let private defaultAuthState (authUser:AuthUser) currentPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
-    let newsState, newsCmd =
+    let newsState, newsCmd = 
         match unauthPageStates with
         | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none
         | None -> News.State.initialize (currentPage = UnauthPage NewsPage) true None
+    let scoresState, scoresCmd =
+        match unauthPageStates with
+        | Some unauthPageStates ->
+            let scoresState = unauthPageStates.ScoresState
+            let scoresState = if currentPage = UnauthPage ScoresPage then scoresState else { scoresState with CurrentUserId = authUser.UserId |> Some }
+            scoresState, Cmd.none
+        | None -> Scores.State.initialize (authUser.UserId |> Some)
     let squadsState, squadsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState, Cmd.none | None -> Squads.State.initialize None
-
-    let tempScoresState = ()
-
     let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
     let initializeUserAdminState = currentPage = AuthPage UserAdminPage
     let userAdminState, userAdminCmd =
@@ -242,9 +248,9 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         AuthUser = authUser
         LastUserActivity = DateTimeOffset.UtcNow
         CurrentPage = currentPage
-        UnauthPageStates = { NewsState = newsState ; ScoresState = tempScoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
-        AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = draftAdminState ; DraftsState = draftsState ; ChatState = chatState }
+        UnauthPageStates = { NewsState = newsState ; ScoresState = scoresState ; SquadsState = squadsState ; FixturesState = fixturesState }
         UnauthProjections = { UsersProjection = usersProjection ; SquadsProjection = squadsProjection ; FixturesProjection = fixturesProjection }
+        AuthPageStates = { UserAdminState = userAdminState ; DraftAdminState = draftAdminState ; DraftsState = draftsState ; ChatState = chatState }
         AuthProjections = { DraftsProjection = Pending }
         ChangePasswordState =
             match authUser.MustChangePasswordReason with
@@ -257,6 +263,7 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
         | Some _ -> InitializeDraftsProjectionQry |> UiAuthAppMsg |> sendAuthMsgCmd state.ConnectionState authState
         | None -> authState, Cmd.none
     let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
+    let scoresCmd = scoresCmd |> Cmd.map (ScoresInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
     let userAdminCmd = userAdminCmd |> Cmd.map (UserAdminInput >> APageInput >> PageInput >> AuthInput >> AppInput)
@@ -265,8 +272,8 @@ let private defaultAuthState authUser currentPage (unauthPageStates:UnauthPageSt
     let chatCmd = chatCmd |> Cmd.map (ChatInput >> APageInput >> PageInput >> AuthInput >> AppInput)
     let cmd =
         Cmd.batch [
-            usersProjectionAuthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; draftsProjectionCmd ; newsCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; draftAdminCmd ; draftsCmd
-            chatCmd ]
+            usersProjectionAuthCmd ; squadsProjectionCmd ; fixturesProjectionCmd ; draftsProjectionCmd ; newsCmd ; scoresCmd ; squadsCmd ; fixturesCmd ; userAdminCmd ; draftAdminCmd
+            draftsCmd ; chatCmd ]
     { state with AppState = Auth authState }, cmd
 
 let initialize () =
@@ -483,7 +490,7 @@ let private squad (squadDto:SquadDto) =
 
 let private updateSquad (squadOnlyDto:SquadOnlyDto) (squad:Squad) =
     { squad with Rvn = squadOnlyDto.Rvn ; SquadName = squadOnlyDto.SquadName ; Group = squadOnlyDto.Group ; Seeding = squadOnlyDto.Seeding ; CoachName = squadOnlyDto.CoachName
-                 Eliminated = squadOnlyDto.Eliminated ; PlayerDic = squad.PlayerDic }
+                 Eliminated = squadOnlyDto.Eliminated ; PlayerDic = squad.PlayerDic ; PickedBy = squadOnlyDto.PickedBy }
 
 let private squadDic (squadDtos:SquadDto list) =
     let squadDic = SquadDic ()
@@ -726,7 +733,7 @@ let private handleServerAppMsg serverAppMsg state =
             let unauthPageStates = authState.UnauthPageStates
             let state, unauthPageStates, squadsProjection =
                 match result with
-                | Ok squadDtos ->
+                | Ok squadDtos ->               
                     let squadDic = squadDtos |> squadDic
                     let currentSquadId = GroupA |> defaultSquadId squadDic
                     let squadsState = { unauthPageStates.SquadsState with CurrentSquadId = currentSquadId }
@@ -1077,11 +1084,14 @@ let private handleUnauthInput unauthInput (unauthState:UnauthState) state =
         let unauthPageStates = { unauthState.UnauthPageStates with NewsState = newsState }
         let newsCmd = newsCmd |> Cmd.map (NewsInput >> UnauthPageInput >> UnauthInput >> AppInput)
         { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, newsCmd
-
-    | UnauthPageInput (ScoresInput _), _ ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
-        state, cmd
-
+    | UnauthPageInput (ScoresInput (Scores.Common.AddNotificationMessage notificationMessage)), _ ->
+        state |> addNotificationMessage notificationMessage, Cmd.none
+    | UnauthPageInput (ScoresInput scoresInput), _ ->
+        let scoresState = unauthState.UnauthPageStates.ScoresState
+        let scoresState, scoresCmd, _ = scoresState |> Scores.State.transition scoresInput unauthState.UnauthProjections.SquadsProjection
+        let unauthPageStates = { unauthState.UnauthPageStates with ScoresState = scoresState }
+        let scoresCmd = scoresCmd |> Cmd.map (ScoresInput >> UnauthPageInput >> UnauthInput >> AppInput)
+        { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, scoresCmd
     | UnauthPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage)), _ ->
         state |> addNotificationMessage notificationMessage, Cmd.none
     | UnauthPageInput (SquadsInput (Squads.Common.SendUiAuthMsg _)), _ ->
@@ -1186,11 +1196,14 @@ let private handleAuthInput authInput authState state =
         let unauthPageStates = { authState.UnauthPageStates with NewsState = newsState }
         let newsCmd = newsCmd |> Cmd.map (NewsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
         { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, newsCmd, isUserNonApiActivity
-
-    | PageInput (UPageInput (ScoresInput _)), _, false ->
-        let state, cmd = state |> shouldNeverHappen "Unexpected ScoresInput -> NYI"
-        state, cmd, false
-
+    | PageInput (UPageInput (ScoresInput (Scores.Common.AddNotificationMessage notificationMessage))), _, false ->
+        state |> addNotificationMessage notificationMessage, Cmd.none, false
+    | PageInput (UPageInput (ScoresInput scoresInput)), _, _ ->
+        let scoresState = authState.UnauthPageStates.ScoresState
+        let scoresState, scoresCmd, isUserNonApiActivity = scoresState |> Scores.State.transition scoresInput authState.UnauthProjections.SquadsProjection
+        let unauthPageStates = { authState.UnauthPageStates with ScoresState = scoresState }
+        let scoresCmd = scoresCmd |> Cmd.map (ScoresInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
+        { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, scoresCmd, isUserNonApiActivity
     | PageInput (UPageInput (SquadsInput (Squads.Common.AddNotificationMessage notificationMessage))), _, false ->
         state |> addNotificationMessage notificationMessage, Cmd.none, false
     | PageInput (UPageInput (SquadsInput (Squads.Common.SendUiAuthMsg uiAuthMsg))), _, false ->

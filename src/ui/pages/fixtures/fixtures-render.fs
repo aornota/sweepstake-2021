@@ -147,13 +147,12 @@ let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection
     columnContent [
         yield [ bold "Fixtures" ] |> para theme paraCentredSmall
         yield hr theme false
-        match fixturesProjection with
-        | Pending ->
+        match squadsProjection, fixturesProjection with
+        | Pending, _ | _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed -> // note: should never happen
+        | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, fixtureDic) ->
-            let squadDic = match squadsProjection with | Ready (_, squadDic) -> squadDic | Pending | Failed -> SquadDic ()
+        | Ready (_, squadDic), Ready (_, fixtureDic) ->
             let currentFixtureFilter = state.CurrentFixtureFilter
             let filterTabs = filterTabs currentFixtureFilter dispatch
             let groupTabs = groupTabs currentFixtureFilter dispatch

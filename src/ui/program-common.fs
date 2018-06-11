@@ -17,8 +17,6 @@ open System
 
 module Brw = Fable.Import.Browser
 
-type ToDo = unit // TODO-REMOVE: Once no longer used...
-
 type UnauthPage =
     | NewsPage
     | ScoresPage
@@ -55,7 +53,7 @@ type WsError =
 
 type UnauthPageInput =
     | NewsInput of newsInput : News.Common.Input
-    | ScoresInput of scoresInput: ToDo
+    | ScoresInput of scoresInput: Scores.Common.Input
     | SquadsInput of squadsInput : Squads.Common.Input
     | FixturesInput of fixturesInput : Fixtures.Common.Input
 
@@ -142,7 +140,7 @@ type SignInState = {
 
 type UnauthPageStates = {
     NewsState : News.Common.State
-    ScoresState : ToDo
+    ScoresState : Scores.Common.State
     SquadsState : Squads.Common.State
     FixturesState : Fixtures.Common.State }
 
@@ -184,8 +182,8 @@ type AuthState = {
     LastUserActivity : DateTimeOffset
     CurrentPage : Page
     UnauthPageStates : UnauthPageStates
-    AuthPageStates : AuthPageStates
     UnauthProjections : UnauthProjections
+    AuthPageStates : AuthPageStates
     AuthProjections : AuthProjections
     ChangePasswordState : ChangePasswordState option
     SigningOut : bool }

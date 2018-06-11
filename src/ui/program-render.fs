@@ -13,6 +13,7 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
+open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -224,12 +225,6 @@ let private renderSignInModal (useDefaultTheme, signInState) dispatch =
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Sign in" ] |> button theme { buttonLinkSmall with Interaction = signInInteraction } ] ]
     cardModal theme [ [ bold "Sign in" ] |> para theme paraCentredSmall ] onDismiss body
 
-// #region TEMP-NMB...renderScores
-let private renderScores useDefaultTheme =
-    let theme = getTheme useDefaultTheme
-    columnContent [ [ bold "Scores" ] |> para theme paraCentredSmall ; hr theme false ; [ str "Coming soon" ] |> para theme paraCentredSmaller ]
-// #endregion
-
 let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (dispatch:UnauthInput -> unit) =
     let hasModal = if hasStaticModal then true else match unauthState.SignInState with | Some _ -> true | None -> false
     let usersProjection = unauthState.UnauthProjections.UsersProjection
@@ -244,12 +239,9 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
         | NewsPage ->
             let newsState = unauthState.UnauthPageStates.NewsState
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, usersProjection, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
-
         | ScoresPage ->
-            let _scoresState = unauthState.UnauthPageStates.ScoresState
-            yield renderScores useDefaultTheme
-            // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UnauthPageInput >> dispatch)
-
+            let scoresState = unauthState.UnauthPageStates.ScoresState
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UnauthPageInput >> dispatch)
         | SquadsPage ->
             let squadsState = unauthState.UnauthPageStates.SquadsState
             yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, None, usersProjection, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
@@ -338,16 +330,30 @@ let private userDraftPickSummary theme (squadsProjection:Projection<_ * SquadDic
         let plural = if count > 1 then "s" else String.Empty
         [ str (sprintf "You have made %i selection%s for this draft." count plural) ] |> para theme paraDefaultSmallest // note: should never happen
 
-let private currentDraftSummary useDefaultTheme authUser (_, draft) (currentUserDraftDto:CurrentUserDraftDto option) squadsProjection dispatch =
+let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (currentUserDraftDto:CurrentUserDraftDto option) squadsProjection dispatch =
     let theme = getTheme useDefaultTheme
     let canDraft = match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
     if canDraft then
         let semanticAndContents =
             let draftTextLower = draft.DraftOrdinal |> draftTextLower
+            let isFirst = draft.DraftOrdinal = DraftOrdinal 1
+            let scoresPageBlurb = [
+                br
+                [
+                    str "You can see your successful picks from previous drafts on the "
+                    [ str "Scores" ] |> link theme (ClickableLink (fun _ -> ScoresPage |> UnauthPage |> ShowPage |> dispatch))
+                    str " page."
+                ] |> para theme paraDefaultSmallest
+            ]
             match draft.DraftStatus with
             | PendingOpen (starts, ends) ->
                 let starts, ends = starts.LocalDateTime |> dateAndTimeText, ends.LocalDateTime |> dateAndTimeText
-                let contents = [ [ bold (sprintf "The %s will open on %s and will close on %s" draftTextLower starts ends) ] |> para theme paraCentredSmaller ]
+                let contents =
+                    [
+                        yield [ bold (sprintf "The %s will open on %s and will close on %s" draftTextLower starts ends) ] |> para theme paraCentredSmaller
+                        if isFirst |> not then
+                            yield! scoresPageBlurb
+                    ]
                 (Info, contents) |> Some
             | Opened ends ->
                 let ends = ends.LocalDateTime |> dateAndTimeText
@@ -358,17 +364,20 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft) (currentUser
                     | Some _ | None ->
                         Warning, [ bold "You have not made any selections for this draft." ] |> para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger }
                 let recommendation =
-                    if draft.DraftOrdinal = DraftOrdinal 1 then
+                    if isFirst then
                         [
                             br
                             [ italic "We recommend making at least 25-30 selections for the first draft." ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
                         ]
                     else []
+                let pleaseSelect = if isFirst then "Please select" else "If required, please select"
                 let contents = [
                     yield [ bold (sprintf "The %s is now open and will close on %s" draftTextLower ends) ] |> para theme paraCentredSmaller
+                    if isFirst |> not then
+                        yield! scoresPageBlurb
                     yield br
                     yield [
-                        str "Please select teams/coaches, goalkeepers and outfield players on the "
+                        str (sprintf "%s teams/coaches, goalkeepers and outfield players on the " pleaseSelect)
                         [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
                         str " page. You can prioritize your selections on the "
                         [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
@@ -422,12 +431,9 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | UnauthPage NewsPage ->
             let newsState = authState.UnauthPageStates.NewsState
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, usersProjection, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
-
         | UnauthPage ScoresPage ->
-            let _scoresState = authState.UnauthPageStates.ScoresState
-            yield renderScores useDefaultTheme
-            // TODO-SOON... yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, hasModal) (ScoresInput >> UPageInput >> PageInput >> dispatch)
-
+            let scoresState = authState.UnauthPageStates.ScoresState
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState
             yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraft, currentUserDraftDto, usersProjection, hasModal)
@@ -451,7 +457,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
             let draftsState = authState.AuthPageStates.DraftsState
-            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, squadsProjection, currentDraft, currentUserDraftDto, hasModal)
+            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, squadsProjection, currentDraft, currentUserDraftDto)
                 (DraftsInput >> APageInput >> PageInput >> dispatch)
         | AuthPage ChatPage ->
             let chatState = authState.AuthPageStates.ChatState

@@ -92,8 +92,8 @@ It's not a perfect algorithm by any means. But it's the best I've been able to c
 For a more detailed example, here are the [first and second draft details](https://aornota.github.io/sweepstake.2016/draft.html) for the world-famous Euro 2016 sweepstake."""
 
 let [<Literal>] PAYOUTS_MARKDOWN = """**To be confirmed** - but based on the [world-famous Euro 2016 sweepstake](https://aornota.github.io/sweepstake.2016/), probably something like:
-+ £60 for first place
-+ £30 for second place
++ £65 for first place
++ £35 for second place
 + £20 for third place
 + £10 for the [_деревянная ложка_](https://translate.google.co.uk/#auto/en/%D0%B4%D0%B5%D1%80%D0%B5%D0%B2%D1%8F%D0%BD%D0%BD%D0%B0%D1%8F%20%D0%BB%D0%BE%D0%B6%D0%BA%D0%B0)"""
 

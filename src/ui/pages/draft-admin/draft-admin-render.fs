@@ -8,10 +8,11 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
-open Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Common
+open Aornota.Sweepstake2018.UI.Shared
 
 module Rct = Fable.Helpers.React
 
@@ -143,18 +144,17 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
             ]
         | None -> []
 
-let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * DraftDic * _>, userProjection:Projection<_ * UserDic>, hasModal) dispatch =
+let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * DraftDic * _>, usersProjection:Projection<_ * UserDic>, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
-    let userDic = match userProjection with | Ready (_, userDic) -> userDic | Pending | Failed -> UserDic ()
     columnContent [
         yield [ bold "Draft administration" ] |> para theme paraCentredSmall
         yield hr theme false
-        match draftProjection with
-        | Pending ->
+        match usersProjection, draftProjection with
+        | Pending, _ | _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed -> // note: should never happen
+        | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, draftDic, _) ->
+        | Ready (_, userDic), Ready (_, draftDic, _) ->
             match hasModal, state.ProcessDraftState with
             | false, Some processDraftState ->
                 yield div divDefault [ lazyViewOrHMR2 renderProcessDraftModal (useDefaultTheme, draftDic, processDraftState) (ProcessDraftInput >> dispatch) ]

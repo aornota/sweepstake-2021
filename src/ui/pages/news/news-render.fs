@@ -173,13 +173,12 @@ let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Pr
     columnContent [
         yield [ bold "News" ] |> para theme paraCentredSmall
         yield hr theme false
-        match state.NewsProjection with
-        | Pending ->
+        match usersProjection, state.NewsProjection with
+        | Pending, _ | _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed -> // note: should never happen
+        | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, postDic, readyState) ->
-            let userDic = match usersProjection with | Ready (_, userDic) -> userDic | Pending | Failed -> UserDic ()
+        | Ready (_, userDic), Ready (_, postDic, readyState) ->
             let morePosts =
                 let paraMore = { paraDefaultSmallest with ParaAlignment = RightAligned }
                 if readyState.MorePostsPending then

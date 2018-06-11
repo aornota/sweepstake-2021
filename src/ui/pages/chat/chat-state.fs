@@ -53,7 +53,7 @@ let private defaultNewChatMessageState () = { NewChatMessageId = ChatMessageId.C
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
 let private updateLastChatSeen state =
-    let lastChatSeen = if state.IsCurrentPage && state.PreferencesRead then DateTimeOffset.UtcNow |> Some else state.LastChatSeen
+    let lastChatSeen = if state.IsCurrentPage && state.PreferencesRead then (DateTimeOffset.UtcNow.AddSeconds 10.) |> Some else state.LastChatSeen
     let unseenCount =
         match state.PreferencesRead, state.ChatProjection with
         | true, Ready (_, chatMessageDic, _) ->

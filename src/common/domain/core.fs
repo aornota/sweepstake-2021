@@ -7,6 +7,8 @@ type SessionId = | SessionId of guid : Guid with
 
 type Group = | GroupA | GroupB | GroupC | GroupD | GroupE | GroupF | GroupG | GroupH
 
+type DraftOrdinal = | DraftOrdinal of draftOrdinal : int
+
 let groups = [ GroupA ; GroupB ; GroupC ; GroupD ; GroupE ; GroupF ; GroupG ; GroupH ]
 
 let groupText group =

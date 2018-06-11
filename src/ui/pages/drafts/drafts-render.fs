@@ -123,7 +123,7 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                 tbody [ yield! userDraftPickRows ] ]
         else yield [ bold (sprintf "You have not made any selections for the %s" draftText) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger } ]
 
-let render (useDefaultTheme, state, _authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto, _hasModal) dispatch =
+let render (useDefaultTheme, state, _authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto) dispatch =
     let theme = getTheme useDefaultTheme
     let userDraftPickDic =
         match currentUserDraftDto with
@@ -150,4 +150,4 @@ let render (useDefaultTheme, state, _authUser:AuthUser option, squadsProjection:
             | Some (draftId, draft, isOpened) ->
                 yield lazyViewOrHMR2 renderActiveDraft (useDefaultTheme, state, draftId, draft, isOpened, userDraftPickDic, squadDic) dispatch
             | None ->
-                yield [ str "Coming soon" ] |> para theme paraCentredSmaller ]
+                yield [ str "Processed draft details coming soon" ] |> para theme paraCentredSmaller ]

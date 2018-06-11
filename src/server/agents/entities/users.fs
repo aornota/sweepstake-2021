@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.Server.Agents.Entities.Users
 
-(* Broadcasts: UsersRead
+(* Broadcasts: TODO:SendMsg
+               UsersRead
    Subscribes: UsersEventsRead *)
 
 open Aornota.Common.IfDebug

@@ -1,5 +1,6 @@
 module Aornota.Sweepstake2018.Server.Events.DraftEvents
 
+open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
@@ -20,7 +21,7 @@ type DraftEvent =
     | UncontestedPick of draftId : DraftId * draftPick : DraftPick * userId : UserId
     | ContestedPick of draftId : DraftId * draftPick : DraftPick * userDetails : (UserId * uint32 * float option) list * winner : UserId
     | PickPriorityChanged of draftId : DraftId * userId : UserId * pickPriority : uint32
-    | Picked of draftId : DraftId * draftPick : DraftPick * userId : UserId * timestamp : DateTimeOffset
+    | Picked of draftId : DraftId * draftOrdinal : DraftOrdinal option * draftPick : DraftPick * userId : UserId * timestamp : DateTimeOffset // note: draftOrdinal will be None for "free pick"
     with
         member self.DraftId =
             match self with
@@ -37,4 +38,4 @@ type DraftEvent =
             | UncontestedPick (draftId, _, _) -> draftId
             | ContestedPick (draftId, _, _, _) -> draftId
             | PickPriorityChanged (draftId, _, _) -> draftId
-            | Picked (draftId, _, _, _) -> draftId
+            | Picked (draftId, _, _, _, _) -> draftId
