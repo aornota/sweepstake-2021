@@ -13,11 +13,7 @@ open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 
-open System.Collections.Generic
-
 module Rct = Fable.Helpers.React
-
-type private UserDraftPickDic = Dictionary<UserDraftPick, int>
 
 let private squadDescription (squadDic:SquadDic) squadId =
     if squadId |> squadDic.ContainsKey then       
@@ -39,9 +35,10 @@ let private playerDescriptionAndExtraAndWithdrawn (squadDic:SquadDic) (squadId, 
         else UNKNOWN, UNKNOWN, false
     else UNKNOWN, UNKNOWN, false
 
-let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isOpened, userDraftPickDic:UserDraftPickDic, squadDic:SquadDic) dispatch =
+let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isOpen, needsMorePicks, userDraftPickDic:UserDraftPickDic, squadDic:SquadDic) dispatch =
     let theme = getTheme useDefaultTheme
-    let draftText = draft.DraftOrdinal |> draftTextLower
+    let draftTextLower = draft.DraftOrdinal |> draftTextLower
+    let canInteract = isOpen && needsMorePicks
     let userDraftPickRow (userDraftPick, rank) =
         let description, extra, withdrawn =
             match userDraftPick with
@@ -59,7 +56,7 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
         let count = userDraftPickDic.Count
         let increasePriorityButton =
             let interaction, highlight =
-                if isOpened |> not || isWithdrawn || rank < 2 then None, false
+                if canInteract |> not || isWithdrawn || rank < 2 then None, false
                 else
                     match state.ChangePriorityPending, state.RemovalPending with
                     | None, None ->
@@ -75,7 +72,7 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
             | None -> None
         let decreasePriorityButton =
             let interaction, highlight =
-                if isOpened |> not || isWithdrawn || rank > count - 1 then None, false
+                if canInteract |> not || isWithdrawn || rank > count - 1 then None, false
                 else
                     match state.ChangePriorityPending, state.RemovalPending with
                     | None, None ->
@@ -90,13 +87,13 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                 |> para theme paraDefaultSmallest |> Some
             | None -> None
         let removeButton =
-            if isOpened then
+            if canInteract then
                 let interaction =
                     match state.RemovalPending, state.ChangePriorityPending with
                     | None, None -> Clickable ((fun _ -> (draftId, userDraftPick) |> RemoveFromDraft |> dispatch), None)
                     | Some (pendingPick, _), _ when pendingPick = userDraftPick -> Loading
                     | _ -> NotEnabled None
-                [ [ str (sprintf "Remove from %s" draftText) ] |> button theme { buttonDangerSmall with Interaction = interaction } ] |> para theme paraDefaultSmallest |> Some
+                [ [ str (sprintf "Remove from %s" draftTextLower) ] |> button theme { buttonDangerSmall with Interaction = interaction } ] |> para theme paraDefaultSmallest |> Some
             else None
         tr false [
             td [ Rct.ofOption increasePriorityButton ]
@@ -121,33 +118,34 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                         th []
                         th [] ] ]
                 tbody [ yield! userDraftPickRows ] ]
-        else yield [ bold (sprintf "You have not made any selections for the %s" draftText) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger } ]
+        else if needsMorePicks then
+            yield [ bold (sprintf "You have not made any selections for the %s" draftTextLower) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger }
+        else
+            yield [ bold (sprintf "You do not need to make any selections for the %s" draftTextLower) ] |> para theme paraCentredSmallest ]
 
-let render (useDefaultTheme, state, _authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, currentDraft:(DraftId * Draft) option, currentUserDraftDto) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option>, squadsProjection:Projection<_ * SquadDic>) dispatch =
     let theme = getTheme useDefaultTheme
-    let userDraftPickDic =
-        match currentUserDraftDto with
-        | Some currentUserDraftDto ->
-            let userDraftPickDic = UserDraftPickDic ()
-            currentUserDraftDto.UserDraftPickDtos |> List.iter (fun userDraftPickDto -> (userDraftPickDto.UserDraftPick, userDraftPickDto.Rank) |> userDraftPickDic.Add)
-            userDraftPickDic
-        | None -> UserDraftPickDic ()
     columnContent [
         yield [ bold "Drafts" ] |> para theme paraCentredSmall
         yield hr theme false
-        match squadsProjection with
-        | Pending ->
+        match draftsProjection, squadsProjection with
+        | Pending, _ | _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed -> // note: should never happen
+        | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, squadDic) ->
+        | Ready (_, draftDic, currentUserDraftDto), Ready (_, squadDic) ->
+            let currentDraft = draftDic |> currentDraft
             let activeDraft =
                 match currentDraft with
                 | Some (draftId, draft) ->
                     match draft.DraftStatus with | Opened _ -> (draftId, draft, true) |> Some | PendingProcessing _ -> (draftId, draft, false) |> Some | _ -> None
                 | None -> None
+            let userDraftPickDic = currentUserDraftDto |> userDraftPickDic
+            let squad, players = authUser.UserId |> pickedByUser squadDic
+            let pickedCounts = (squad, players) |> pickedCounts
+            let needsMorePicks = match pickedCounts |> stillRequired with | Some _ -> true | None -> false
             match activeDraft with
-            | Some (draftId, draft, isOpened) ->
-                yield lazyViewOrHMR2 renderActiveDraft (useDefaultTheme, state, draftId, draft, isOpened, userDraftPickDic, squadDic) dispatch
+            | Some (draftId, draft, isOpen) ->
+                yield lazyViewOrHMR2 renderActiveDraft (useDefaultTheme, state, draftId, draft, isOpen, needsMorePicks, userDraftPickDic, squadDic) dispatch
             | None ->
                 yield [ str "Processed draft details coming soon" ] |> para theme paraCentredSmaller ]

@@ -14,8 +14,6 @@ open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.Scores.Common
 open Aornota.Sweepstake2018.UI.Shared
 
-open System
-
 module Rct = Fable.Helpers.React
 
 let private userTabs users currentUserId dispatch =
@@ -125,54 +123,23 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, squ
             match currentUserId with
             | Some currentUserId ->
                 let userTabs = userTabs users currentUserId dispatch
-                let squad =
-                    squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad)
-                    |> List.choose (fun squad -> match squad.PickedBy with | Some (userId, draftOrdinal) when userId = currentUserId -> (squad, draftOrdinal) |> Some | _ -> None)
-                let playerDics =
-                    squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad, squad.PlayerDic)
-                let players =
-                    playerDics |> List.map (fun (squad, playerDic) ->
-                        playerDic |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player)
-                        |> List.choose (fun player ->
-                            match player.PickedBy with | Some (userId, draftOrdinal) when userId = currentUserId -> (squad, player, draftOrdinal) |> Some | _ -> None))
-                    |> List.collect id               
-                let goalkeeperCount =
-                    players |> List.filter (fun (_, player, _) ->
-                        match player.PlayerType, player.PlayerStatus with
-                        | Goalkeeper, Active _ -> true
-                        | _ -> false) |> List.length
-                let outfieldPlayerCount =
-                    players |> List.filter (fun (_, player, _) ->
-                        match player.PlayerType, player.PlayerStatus with
-                        | Goalkeeper, _ -> false
-                        | _, Active -> true
-                        | _ -> false) |> List.length
-                let neededCounts = [
-                    if goalkeeperCount < MAX_GOALKEEPER_PICKS then yield "1 goalkeeper"
-                    let outfieldPlayersNeeded = MAX_OUTFIELD_PLAYER_PICKS - outfieldPlayerCount                   
-                    if outfieldPlayersNeeded > 0 then
-                        let plural = if outfieldPlayersNeeded > 1 then "s" else String.Empty
-                        yield sprintf "%i outfield player%s" outfieldPlayersNeeded plural ]
-                let items = neededCounts.Length
-                let needed =
-                    if items > 0 then
-                        let neededCounts = neededCounts |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
-                        let neededCounts = neededCounts |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
-                        [
-                            br
-                            [ bold (sprintf "%s still required" neededCounts) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger }
-                        ]
-                    else []
+                let squad, players = currentUserId |> pickedByUser squadDic
+                let pickedCounts = (squad, players) |> pickedCounts
+                let stillRequired = pickedCounts |> stillRequired
                 yield div divCentred [ tabs theme { tabsDefault with Tabs = userTabs } ]
                 yield br
+                match stillRequired with
+                | Some stillRequired ->
+                    yield [ bold stillRequired ] |> para theme paraCentredSmallest
+                    yield br
+                | None -> ()
                 match squad with
-                | (squad, draftOrdinal) :: _ ->
+                | Some (squad, draftOrdinal) ->
                     yield lazyViewOrHMR renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal)
-                | [] -> yield [ bold "Team/coach still required" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger }
+                | None -> ()
                 yield br
                 match players with
                 | _ :: _ ->
                     yield lazyViewOrHMR renderCurrentUserPlayers (useDefaultTheme, players)
                 | [] -> ()
-                yield! needed
             | None -> yield [ str "Coming soon" ] |> para theme paraCentredSmaller ] // note: should never happen

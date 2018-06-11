@@ -244,7 +244,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
             yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UnauthPageInput >> dispatch)
         | SquadsPage ->
             let squadsState = unauthState.UnauthPageStates.SquadsState
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, None, None, usersProjection, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, usersProjection, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
             let fixturesState = unauthState.UnauthPageStates.FixturesState
             yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch) ]
@@ -295,7 +295,7 @@ let private renderSigningOutModal useDefaultTheme =
     let theme = getTheme useDefaultTheme
     cardModal theme [ [ bold "Signing out" ] |> para theme paraCentredSmall ] None [ div divCentred [ icon iconSpinnerPulseLarge ] ]
 
-let private userDraftPickSummary theme (squadsProjection:Projection<_ * SquadDic>) (userDraftPickDtos:UserDraftPickDto list) =
+let private userDraftPickSummary theme (squadDic:SquadDic) (userDraftPickDtos:UserDraftPickDto list) =
     let isTeamPick userDraftPick = match userDraftPick with | TeamPick _ -> true | PlayerPick _ -> false
     let isGoalkeeper squadDic userDraftPick =
         match userDraftPick with
@@ -306,34 +306,34 @@ let private userDraftPickSummary theme (squadsProjection:Projection<_ * SquadDic
         | TeamPick _ -> false
         | PlayerPick (squadId, playerId) -> match (squadId, playerId) |> playerType squadDic with | Some Defender | Some Midfielder | Some Forward -> true | _ -> false
     let userDraftPicks = userDraftPickDtos |> List.map (fun userDraftPickDto -> userDraftPickDto.UserDraftPick)
-    match squadsProjection with
-    | Ready (_, squadDic) ->
-        let teamCount = userDraftPicks |> List.filter isTeamPick |> List.length
-        let goalkeeperCount = userDraftPicks |> List.filter (isGoalkeeper squadDic) |> List.length
-        let outfieldPlayerCount = userDraftPicks |> List.filter (isOutfieldPlayer squadDic) |> List.length
-        let counts = [
-            if teamCount > 0 then
-                let plural = if teamCount > 1 then "s" else String.Empty
-                yield sprintf "%i team%s" teamCount plural
-            if goalkeeperCount > 0 then
-                let plural = if goalkeeperCount > 1 then "s" else String.Empty
-                yield sprintf "%i goalkeeper%s" goalkeeperCount plural
-            if outfieldPlayerCount > 0 then
-                let plural = if outfieldPlayerCount > 1 then "s" else String.Empty
-                yield sprintf "%i outfield player%s" outfieldPlayerCount plural ]
-        let items = counts.Length
-        let counts = counts |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
-        let counts = counts |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
-        [ str (sprintf "You have selected %s for this draft." counts) ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
-    | Pending | Failed ->
-        let count = userDraftPickDtos.Length
-        let plural = if count > 1 then "s" else String.Empty
-        [ str (sprintf "You have made %i selection%s for this draft." count plural) ] |> para theme paraDefaultSmallest // note: should never happen
+    let teamCount = userDraftPicks |> List.filter isTeamPick |> List.length
+    let goalkeeperCount = userDraftPicks |> List.filter (isGoalkeeper squadDic) |> List.length
+    let outfieldPlayerCount = userDraftPicks |> List.filter (isOutfieldPlayer squadDic) |> List.length
+    let counts = [
+        if teamCount > 0 then
+            let teamPlural, coachPlural = if teamCount > 1 then "s", "es" else String.Empty, String.Empty
+            yield sprintf "%i team%s/coach%s" teamCount teamPlural coachPlural
+        if goalkeeperCount > 0 then
+            let plural = if goalkeeperCount > 1 then "s" else String.Empty
+            yield sprintf "%i goalkeeper%s" goalkeeperCount plural
+        if outfieldPlayerCount > 0 then
+            let plural = if outfieldPlayerCount > 1 then "s" else String.Empty
+            yield sprintf "%i outfield player%s" outfieldPlayerCount plural ]
+    let items = counts.Length
+    let counts = counts |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
+    let counts = counts |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
+    [ str (sprintf "You have selected %s for this draft." counts) ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
 
-let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (currentUserDraftDto:CurrentUserDraftDto option) squadsProjection dispatch =
+let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (currentUserDraftDto:CurrentUserDraftDto option) (squadDic:SquadDic) dispatch =
     let theme = getTheme useDefaultTheme
     let canDraft = match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
     if canDraft then
+        let squad, players = authUser.UserId |> pickedByUser squadDic
+        let pickedCounts = (squad, players) |> pickedCounts
+        let stillRequired =
+            match pickedCounts |> stillRequired with
+            | Some stillRequired -> [ bold (sprintf "%s." stillRequired) ] |> para theme paraDefaultSmallest |> Some
+            | None -> None
         let semanticAndContents =
             let draftTextLower = draft.DraftOrdinal |> draftTextLower
             let isFirst = draft.DraftOrdinal = DraftOrdinal 1
@@ -351,18 +351,31 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
                 let contents =
                     [
                         yield [ bold (sprintf "The %s will open on %s and will close on %s" draftTextLower starts ends) ] |> para theme paraCentredSmaller
-                        if isFirst |> not then
-                            yield! scoresPageBlurb
+                        if isFirst |> not then yield! scoresPageBlurb
                     ]
                 (Info, contents) |> Some
             | Opened ends ->
                 let ends = ends.LocalDateTime |> dateAndTimeText
                 let semantic, userDraftPickSummary =
-                    match currentUserDraftDto with
-                    | Some currentUserDraftDto when currentUserDraftDto.UserDraftPickDtos.Length > 0 ->
-                        Info, currentUserDraftDto.UserDraftPickDtos |> userDraftPickSummary theme squadsProjection
-                    | Some _ | None ->
-                        Warning, [ bold "You have not made any selections for this draft." ] |> para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger }
+                    match stillRequired, currentUserDraftDto with
+                    | None, _ ->
+                        Success, [ [ bold (sprintf "You do not need to make any selections for the %s." draftTextLower) ] |> para theme paraDefaultSmallest ]
+                    | Some stillRequired, Some currentUserDraftDto when currentUserDraftDto.UserDraftPickDtos.Length > 0 ->
+                        let contents =
+                            [
+                                stillRequired
+                                br
+                                currentUserDraftDto.UserDraftPickDtos |> userDraftPickSummary theme squadDic
+                            ]
+                        Info, contents
+                    | Some stillRequired, _ ->
+                        let contents =
+                            [
+                                stillRequired
+                                br
+                                [ bold (sprintf "You have not made any selections for the %s." draftTextLower) ] |> para theme { paraDefaultSmallest with ParaColour = SemanticPara Danger }
+                            ]
+                        Warning, contents
                 let recommendation =
                     if isFirst then
                         [
@@ -370,21 +383,27 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
                             [ italic "We recommend making at least 25-30 selections for the first draft." ] |> para theme { paraDefaultSmallest with Weight = SemiBold }
                         ]
                     else []
-                let pleaseSelect = if isFirst then "Please select" else "If required, please select"
+                let pleaseSelect =
+                    match stillRequired with
+                    | Some _ ->
+                        [
+                            str "Please select teams/coaches, goalkeepers and outfield players on the "
+                            [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
+                            str " page. You can prioritize your selections on the "
+                            [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
+                            str " page."
+                        ] |> para theme paraDefaultSmallest |> Some
+                    | None -> None
                 let contents = [
                     yield [ bold (sprintf "The %s is now open and will close on %s" draftTextLower ends) ] |> para theme paraCentredSmaller
-                    if isFirst |> not then
-                        yield! scoresPageBlurb
+                    if isFirst |> not then yield! scoresPageBlurb
                     yield br
-                    yield [
-                        str (sprintf "%s teams/coaches, goalkeepers and outfield players on the " pleaseSelect)
-                        [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
-                        str " page. You can prioritize your selections on the "
-                        [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
-                        str " page."
-                    ] |> para theme paraDefaultSmallest
-                    yield br
-                    yield userDraftPickSummary
+                    match pleaseSelect with
+                    | Some pleaseSelect ->
+                        yield pleaseSelect
+                        yield br
+                    | None -> ()
+                    yield! userDraftPickSummary
                     yield! recommendation ]
                 (semantic, contents) |> Some
             | PendingProcessing processingStarted ->
@@ -405,15 +424,11 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
 
 let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispatch =
     let hasModal = if hasStaticModal then true else match authState.ChangePasswordState, authState.SigningOut with | Some _, _ -> true | None, true -> true | None, false -> false
-    let authUser = authState.AuthUser |> Some
+    let authUser = authState.AuthUser
     let usersProjection = authState.UnauthProjections.UsersProjection
     let squadsProjection = authState.UnauthProjections.SquadsProjection
     let fixturesProjection = authState.UnauthProjections.FixturesProjection
     let draftsProjection = authState.AuthProjections.DraftsProjection
-    let currentDraft, currentUserDraftDto =
-        match draftsProjection with
-        | Ready (_, draftDic, currentUserDraftDto) -> draftDic |> currentDraft, currentUserDraftDto
-        | Pending | Failed -> None, None
     div divDefault [
         match hasStaticModal, authState.ChangePasswordState with
         | false, Some changePasswordState ->
@@ -423,10 +438,13 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | false, true ->
             yield lazyViewOrHMR renderSigningOutModal useDefaultTheme
         | _ -> ()
-        match currentDraft with
-        | Some currentDraft ->
-            yield Rct.ofOption (currentDraftSummary useDefaultTheme authState.AuthUser currentDraft currentUserDraftDto squadsProjection dispatch)
-        | _ -> ()
+        match squadsProjection, draftsProjection with
+        | Pending, _ | _, Pending | Failed, _ | _, Failed -> ()
+        | Ready (_, squadDic), Ready (_, draftDic, currentUserDraftDto) ->
+            match draftDic |> currentDraft with
+            | Some currentDraft ->
+                yield Rct.ofOption (currentDraftSummary useDefaultTheme authState.AuthUser currentDraft currentUserDraftDto squadDic dispatch)
+            | None -> ()
         match authState.CurrentPage with
         | UnauthPage NewsPage ->
             let newsState = authState.UnauthPageStates.NewsState
@@ -436,11 +454,12 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser, squadsProjection, currentDraft, currentUserDraftDto, usersProjection, hasModal)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser |> Some, squadsProjection, usersProjection, draftsProjection |> Some, hasModal)
                 (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
             let fixturesState = authState.UnauthPageStates.FixturesState
-            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UPageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser |> Some, fixturesProjection, squadsProjection, hasModal, ticks)
+                (FixturesInput >> UPageInput >> PageInput >> dispatch)
         | AuthPage UserAdminPage ->
             match authState.AuthPageStates.UserAdminState with
             | Some userAdminState ->
@@ -451,14 +470,14 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
         | AuthPage DraftAdminPage ->
             match authState.AuthPageStates.DraftAdminState with
             | Some draftAdminState ->
-                yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, authUser, draftsProjection, usersProjection, hasModal) (DraftAdminInput >> APageInput >> PageInput >> dispatch)
+                yield lazyViewOrHMR2 DraftAdmin.Render.render (useDefaultTheme, draftAdminState, authUser, draftsProjection, usersProjection, hasModal)
+                    (DraftAdminInput >> APageInput >> PageInput >> dispatch)
             | None ->
                 let message = debugMessage "CurrentPage is AuthPage DraftAdminPage when AuthPageStates.DraftAdminState is None" false
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
             let draftsState = authState.AuthPageStates.DraftsState
-            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, squadsProjection, currentDraft, currentUserDraftDto)
-                (DraftsInput >> APageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, draftsProjection, squadsProjection) (DraftsInput >> APageInput >> PageInput >> dispatch)
         | AuthPage ChatPage ->
             let chatState = authState.AuthPageStates.ChatState
             yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, usersProjection, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]

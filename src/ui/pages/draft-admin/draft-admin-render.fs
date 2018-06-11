@@ -49,10 +49,7 @@ let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, process
 
 let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
-    let canProcessDraft =
-        match authUser with
-        | Some authUser -> match authUser.Permissions.DraftAdminPermissions with | Some draftAdminPermissions -> draftAdminPermissions.ProcessDraftPermission | None -> false
-        | None -> false
+    let canProcessDraft = match authUser.Permissions.DraftAdminPermissions with | Some draftAdminPermissions -> draftAdminPermissions.ProcessDraftPermission | None -> false
     let processDraft (draftId, draft:Draft) =
         let isPendingProcessing = match draft.DraftStatus with | PendingProcessing false -> true | _ -> false
         if canProcessDraft && isPendingProcessing then
@@ -144,7 +141,7 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
             ]
         | None -> []
 
-let render (useDefaultTheme, state, authUser, draftProjection:Projection<_ * DraftDic * _>, usersProjection:Projection<_ * UserDic>, hasModal) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser, draftProjection:Projection<_ * DraftDic * _>, usersProjection:Projection<_ * UserDic>, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "Draft administration" ] |> para theme paraCentredSmall

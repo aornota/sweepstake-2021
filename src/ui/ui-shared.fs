@@ -35,6 +35,8 @@ type FixtureDic = Dictionary<FixtureId, Fixture>
 type Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
 type DraftDic = Dictionary<DraftId, Draft>
 
+type UserDraftPickDic = Dictionary<UserDraftPick, int>
+
 let [<Literal>] UNKNOWN = "<unknown>"
 
 let cmdErrorText error = match error with | AuthCmdJwtError _ | AuthCmdAuthznError _ | AuthCmdPersistenceError _ -> UNEXPECTED_ERROR | OtherAuthCmdError (OtherError errorText) -> errorText
@@ -85,6 +87,13 @@ let activeDraft (draftDic:DraftDic) =
     | (draftId, draft) :: _ -> if draft.DraftStatus |> isActive then (draftId, draft) |> Some else None
     | [] -> None
 
+let userDraftPickDic currentUserDraftDto =
+    match currentUserDraftDto with
+    | Some currentUserDraftDto ->
+        let userDraftPickDic = UserDraftPickDic ()
+        currentUserDraftDto.UserDraftPickDtos |> List.iter (fun userDraftPickDto -> (userDraftPickDto.UserDraftPick, userDraftPickDto.Rank) |> userDraftPickDic.Add)
+        userDraftPickDic
+    | None -> UserDraftPickDic ()
 let userDraftPickText (squadDic:SquadDic) userDraftPick =
     match userDraftPick with
     | TeamPick squadId ->
@@ -93,3 +102,39 @@ let userDraftPickText (squadDic:SquadDic) userDraftPick =
     | PlayerPick (squadId, playerId) ->
         let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
         playerName
+
+let pickedByUser (squadDic:SquadDic) userId =
+    let squad =
+        squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad)
+        |> List.choose (fun squad -> match squad.PickedBy with | Some (pickedByUserId, draftOrdinal) when pickedByUserId = userId -> (squad, draftOrdinal) |> Some | _ -> None)
+    let squad = match squad with (squad, draftOrdinal) :: _ -> (squad, draftOrdinal) |> Some | [] -> None
+    let playerDics =
+        squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad, squad.PlayerDic)
+    let players =
+        playerDics |> List.map (fun (squad, playerDic) ->
+            playerDic |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player)
+            |> List.choose (fun player ->
+                match player.PickedBy with | Some (pickedByUserId, draftOrdinal) when pickedByUserId = userId -> (squad, player, draftOrdinal) |> Some | _ -> None))
+        |> List.collect id               
+    squad, players
+let pickedCounts (squad:(Squad * DraftOrdinal option) option, players:(Squad * Player * DraftOrdinal option) list) =
+    let teamCount = match squad with | Some _ -> 1 | None -> 0
+    let goalkeeperCount = players |> List.filter (fun (_, player, _) -> match player.PlayerType, player.PlayerStatus with | Goalkeeper, Active _ -> true | _ -> false) |> List.length
+    let outfieldPlayerCount =
+        players |> List.filter (fun (_, player, _) ->
+            match player.PlayerType, player.PlayerStatus with | Goalkeeper, _ -> false | _, Active -> true | _ -> false) |> List.length
+    teamCount, goalkeeperCount, outfieldPlayerCount
+let stillRequired (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) =
+    let required = [
+        if pickedTeamCount < MAX_TEAM_PICKS then yield "1 team/coach"
+        if pickedGoalkeeperCount < MAX_GOALKEEPER_PICKS then yield "1 goalkeeper"
+        let requiredOutfieldPlayers = MAX_OUTFIELD_PLAYER_PICKS - pickedOutfieldPlayerCount            
+        if requiredOutfieldPlayers > 0 then
+            let plural = if requiredOutfieldPlayers > 1 then "s" else String.Empty
+            yield sprintf "%i outfield player%s" requiredOutfieldPlayers plural ]
+    let items = required.Length
+    if items > 0 then
+        let required = required |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
+        let required = required |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
+        sprintf "%s still required" required |> Some
+    else None
