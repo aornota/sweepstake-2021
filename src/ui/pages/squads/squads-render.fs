@@ -310,16 +310,25 @@ let private draftLeftAndRight theme draftId draftOrdinal isOpen needsMorePicks u
         | None -> None
     draftLeft, draftRight
 
-let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) userIdAndDraftOrdinal =
-    match userIdAndDraftOrdinal with
-    | Some (userId, draftOrdinal) ->
+// #region customAgo
+let private customAgo (timestamp:DateTime) =
+#if TICK
+    timestamp |> ago
+#else
+    sprintf "on %s" (timestamp |> dateAndTimeText)
+#endif
+// #endregion
+
+let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pickedBy:PickedBy option) =
+    match pickedBy with
+    | Some (userId, draftOrdinal, timestamp) ->
         let (UserName userName) = userId |> userName userDic
         let pickedBy =
             match draftOrdinal with
             | Some draftOrdinal -> [ div divDefault [ bold userName ; str (sprintf " (%s)" (draftOrdinal |> draftTextLower)) ] ]
-            | None -> [ bold userName ]
+            | None -> [ div divDefault [ bold userName ; str (sprintf "(%s)" (customAgo timestamp.LocalDateTime)) ] ]
         let tagData = match authUser with | Some authUser when authUser.UserId = userId -> tagSuccess | Some _ | None -> tagPrimary
-        [ pickedBy |> tag theme { tagData with IsRounded = false } ] |> para theme paraCentredSmallest |> Some
+        pickedBy |> tag theme { tagData with IsRounded = false } |> Some
     | None -> None
 
 let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
@@ -373,15 +382,6 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
-// #region withdrawnAgo
-let private withdrawnAgo (timestamp:DateTime) =
-#if TICK
-    timestamp |> ago
-#else
-    sprintf "on %s" (timestamp |> dateAndTimeText)
-#endif
-// #endregion
-
 let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
     let _, pickedGoalkeeperCount, pickedOutfieldPlayerCount = pickedCounts
@@ -408,7 +408,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
     let withdrawn player =
         let isWithdrawn, dateWithdrawn = player |> isWithdrawnAndDate
         if isWithdrawn then
-            let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (withdrawnAgo dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
+            let withdrawnText = match dateWithdrawn with | Some dateWithdrawn -> sprintf "Withdrawn %s" (customAgo dateWithdrawn.LocalDateTime) | None -> "Withdrawn"
             [ [ str withdrawnText ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme paraDefaultSmallest |> Some
         else None
     let withdraw playerId player =

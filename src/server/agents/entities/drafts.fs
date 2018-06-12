@@ -62,7 +62,7 @@ type private Player = { PlayerType : PlayerType ; Withdrawn : bool }
 type private PlayerDic = Dictionary<PlayerId, Player>
 type private SquadDic = Dictionary<SquadId, PlayerDic>
 
-type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * (UserId * DraftOrdinal option)) list }
+type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * PickedBy) list ; ProcessingEvents : ProcessingEvent list }
 type private DraftDic = Dictionary<DraftId, Draft>
 
 type private UserDraftPickDic = Dictionary<UserDraftPick, int>
@@ -94,7 +94,7 @@ let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft opti
     | Ok (draftId, Some draft), _ when validateNextRvn (Some draft.Rvn) nextRvn |> not -> // note: should never happen
         ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" draftId draft.Rvn nextRvn draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, None), DraftCreated (_, draftOrdinal, draftType) ->
-        (draftId, { Rvn = initialRvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus ; DraftPicks = [] } |> Some) |> Ok
+        (draftId, { Rvn = initialRvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus ; DraftPicks = [] ; ProcessingEvents = [] } |> Some) |> Ok
     | Ok (draftId, None), _ -> // note: should never happen
         ifDebug (sprintf "Invalid initial DraftEvent for %A -> %A" draftId draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, Some draft), DraftCreated _ -> // note: should never happen
@@ -119,19 +119,70 @@ let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft opti
         | PendingFreeSelection ->
             (draftId, { draft with Rvn = nextRvn ; DraftStatus = FreeSelection } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (draftId, Some draft), ProcessingStarted _ ->
+    | Ok (draftId, Some draft), DraftEvent.ProcessingStarted (_, seed) ->
         match draft.DraftStatus with
         | PendingProcessing false ->
-            (draftId, { draft with Rvn = nextRvn ; DraftStatus = PendingProcessing true } |> Some) |> Ok
+            let processingEvents = (seed |> ProcessingEvent.ProcessingStarted) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; DraftStatus = PendingProcessing true ; ProcessingEvents = processingEvents } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (draftId, Some draft), Picked (_, draftOrdinal, draftPick, userId, _) ->
+    | Ok (draftId, Some draft), DraftEvent.WithdrawnPlayersIgnored (_, ignored) ->
         match draft.DraftStatus with
-        | PendingProcessing true | FreeSelection -> (draftId, { draft with Rvn = nextRvn ; DraftPicks = (draftPick, (userId, draftOrdinal)) :: draft.DraftPicks } |> Some) |> Ok
+        | PendingProcessing true ->
+            let processingEvents = (ignored |> ProcessingEvent.WithdrawnPlayersIgnored) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
-    | Ok (draftId, Some draft), _ ->
+    | Ok (draftId, Some draft), DraftEvent.RoundStarted (_, round) ->
         match draft.DraftStatus with
-        | PendingProcessing true -> (draftId, { draft with Rvn = nextRvn } |> Some) |> Ok
+        | PendingProcessing true ->
+            let processingEvents = (round |> ProcessingEvent.RoundStarted) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.AlreadyPickedIgnored (_, ignored) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let processingEvents = (ignored |> ProcessingEvent.AlreadyPickedIgnored) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.NoLongerRequiredIgnored (_, ignored) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let processingEvents = (ignored |> ProcessingEvent.NoLongerRequiredIgnored) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.UncontestedPick (_, draftPick, userId) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let processingEvents = ((draftPick, userId) |> ProcessingEvent.UncontestedPick) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.ContestedPick (_, draftPick, userDetails, winner) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let processingEvents = ((draftPick, userDetails, winner) |> ProcessingEvent.ContestedPick) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.PickPriorityChanged (_, userId, pickPriority) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let processingEvents = ((userId, pickPriority) |> ProcessingEvent.PickPriorityChanged) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.Picked (_, draftOrdinal, draftPick, userId, timestamp) ->
+        match draft.DraftStatus with
+        | PendingProcessing true ->
+            let draftPicks = (draftPick, (userId, draftOrdinal |> Some, timestamp)) :: draft.DraftPicks
+            let processingEvents = ((draftOrdinal, draftPick, userId, timestamp) |> ProcessingEvent.Picked) :: draft.ProcessingEvents
+            (draftId, { draft with Rvn = nextRvn ; DraftPicks = draftPicks ; ProcessingEvents = processingEvents } |> Some)
+            |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), DraftEvent.FreePick (_, draftPick, userId, timestamp) ->
+        match draft.DraftStatus with
+        | FreeSelection ->
+            let draftPicks = (draftPick, (userId, None, timestamp)) :: draft.DraftPicks
+            (draftId, { draft with Rvn = nextRvn ; DraftPicks = draftPicks } |> Some) |> Ok
+        | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
+    | Ok (draftId, Some draft), _ -> // note: should never happen
+        ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
     | Error error, _ -> error |> Error
 
 let private initializeDrafts source (draftsEvents:(DraftId * (Rvn * DraftEvent) list) list) =
@@ -195,17 +246,17 @@ let private ignoreWithdrawnPlayers draftId (squadDic:SquadDic) (userStatuses:Use
             let playerDic = squadDic.[squadId]
             if playerId |> playerDic.ContainsKey then playerDic.[playerId].Withdrawn else false
         else true
-    let ignored = Dictionary<UserId, HashSet<PlayerId>> ()
+    let ignored = Dictionary<UserId, HashSet<SquadId * PlayerId>> ()
     let userStatuses =
         userStatuses |> List.choose (fun userStatus ->
-            let ignoredForUser = HashSet<PlayerId> ()
+            let ignoredForUser = HashSet<SquadId * PlayerId> ()
             let pendingPicks =
                 userStatus.PendingPicks |> List.choose (fun userDraftPick ->
                     match userDraftPick with
                     | TeamPick _ -> userDraftPick |> Some
                     | PlayerPick (squadId, playerId) ->
                         if (squadId, playerId) |> isWithdrawnOrUnknown then
-                            playerId |> ignoredForUser.Add |> ignore
+                            (squadId, playerId) |> ignoredForUser.Add |> ignore
                             None
                         else userDraftPick |> Some)
             if ignoredForUser.Count > 0 then (userStatus.UserId, ignoredForUser) |> ignored.Add |> ignore
@@ -213,7 +264,7 @@ let private ignoreWithdrawnPlayers draftId (squadDic:SquadDic) (userStatuses:Use
     let events =
         if ignored.Count > 0 then
             let ignored = ignored |> List.ofSeq |> List.map (fun (KeyValue (userId, playerIdSet)) -> userId, playerIdSet |> List.ofSeq)
-            [ (draftId, ignored) |> WithdrawnPlayersIgnored ]
+            [ (draftId, ignored) |> DraftEvent.WithdrawnPlayersIgnored ]
         else []
     userStatuses, events
 
@@ -242,7 +293,7 @@ let private ignoreAlreadyPicked draftId (allPicked:DraftPickSet) (userStatuses:U
     let events =
         if ignored.Count > 0 then
             let ignored = ignored |> List.ofSeq |> List.map (fun (KeyValue (userId, draftPickSet)) -> userId, draftPickSet |> List.ofSeq)
-            [ (draftId, ignored) |> AlreadyPickedIgnored ]
+            [ (draftId, ignored) |> DraftEvent.AlreadyPickedIgnored ]
         else []
     userStatuses, events
 
@@ -300,7 +351,7 @@ let private ignoreNoLongerRequired draftId (squadDic:SquadDic) (userStatuses:Use
     let events =
         if ignored.Count > 0 then
             let ignored = ignored |> List.ofSeq |> List.map (fun (KeyValue (userId, draftPickSet)) -> userId, draftPickSet |> List.ofSeq)
-            [ (draftId, ignored) |> NoLongerRequiredIgnored ]
+            [ (draftId, ignored) |> DraftEvent.NoLongerRequiredIgnored ]
         else []
     userStatuses, events
 
@@ -310,13 +361,13 @@ let private processTopPicks (random:Random) draftId draftOrdinal (allPicked:Draf
     let topPicks =
         userStatuses |> List.choose (fun userStatus -> match userStatus.PendingPicks with | userDraftPick :: _ -> (userDraftPick |> draftPick, userStatus.UserId) |> Some | [] -> None)
     "Processing uncontested picks" |> Verbose |> log
-    let uncontestedPicks = topPicks |> List.groupBy fst |> List.choose (fun (_, pairs) -> match pairs with | [ (draftPick, userId) ] -> (draftPick, userId) |> Some | _ -> None)
+    let uncontestedPicks = topPicks |> List.groupBy fst |> List.choose (fun (_, pairs) -> match pairs with | [ draftPick, userId ] -> (draftPick, userId) |> Some | _ -> None)
     let userStatuses =
         userStatuses |> List.map (fun userStatus ->
             match uncontestedPicks |> List.filter (fun (_, userId) -> userId = userStatus.UserId) with
             | (draftPick, _) :: _ ->
-                (draftId, draftPick, userStatus.UserId) |> UncontestedPick |> events.Add |> ignore
-                (draftId, draftOrdinal |> Some, draftPick, userStatus.UserId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
+                (draftId, draftPick, userStatus.UserId) |> DraftEvent.UncontestedPick |> events.Add |> ignore
+                (draftId, draftOrdinal, draftPick, userStatus.UserId, DateTimeOffset.UtcNow) |> DraftEvent.Picked |> events.Add |> ignore
                 draftPick |> allPicked.Add |> ignore
                 draftPick |> userStatus.AlreadyPicked.Add |> ignore
                 userStatus
@@ -335,7 +386,7 @@ let private processTopPicks (random:Random) draftId draftOrdinal (allPicked:Draf
                 userId, pickPriority, coinToss)
             let winner, _, _ = userDetails |> List.maxBy (fun (_, _, coinToss) -> match coinToss with | Some coinToss -> coinToss | None -> -1.)
             draftPick, userDetails, winner)
-    contestedPicks |> List.iter (fun (draftPick, userDetails, winner) -> (draftId, draftPick, userDetails, winner) |> ContestedPick |> events.Add |> ignore)
+    contestedPicks |> List.iter (fun (draftPick, userDetails, winner) -> (draftId, draftPick, userDetails, winner) |> DraftEvent.ContestedPick |> events.Add |> ignore)
     let userStatuses =
         userStatuses |> List.map (fun userStatus ->
             match contestedPicks |> List.filter (fun (_, userDetails, _) -> userDetails |> List.exists (fun (userId, _, _) -> userId = userStatus.UserId)) with
@@ -344,13 +395,13 @@ let private processTopPicks (random:Random) draftId draftOrdinal (allPicked:Draf
                 let isWinner = winner = userId
                 let pickPriority =
                     if isWinner then
-                        (draftId, draftOrdinal |> Some, draftPick, userId, DateTimeOffset.UtcNow) |> Picked |> events.Add |> ignore
+                        (draftId, draftOrdinal, draftPick, userId, DateTimeOffset.UtcNow) |> DraftEvent.Picked |> events.Add |> ignore
                         draftPick |> allPicked.Add |> ignore
                         draftPick |> userStatus.AlreadyPicked.Add |> ignore
                         userStatus.PickPriority
                     else
                         let pickPriority = userStatus.PickPriority + 1u
-                        (draftId, userId, pickPriority) |> PickPriorityChanged |> events.Add |> ignore
+                        (draftId, userId, pickPriority) |> DraftEvent.PickPriorityChanged |> events.Add |> ignore
                         pickPriority
                 { userStatus with PickPriority = pickPriority }
             | [] -> userStatus)
@@ -364,7 +415,7 @@ let private processTopPicks (random:Random) draftId draftOrdinal (allPicked:Draf
 let rec private processRounds (random:Random) draftId draftOrdinal (userStatuses:UserStatus list) (allPicked:DraftPickSet) squadDic round (allEvents:DraftEvent list) =
     let initialPendingCount = userStatuses |> pendingCount
     sprintf "Processing round #%i -> (%i user status/es) (%i pending pick/s) (%i already picked)" round userStatuses.Length initialPendingCount allPicked.Count |> Verbose |> log
-    let roundEvents = [ (draftId, round) |> RoundStarted ]
+    let roundEvents = [ (draftId, round) |> DraftEvent.RoundStarted ]
     "Ignoring already picked teams/players" |> Verbose |> log
     let userStatuses, events = userStatuses |> ignoreAlreadyPicked draftId allPicked
     let roundEvents = roundEvents @ events
@@ -394,10 +445,10 @@ let private processDraft source draftId draftOrdinal (userDrafts:UserDraft list)
     existingPicks |> List.iter (fun (draftPick, _) -> draftPick |> allPicked.Add |> ignore)
     "Ignoring withdrawn players" |> Verbose |> log
     let userStatuses, events = userStatuses |> ignoreWithdrawnPlayers draftId squadDic
-    let seed = 87654321
+    let seed = 12345678
     sprintf "Using random seed %i" seed |> Verbose |> log
     let random = Random seed
-    processRounds random draftId draftOrdinal userStatuses allPicked squadDic 1u ([ (draftId, seed) |> ProcessingStarted ] @ events)
+    processRounds random draftId draftOrdinal userStatuses allPicked squadDic 1u ([ (draftId, seed) |> DraftEvent.ProcessingStarted ] @ events)
 // #endregion
 
 // #region UserDrafts
@@ -552,7 +603,8 @@ type Drafts () =
                 errors |> List.iter (fun (OtherError errorText) -> errorText |> Danger |> log)
                 sprintf "%s (%i draft/s) when pendingAllRead" source draftsEvents.Length |> Info |> log
                 let draftsRead = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) ->
-                    { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus ; DraftPicks = draft.DraftPicks })
+                    { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus ; DraftPicks = draft.DraftPicks
+                      ProcessingEvents = draft.ProcessingEvents })
                 draftsRead |> DraftsRead |> broadcaster.Broadcast
                 let draftDic = draftDic |> Some
                 match (draftDic, userDraftDic, squadsRead) |> ifAllRead with
@@ -692,7 +744,7 @@ type Drafts () =
                     |> Result.bind (fun (draftId, draft) ->
                         let existingPicks =
                             draftDic |> List.ofSeq |> List.map (fun (KeyValue (_, draft)) -> draft.DraftPicks) |> List.collect id
-                            |> List.map (fun (draftPick, (userId, _)) -> draftPick, userId)
+                            |> List.map (fun (draftPick, (userId, _, _)) -> draftPick, userId)
                         let userDraftIds = userDraftLookupDic |> List.ofSeq |> List.choose (fun (KeyValue ((_, forDraftId), userDraftId)) ->
                             if forDraftId = draftId then userDraftId |> Some else None)
                         let userDrafts = userDraftIds |> List.choose (fun userDraftId -> if userDraftId |> userDraftDic.ContainsKey then userDraftDic.[userDraftId] |> Some else None)

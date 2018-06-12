@@ -21,18 +21,16 @@ type Projection<'a> =
 type User = UserName * UserAuthDto option
 type UserDic = Dictionary<UserId, User>
 
-type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : (UserId * DraftOrdinal option) option }
+type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : PickedBy option }
 type PlayerDic = Dictionary<PlayerId, Player>
 
-type Squad =
-    { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic
-      PickedBy : (UserId * DraftOrdinal option) option }
+type Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
 type SquadDic = Dictionary<SquadId, Squad>
 
 type Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }
 type FixtureDic = Dictionary<FixtureId, Fixture>
 
-type Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
+type Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; ProcessingDetails : ProcessingDetails option }
 type DraftDic = Dictionary<DraftId, Draft>
 
 type UserDraftPickDic = Dictionary<UserDraftPick, int>
@@ -106,22 +104,23 @@ let userDraftPickText (squadDic:SquadDic) userDraftPick =
 let pickedByUser (squadDic:SquadDic) userId =
     let squad =
         squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad)
-        |> List.choose (fun squad -> match squad.PickedBy with | Some (pickedByUserId, draftOrdinal) when pickedByUserId = userId -> (squad, draftOrdinal) |> Some | _ -> None)
-    let squad = match squad with (squad, draftOrdinal) :: _ -> (squad, draftOrdinal) |> Some | [] -> None
+        |> List.choose (fun squad ->
+            match squad.PickedBy with | Some (pickedByUserId, draftOrdinal, timestamp) when pickedByUserId = userId -> (squad, draftOrdinal, timestamp) |> Some | _ -> None)
+    let squad = match squad with (squad, draftOrdinal, timestamp) :: _ -> (squad, draftOrdinal, timestamp) |> Some | [] -> None
     let playerDics =
         squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) -> squad, squad.PlayerDic)
     let players =
         playerDics |> List.map (fun (squad, playerDic) ->
             playerDic |> List.ofSeq |> List.map (fun (KeyValue (_, player)) -> player)
             |> List.choose (fun player ->
-                match player.PickedBy with | Some (pickedByUserId, draftOrdinal) when pickedByUserId = userId -> (squad, player, draftOrdinal) |> Some | _ -> None))
+                match player.PickedBy with | Some (pickedByUserId, draftOrdinal, timestamp) when pickedByUserId = userId -> (squad, player, draftOrdinal, timestamp) |> Some | _ -> None))
         |> List.collect id               
     squad, players
-let pickedCounts (squad:(Squad * DraftOrdinal option) option, players:(Squad * Player * DraftOrdinal option) list) =
+let pickedCounts (squad:(Squad * _ * _) option, players:(Squad * Player * _ * _) list) =
     let teamCount = match squad with | Some _ -> 1 | None -> 0
-    let goalkeeperCount = players |> List.filter (fun (_, player, _) -> match player.PlayerType, player.PlayerStatus with | Goalkeeper, Active _ -> true | _ -> false) |> List.length
+    let goalkeeperCount = players |> List.filter (fun (_, player, _, _) -> match player.PlayerType, player.PlayerStatus with | Goalkeeper, Active _ -> true | _ -> false) |> List.length
     let outfieldPlayerCount =
-        players |> List.filter (fun (_, player, _) ->
+        players |> List.filter (fun (_, player, _, _) ->
             match player.PlayerType, player.PlayerStatus with | Goalkeeper, _ -> false | _, Active -> true | _ -> false) |> List.length
     teamCount, goalkeeperCount, outfieldPlayerCount
 let stillRequired (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) =

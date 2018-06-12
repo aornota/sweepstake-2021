@@ -36,10 +36,12 @@ type private DraftsInput =
     | HandleInitializeDraftsProjectionQry of token : DraftToken * connectionId : ConnectionId * userId : UserId
         * reply : AsyncReplyChannel<Result<DraftDto list * CurrentUserDraftDto option, AuthQryError<string>>>
 
-type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus }
+type private UserDraftPickDic = Dictionary<UserDraftPick, int>
+
+type private Draft =
+    { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; ProcessingEvents : ProcessingEvent list ; ProcessedUserDraftPicks : (UserId * UserDraftPickDic) list }
 type private DraftDic = Dictionary<DraftId, Draft>
 
-type private UserDraftPickDic = Dictionary<UserDraftPick, int>
 type private UserDraft = { Rvn : Rvn ; UserDraftPickDic : UserDraftPickDic }
 type private UserDraftDic = Dictionary<UserDraftKey, UserDraft>
 type private UserDraftLookupDic = Dictionary<UserDraftId, UserDraftKey>
@@ -66,7 +68,13 @@ let private logResult source successText result =
         sprintf "%s Ok%s" source successText |> Info |> log
     | Error error -> sprintf "%s Error -> %A" source error |> Danger |> log
 
-let private draftDto (draftId, draft:Draft) : DraftDto = { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus }
+let private userDraftPickDtos (userDraftPickDic:UserDraftPickDic) : UserDraftPickDto list =
+    userDraftPickDic |> List.ofSeq |> List.map (fun (KeyValue (userDraftPick, rank)) -> { UserDraftPick = userDraftPick ; Rank = rank })
+
+let private draftDto (draftId, draft:Draft) : DraftDto =
+    let userDraftPicks = draft.ProcessedUserDraftPicks |> List.map (fun (userId, userDraftPickDic) -> userId, userDraftPickDic |> userDraftPickDtos)
+    let processingDetails = { UserDraftPicks = userDraftPicks ; ProcessingEvents = draft.ProcessingEvents |> List.rev }
+    { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus ; ProcessingDetails = processingDetails |> Some }
 
 let private draftDtoDic (draftDic:DraftDic) =
     let draftDtoDic = DraftDtoDic ()
@@ -76,9 +84,6 @@ let private draftDtoDic (draftDic:DraftDic) =
     draftDtoDic
 
 let private draftDtos state = state.DraftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> (draftId, draft) |> draftDto)
-
-let private userDraftPickDtos (userDraftPickDic:UserDraftPickDic) : UserDraftPickDto list =
-    userDraftPickDic |> List.ofSeq |> List.map (fun (KeyValue (userDraftPick, rank)) -> { UserDraftPick = userDraftPick ; Rank = rank })
 
 let private currentUserDraftDto userId state =
     match state.UserDraftDic |> List.ofSeq |> List.filter (fun (KeyValue (userDraftKey, _)) -> fst userDraftKey = userId) with // note: should be single match (or none)
@@ -149,30 +154,41 @@ let private updateState source (projecteeDic:ProjecteeDic) stateChangeType =
                 state
     newState
 
-let private isOpened draftId (draftDic:DraftDic) =
+let private isOpen draftId (draftDic:DraftDic) =
     if draftId |> draftDic.ContainsKey then
         let draft = draftDic.[draftId]
         match draft.DraftStatus with | Opened _ -> true | _ -> false
-    else false
-let private isActive draftId (draftDic:DraftDic) = 
-    if draftId |> draftDic.ContainsKey then draftDic.[draftId].DraftStatus |> isActive
     else false
 
 let private ifAllRead source (draftsRead:(DraftRead list) option, userDraftsRead:(UserDraftRead list) option) =
     match draftsRead, userDraftsRead with
     | Some draftsRead, Some userDraftsRead ->
         let draftDic = DraftDic ()
-        draftsRead |> List.iter (fun draftRead -> (draftRead.DraftId, { Rvn = draftRead.Rvn ; DraftOrdinal = draftRead.DraftOrdinal ; DraftStatus = draftRead.DraftStatus }) |> draftDic.Add)
+        draftsRead |> List.iter (fun draftRead ->
+            let draft =
+                { Rvn = draftRead.Rvn ; DraftOrdinal = draftRead.DraftOrdinal ; DraftStatus = draftRead.DraftStatus ; ProcessingEvents = draftRead.ProcessingEvents
+                  ProcessedUserDraftPicks = [] }
+            (draftRead.DraftId, draft) |> draftDic.Add)
         let userDraftDic = UserDraftDic ()
         let userDraftLookupDic = UserDraftLookupDic ()
         userDraftsRead |> List.iter (fun userDraftRead ->
-            // Note: We only care about UserDrafts if Draft is "active" (Opened or PendingProcessing).
-            if draftDic |> isActive (snd userDraftRead.UserDraftKey) then
-                let userDraftPickDic = UserDraftPickDic ()
-                userDraftRead.UserDraftPicksRead |> List.iter (fun userDraftPickRead -> (userDraftPickRead.UserDraftPick, userDraftPickRead.Rank) |> userDraftPickDic.Add)
-                (userDraftRead.UserDraftKey, { Rvn = userDraftRead.Rvn ; UserDraftPickDic = userDraftPickDic }) |> userDraftDic.Add
-                (userDraftRead.UserDraftId, userDraftRead.UserDraftKey) |> userDraftLookupDic.Add
-            else ())
+            let (userId, draftId) = userDraftRead.UserDraftKey
+            if draftId |> draftDic.ContainsKey then
+                let draft = draftDic.[draftId]
+                // Note: We only care about UserDraftRead if Draft is "active" (Opened or PendingProcessing) - or Processed.
+                if draft.DraftStatus |> isActive then
+                    let userDraftPickDic = UserDraftPickDic ()
+                    userDraftRead.UserDraftPicksRead |> List.iter (fun userDraftPickRead -> (userDraftPickRead.UserDraftPick, userDraftPickRead.Rank) |> userDraftPickDic.Add)
+                    (userDraftRead.UserDraftKey, { Rvn = userDraftRead.Rvn ; UserDraftPickDic = userDraftPickDic }) |> userDraftDic.Add
+                    (userDraftRead.UserDraftId, userDraftRead.UserDraftKey) |> userDraftLookupDic.Add
+                else
+                    match draft.DraftStatus with
+                    | Processed ->
+                        let userDraftPickDic = UserDraftPickDic ()
+                        userDraftRead.UserDraftPicksRead |> List.iter (fun userDraftPickRead -> (userDraftPickRead.UserDraftPick, userDraftPickRead.Rank) |> userDraftPickDic.Add)
+                        let processedUserDraftPicks = (userId, userDraftPickDic) :: draft.ProcessedUserDraftPicks
+                        draftDic.[draftId] <- { draft with ProcessedUserDraftPicks = processedUserDraftPicks }
+                    | _ -> ())
         let projecteeDic = ProjecteeDic ()
         let state = (draftDic, userDraftDic) |> Initialization |> updateState source projecteeDic
         (state, draftDic, userDraftDic, userDraftLookupDic, projecteeDic) |> Some
@@ -229,7 +245,10 @@ type Drafts () =
                     match draftEvent with
                     | DraftCreated (draftId, draftOrdinal, draftType) ->
                         if draftId |> draftDic.ContainsKey |> not then // note: silently ignore already-known draftId (should never happen)
-                            (draftId, { Rvn = rvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus }) |> draftDic.Add
+                            let draft =
+                                { Rvn = rvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus ; ProcessingEvents = []
+                                  ProcessedUserDraftPicks = [] }
+                            (draftId, draft) |> draftDic.Add
                             (draftDic, state) |> DraftChange |> updateState source projecteeDic
                         else state
                     | _ ->
@@ -239,18 +258,94 @@ type Drafts () =
                             let draft, userDraftChanged =
                                 match draftEvent with
                                 | DraftCreated _ -> draft, false // note: should never happen
-                                | DraftOpened _ -> (match draft.DraftStatus with | PendingOpen (_, ends) -> { draft with Rvn = rvn ; DraftStatus = ends |> Opened } | _ -> draft), false
-                                | DraftPendingProcessing _ -> (match draft.DraftStatus with | Opened _ -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing false } | _ -> draft), false
+                                | DraftOpened _ ->
+                                    (match draft.DraftStatus with | PendingOpen (_, ends) -> { draft with Rvn = rvn ; DraftStatus = ends |> Opened } | _ -> draft), false
+                                | DraftPendingProcessing _ ->
+                                    (match draft.DraftStatus with | Opened _ -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing false } | _ -> draft), false
                                 | DraftProcessed _ ->
                                     match draft.DraftStatus with                                   
                                     | PendingProcessing true ->
-                                        // Note: When Draft changes from PendingProcessing to Processed, clear UserDraftDic and UserDraftLookupDic.
+                                        // Note: When Draft changes to Processed, populate ProcessedUserDraftPickDics - then clear UserDraftDic and UserDraftLookupDic.
+                                        let processedUserDraftPicks = userDraftDic |> List.ofSeq |> List.map (fun (KeyValue ((userId, _), userDraft)) ->
+                                            userId, UserDraftPickDic userDraft.UserDraftPickDic)
                                         userDraftDic.Clear ()
                                         userDraftLookupDic.Clear ()
-                                        { draft with Rvn = rvn ; DraftStatus = Processed }, true
+                                        { draft with Rvn = rvn ; DraftStatus = Processed ; ProcessedUserDraftPicks = processedUserDraftPicks }, true
                                     | _ -> draft, false
-                                | DraftFreeSelection _ -> (match draft.DraftStatus with | PendingFreeSelection -> { draft with Rvn = rvn ; DraftStatus = FreeSelection } | _ -> draft), false
-                                | ProcessingStarted _ -> (match draft.DraftStatus with | PendingProcessing false -> { draft with Rvn = rvn ; DraftStatus = PendingProcessing true } | _ -> draft), false
+                                | DraftFreeSelection _ ->
+                                    (match draft.DraftStatus with | PendingFreeSelection -> { draft with Rvn = rvn ; DraftStatus = FreeSelection } | _ -> draft), false
+                                | DraftEvent.ProcessingStarted (_, seed) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing false ->
+                                            let processingEvents = (seed |> ProcessingEvent.ProcessingStarted) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; DraftStatus = PendingProcessing true ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.WithdrawnPlayersIgnored (_, ignored) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = (ignored |> ProcessingEvent.WithdrawnPlayersIgnored) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.RoundStarted (_, round) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = (round |> ProcessingEvent.RoundStarted) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.AlreadyPickedIgnored (_, ignored) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = (ignored |> ProcessingEvent.AlreadyPickedIgnored) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.NoLongerRequiredIgnored (_, ignored) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = (ignored |> ProcessingEvent.NoLongerRequiredIgnored) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.UncontestedPick (_, draftPick, userId) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = ((draftPick, userId) |> ProcessingEvent.UncontestedPick) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.ContestedPick (_, draftPick, userDetails, winner) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = ((draftPick, userDetails, winner) |> ProcessingEvent.ContestedPick) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.PickPriorityChanged (_, userId, pickPriority) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = ((userId, pickPriority) |> ProcessingEvent.PickPriorityChanged) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
+                                | DraftEvent.Picked (_, draftOrdinal, draftPick, userId, timestamp) ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | PendingProcessing true ->
+                                            let processingEvents = ((draftOrdinal, draftPick, userId, timestamp) |> ProcessingEvent.Picked) :: draft.ProcessingEvents
+                                            { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
+                                        | _ -> draft
+                                    draft, false
                                 | _ -> draft, false
                             draftDic.[draftId] <- draft
                             let state = (draftDic, state) |> DraftChange |> updateState source projecteeDic
@@ -265,7 +360,7 @@ type Drafts () =
                     match userDraftEvent with
                     | UserDraftCreated (userDraftId, userId, draftId) -> // note: silently ignore already-known userDraftId (should never happen)
                         if userDraftId |> userDraftLookupDic.ContainsKey |> not then
-                            if draftDic |> isOpened draftId then
+                            if draftDic |> isOpen draftId then
                                 let userDraftKey = (userId, draftId)
                                 (userDraftKey, { Rvn = rvn ; UserDraftPickDic = UserDraftPickDic () }) |> userDraftDic.Add
                                 (userDraftId, userDraftKey) |> userDraftLookupDic.Add
@@ -279,7 +374,7 @@ type Drafts () =
                         match userDraftKey with
                         | Some userDraftKey ->
                             if userDraftKey |> userDraftDic.ContainsKey then // note: silently ignore unknown userDraftKey (should never happen)
-                                if draftDic |> isOpened (snd userDraftKey) then
+                                if draftDic |> isOpen (snd userDraftKey) then
                                     let userDraft = userDraftDic.[userDraftKey]
                                     let userDraft =
                                         match userDraftEvent with

@@ -17,7 +17,7 @@ open Aornota.Sweepstake2018.UI.Shared
 
 open Elmish
 
-let initialize () = { RemovalPending = None ; ChangePriorityPending = None ; LastPriorityChanged = None }, Cmd.none
+let initialize () = { CurrentDraftId = None ; RemovalPending = None ; ChangePriorityPending = None ; LastPriorityChanged = None }, Cmd.none
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
@@ -54,6 +54,8 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
         | ReceiveServerDraftsMsg serverDraftsMsg, Ready (_, squadDic) ->
             let state, cmd = state |> handleServerDraftsMsg serverDraftsMsg squadDic
             state, cmd, false
+        | ShowDraft draftId, Ready _ -> // note: no need to check for unknown draftId (should never happen)
+            { state with CurrentDraftId = draftId |> Some }, Cmd.none, true
         | ChangePriority (draftId, userDraftPick, priorityChange), Ready _ ->
             match authUser, state.RemovalPending, state.ChangePriorityPending with
             | Some authUser, None, None ->

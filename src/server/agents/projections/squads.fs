@@ -4,7 +4,7 @@ module Aornota.Sweepstake2018.Server.Agents.Projections.Squads
    Subscribes: SquadsRead
                SquadEventWritten (PlayerAdded | PlayerNameChanged | PlayerTypeChanged | PlayerWithdrawn | SquadEliminated)
                DraftsRead
-               DraftEventWritten (Picked)
+               DraftEventWritten (Picked | FreePick)
                ConnectionsSignedOut | Disconnected *)
 
 open Aornota.Common.Revision
@@ -35,17 +35,16 @@ type private SquadsInput =
     | OnPlayerWithdrawn of squadId : SquadId * squadRvn : Rvn * playerId : PlayerId * dateWithdrawn : DateTimeOffset option
     | OnSquadEliminated of squadId : SquadId * squadRvn : Rvn
     | OnDraftsRead of draftsRead : DraftRead list
-    | OnPicked of draftPick : DraftPick * draftOrdinal : DraftOrdinal option * userId : UserId
+    | OnPicked of draftPick : DraftPick * draftOrdinal : DraftOrdinal option * userId : UserId * timestamp : DateTimeOffset
     | RemoveConnection of connectionId : ConnectionId
     | HandleInitializeSquadsProjectionQry of connectionId : ConnectionId
         * reply : AsyncReplyChannel<Result<SquadDto list, OtherError<string>>>
 
-type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : (UserId * DraftOrdinal option) option }
+type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : PickedBy option }
 type private PlayerDic = Dictionary<PlayerId, Player>
 
 type private Squad =
-    { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic
-      PickedBy : (UserId * DraftOrdinal option) option }
+    { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
 type private SquadDic = Dictionary<SquadId, Squad>
 
 type private Projectee = { LastRvn : Rvn }
@@ -312,7 +311,7 @@ type Squads () =
                     else state
                 return! projectingSquads state squadDic projecteeDic
             | OnDraftsRead _ -> "OnDraftsRead when projectingSquads" |> IgnoredInput |> Agent |> log ; return! projectingSquads state squadDic projecteeDic
-            | OnPicked (draftPick, draftOrdinal, userId) ->
+            | OnPicked (draftPick, draftOrdinal, userId, timestamp) ->
                 let source = "OnPicked"
                 sprintf "%s (%A %A) when projectingSquads (%i squad/s) (%i projectee/s)" source draftPick userId squadDic.Count projecteeDic.Count |> Info |> log
                 let state =
@@ -320,7 +319,7 @@ type Squads () =
                     | TeamPicked squadId ->
                         if squadId |> squadDic.ContainsKey then // note: silently ignore unknown squadId (should never happen)
                             let squad = squadDic.[squadId]
-                            squadDic.[squadId] <- { squad with PickedBy = (userId, draftOrdinal) |> Some }
+                            squadDic.[squadId] <- { squad with PickedBy = (userId, draftOrdinal, timestamp) |> Some }
                             (squadDic, state) |> SquadChange |> updateState source projecteeDic
                         else state
                     | PlayerPicked (squadId, playerId) ->
@@ -329,7 +328,7 @@ type Squads () =
                             let playerDic = squad.PlayerDic
                             if playerId |> playerDic.ContainsKey then // note: silently ignore unknown playerId (should never happen)
                                 let player = playerDic.[playerId]
-                                playerDic.[playerId] <- { player with PickedBy = (userId, draftOrdinal) |> Some }
+                                playerDic.[playerId] <- { player with PickedBy = (userId, draftOrdinal, timestamp) |> Some }
                                 (squadId, squad.Rvn, playerDic, state) |> PlayerChange |> updateState source projecteeDic
                             else state
                         else state
@@ -369,7 +368,8 @@ type Squads () =
             | DraftsRead draftsRead -> draftsRead |> OnDraftsRead |> agent.Post
             | DraftEventWritten (_, draftEvent) ->
                 match draftEvent with
-                | Picked (_, draftOrdinal, draftPick, userId, _) -> (draftPick, draftOrdinal, userId) |> OnPicked |> agent.Post
+                | DraftEvent.Picked (_, draftOrdinal, draftPick, userId, timestamp) -> (draftPick, draftOrdinal |> Some, userId, timestamp) |> OnPicked |> agent.Post
+                | FreePick (_, draftPick, userId, timestamp) -> (draftPick, None, userId, timestamp) |> OnPicked |> agent.Post
                 | _ -> ()
             | Disconnected connectionId -> connectionId |> RemoveConnection |> agent.Post
             | _ -> ())

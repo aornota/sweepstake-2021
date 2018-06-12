@@ -14,14 +14,15 @@ type DraftEvent =
     | DraftProcessed of draftId : DraftId
     | DraftFreeSelection of draftId : DraftId
     | ProcessingStarted of draftId : DraftId * seed : int
-    | WithdrawnPlayersIgnored of draftId : DraftId * ignored : (UserId * PlayerId list) list
+    | WithdrawnPlayersIgnored of draftId : DraftId * ignored : (UserId * (SquadId * PlayerId) list) list
     | RoundStarted of draftId : DraftId * round : uint32
     | AlreadyPickedIgnored of draftId : DraftId * ignored : (UserId * DraftPick list) list
     | NoLongerRequiredIgnored of draftId : DraftId * ignored : (UserId * DraftPick list) list
     | UncontestedPick of draftId : DraftId * draftPick : DraftPick * userId : UserId
     | ContestedPick of draftId : DraftId * draftPick : DraftPick * userDetails : (UserId * uint32 * float option) list * winner : UserId
     | PickPriorityChanged of draftId : DraftId * userId : UserId * pickPriority : uint32
-    | Picked of draftId : DraftId * draftOrdinal : DraftOrdinal option * draftPick : DraftPick * userId : UserId * timestamp : DateTimeOffset // note: draftOrdinal will be None for "free pick"
+    | Picked of draftId : DraftId * draftOrdinal : DraftOrdinal * draftPick : DraftPick * userId : UserId * timestamp : DateTimeOffset
+    | FreePick of draftId : DraftId * draftPick : DraftPick * userId : UserId * timestamp : DateTimeOffset
     with
         member self.DraftId =
             match self with
@@ -39,3 +40,4 @@ type DraftEvent =
             | ContestedPick (draftId, _, _, _) -> draftId
             | PickPriorityChanged (draftId, _, _) -> draftId
             | Picked (draftId, _, _, _, _) -> draftId
+            | FreePick (draftId, _, _, _) -> draftId

@@ -30,7 +30,8 @@ type SquadRead = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group
 
 type FixtureRead = { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }
 
-type DraftRead = { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * (UserId * DraftOrdinal option)) list }
+type DraftRead =
+    { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * PickedBy) list ; ProcessingEvents : ProcessingEvent list }
 
 type UserDraftPickRead = { UserDraftPick : UserDraftPick ; Rank : int }
 type UserDraftRead = { UserDraftId : UserDraftId ; Rvn : Rvn ; UserDraftKey : UserDraftKey ; UserDraftPicksRead : UserDraftPickRead list }

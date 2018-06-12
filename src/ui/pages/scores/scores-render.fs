@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.UI.Pages.Scores.Render
 
 open Aornota.UI.Common.LazyViewOrHMR
+open Aornota.UI.Common.TimestampHelper
 open Aornota.UI.Render.Bulma
 open Aornota.UI.Render.Common
 open Aornota.UI.Theme.Common
@@ -13,6 +14,7 @@ open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.Scores.Common
 open Aornota.Sweepstake2018.UI.Shared
+open System
 
 module Rct = Fable.Helpers.React
 
@@ -20,16 +22,25 @@ let private userTabs users currentUserId dispatch =
     users |> List.map (fun (userId, UserName userName) ->
         { IsActive = userId = currentUserId ; TabText = userName ; TabLinkType = ClickableLink (fun _ -> userId |> ShowUser |> dispatch ) })
 
-let pickedIn theme draftOrdinal =
+// #region customAgo
+let private customAgo (timestamp:DateTime) =
+#if TICK
+    timestamp |> ago
+#else
+    sprintf "on %s" (timestamp |> dateAndTimeText)
+#endif
+// #endregion
+
+let private pickedIn theme (draftOrdinal, timestamp:DateTimeOffset) =
     match draftOrdinal with
     | Some draftOrdinal -> [ str (sprintf "%s" (draftOrdinal |> draftText)) ] |> para theme paraCentredSmallest |> Some
-    | None -> None
+    | None -> [ str (sprintf "Free pick (%s)" (customAgo timestamp.LocalDateTime)) ] |> para theme paraCentredSmallest |> Some
 
 let private scoreText score =
     let scoreText = sprintf "%i" score
     if score > 0 then bold scoreText else str scoreText
 
-let private renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal) =
+let private renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal, timestamp) =
     let theme = getTheme useDefaultTheme
     div divCentred [
         let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
@@ -50,13 +61,13 @@ let private renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal) =
                     td [ Rct.ofOption eliminated ]
                     td [ [ str (sprintf "%i" seeding) ] |> para theme paraDefaultSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
-                    td [ Rct.ofOption (draftOrdinal |> pickedIn theme) ]
+                    td [ Rct.ofOption ((draftOrdinal, timestamp) |> pickedIn theme) ]
                     td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ] ] ]
 
-let private renderCurrentUserPlayers (useDefaultTheme, players:(Squad * Player * DraftOrdinal option) list) =
+let private renderCurrentUserPlayers (useDefaultTheme, players:(Squad * Player * DraftOrdinal option * DateTimeOffset) list) =
     let theme = getTheme useDefaultTheme
     div divCentred [
-        let playerRow (squad, player, draftOrdinal) =
+        let playerRow (squad, player, draftOrdinal, timestamp) =
             let (SquadName squadName), (PlayerName playerName), playerTypeText = squad.SquadName, player.PlayerName, player.PlayerType |> playerTypeText
             let withdrawn =
                     match player.PlayerStatus with 
@@ -70,10 +81,10 @@ let private renderCurrentUserPlayers (useDefaultTheme, players:(Squad * Player *
                 td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                 td [ Rct.ofOption eliminated ]
                 td [ [ str playerTypeText ] |> para theme paraCentredSmallest ]
-                td [ Rct.ofOption (draftOrdinal |> pickedIn theme) ]
+                td [ Rct.ofOption ((draftOrdinal, timestamp) |> pickedIn theme) ]
                 td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ]
         let players =
-            players |> List.sortBy (fun (squad, player, _) ->
+            players |> List.sortBy (fun (squad, player, _, _) ->
                 let active =
                     match squad.Eliminated, player.PlayerStatus with
                     | true, _ -> 1
@@ -108,8 +119,8 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, squ
                 squadDic |> List.ofSeq |> List.map (fun (KeyValue (_, squad)) ->
                     let users =
                         squad.PlayerDic |> List.ofSeq |> List.choose (fun (KeyValue (_, player)) -> player.PickedBy)
-                        |> List.map (fun (userId, _) -> userId)
-                    let squadUserId = match squad.PickedBy with | Some (userId, _) -> [ userId ] | None -> []
+                        |> List.map (fun (userId, _, _) -> userId)
+                    let squadUserId = match squad.PickedBy with | Some (userId, _, _) -> [ userId ] | None -> []
                     squadUserId @ users)
                 |> List.collect id |> List.distinct |> List.map (fun userId -> userId, userId |> userName userDic) |> List.sortBy snd
             let currentUserId =
@@ -134,8 +145,8 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, squ
                     yield br
                 | None -> ()
                 match squad with
-                | Some (squad, draftOrdinal) ->
-                    yield lazyViewOrHMR renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal)
+                | Some (squad, draftOrdinal, timestamp) ->
+                    yield lazyViewOrHMR renderCurrentUserSquad (useDefaultTheme, squad, draftOrdinal, timestamp)
                 | None -> ()
                 yield br
                 match players with

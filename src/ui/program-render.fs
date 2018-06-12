@@ -477,7 +477,8 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
                 yield lazyViewOrHMR renderSpecialNotificationMessage (useDefaultTheme, SWEEPSTAKE_2018, message, ticks)
         | AuthPage DraftsPage ->
             let draftsState = authState.AuthPageStates.DraftsState
-            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, draftsProjection, squadsProjection) (DraftsInput >> APageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 Drafts.Render.render (useDefaultTheme, draftsState, authUser, draftsProjection, usersProjection, squadsProjection)
+                (DraftsInput >> APageInput >> PageInput >> dispatch)
         | AuthPage ChatPage ->
             let chatState = authState.AuthPageStates.ChatState
             yield lazyViewOrHMR2 Chat.Render.render (useDefaultTheme, chatState, usersProjection, hasModal, ticks) (ChatInput >> APageInput >> PageInput >> dispatch) ]

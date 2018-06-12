@@ -7,13 +7,17 @@ open Aornota.UI.Theme.Common
 open Aornota.UI.Theme.Render.Bulma
 open Aornota.UI.Theme.Shared
 
-open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
-open Aornota.Sweepstake2018.UI.Shared
 open Aornota.Sweepstake2018.Common.Domain.Draft
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
+open Aornota.Sweepstake2018.UI.Shared
 
 module Rct = Fable.Helpers.React
+
+let private draftTabs drafts currentDraftId dispatch =
+    drafts |> List.map (fun (draftId, draft) ->
+        { IsActive = draftId = currentDraftId ; TabText = draft.DraftOrdinal |> draftText ; TabLinkType = ClickableLink (fun _ -> draftId |> ShowDraft |> dispatch ) })
 
 let private squadDescription (squadDic:SquadDic) squadId =
     if squadId |> squadDic.ContainsKey then       
@@ -34,6 +38,122 @@ let private playerDescriptionAndExtraAndWithdrawn (squadDic:SquadDic) (squadId, 
             sprintf "%s (%s)" playerName squadName, player.PlayerType |> playerTypeText, withdrawn
         else UNKNOWN, UNKNOWN, false
     else UNKNOWN, UNKNOWN, false
+
+let private playerDescription (squadDic:SquadDic) (squadId, playerId) =
+    let playerDescription, _, _ = (squadId, playerId) |> playerDescriptionAndExtraAndWithdrawn squadDic
+    playerDescription
+
+let private userNameText (userDic:UserDic) userId =
+    let (UserName userName) = userId |> userName userDic
+    userName
+
+let private renderUserDraftPicks theme userDraftPicks (userDic:UserDic) (squadDic:SquadDic) =
+    let userDraftPickElement userDraftPickDto =
+        let text =
+            match userDraftPickDto.UserDraftPick with
+            | TeamPick squadId -> squadId |> squadDescription squadDic
+            | PlayerPick (squadId, playerId) -> (squadId, playerId) |> playerDescription squadDic
+        [ str (sprintf "%i. %s" userDraftPickDto.Rank text) ] |> para theme paraDefaultSmallest
+    userDraftPicks
+    |> List.map (fun (userId, userDraftPickDtos) -> userId |> userNameText userDic, userDraftPickDtos)
+    |> List.sortBy fst
+    |> List.map (fun (userName, userDraftPickDtos) ->
+        [
+            yield [ bold userName ; str " wanted" ] |> para theme paraDefaultSmall
+            yield! userDraftPickDtos |> List.map userDraftPickElement
+            yield br
+        ])
+    |> List.collect id
+
+let private draftPickText (squadDic:SquadDic) draftPick =
+    match draftPick with
+    | TeamPicked squadId -> squadId |> squadDescription squadDic
+    | PlayerPicked (squadId, playerId) -> (squadId, playerId) |> playerDescription squadDic
+
+let private renderProcessingEvents theme processingEvents (userDic:UserDic) (squadDic:SquadDic) =
+    let ignoredElements reason (ignored:(UserId * DraftPick list) list) =
+        let ignoredElement userName draftPick = 
+            [ str (sprintf "Removed %s for " (draftPick |> draftPickText squadDic)) ; bold userName ; str (sprintf ": %s" reason) ] |> para theme paraDefaultSmallest
+        ignored
+        |> List.map (fun (userId, draftPicks) -> userId |> userNameText userDic, draftPicks)
+        |> List.sortBy fst
+        |> List.map (fun (userName, draftPicks) ->
+            [
+                yield br
+                yield! draftPicks |> List.map (ignoredElement userName)
+            ])
+        |> List.collect id
+    let eventElements event =
+        match event with
+        | ProcessingStarted seed -> [ [ bold "Using random seed" ; str (sprintf " %i" seed) ] |> para theme paraDefaultSmall ]
+        | WithdrawnPlayersIgnored ignored ->
+            let ignored = ignored |> List.map (fun (userId, squadAndPlayerIds) -> userId, squadAndPlayerIds |> List.map PlayerPicked)
+            ignored |> ignoredElements "player has been withdrawn"
+        | RoundStarted round -> [ br ; [ bold (sprintf "Round %i" round) ] |> para theme paraDefaultSmaller ]
+        | AlreadyPickedIgnored ignored -> ignored |> ignoredElements "picked in an earlier draft / round"
+        | NoLongerRequiredIgnored ignored -> ignored |> ignoredElements "no longer required"
+        | UncontestedPick (draftPick, userId) ->
+            [
+                br
+                [ bold (userId |> userNameText userDic) ; str " has a unique pick for this round: " ; bold (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest
+            ]
+        | ContestedPick (draftPick, userDetails, winner) ->
+            let pickPriorities =
+                userDetails
+                |> List.mapi (fun i (userId, pickPriority, _) ->
+                    [
+                        if i = 0 then yield br
+                        yield [ bold (userId |> userNameText userDic) ; str (sprintf " has pick priority %i" pickPriority) ] |> para theme paraDefaultSmallest
+                    ])
+                |> List.collect id
+            let randomNumbers =
+                userDetails
+                |> List.choose (fun (userId, _, randomNumber) -> match randomNumber with | Some randomNumber -> (userId, randomNumber) |> Some | None -> None)
+                |> List.map (fun (userId, randomNumber) ->
+                    [
+                        br
+                        [ bold (userId |> userNameText userDic) ; str " has highest pick priority" ] |> para theme paraDefaultSmallest
+                        [ bold (userId |> userNameText userDic) ; str (sprintf " assigned random number %.8f" randomNumber) ] |> para theme paraDefaultSmallest
+                    ])
+                |> List.collect id
+            [
+                yield br
+                yield [ bold (draftPick |> draftPickText squadDic) ; str " is a contested pick for this round" ] |> para theme paraDefaultSmallest
+                yield! pickPriorities
+                yield! randomNumbers
+                yield br
+                yield [ bold (winner |> userNameText userDic) ; str " has the highest random number" ] |> para theme paraDefaultSmallest
+            ]
+        | PickPriorityChanged (userId, pickPriority) ->
+            [ br ; [ str (sprintf "Pick priority changed to %i for " pickPriority) ; bold (userId |> userNameText userDic) ] |> para theme paraDefaultSmallest ]
+        | Picked (_, draftPick, userId, _) ->
+            [ br ; [ bold (userId |> userNameText userDic) ; str " successfully picked " ; str (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest ]
+    processingEvents |> List.collect eventElements
+
+let private renderPicked theme picked (userDic:UserDic) (squadDic:SquadDic) =
+    let draftPickElement draftPick = [ str (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest
+    picked
+    |> List.groupBy fst
+    |> List.map (fun (userId, items) ->
+        let (UserName userName) = userId |> userName userDic
+        userName, items |> List.map snd)
+    |> List.sortBy fst
+    |> List.map (fun (userName, draftPicks) ->
+        [
+            yield [ bold userName ; str " ended up with" ] |> para theme paraDefaultSmall
+            yield! draftPicks |> List.map draftPickElement
+            yield br
+        ])
+    |> List.collect id
+
+let private renderProcessingDetails (useDefaultTheme, processingDetails, userDic:UserDic, squadDic:SquadDic) =
+    let theme = getTheme useDefaultTheme
+    let picked = processingDetails.ProcessingEvents |> List.choose (fun event -> match event with | Picked (_, draftPick, userId, _) -> (userId, draftPick) |> Some | _ -> None)
+    div divDefault [
+        yield! renderUserDraftPicks theme processingDetails.UserDraftPicks userDic squadDic
+        yield! renderProcessingEvents theme processingDetails.ProcessingEvents userDic squadDic
+        yield br
+        yield! renderPicked theme picked userDic squadDic ]
 
 let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isOpen, needsMorePicks, userDraftPickDic:UserDraftPickDic, squadDic:SquadDic) dispatch =
     let theme = getTheme useDefaultTheme
@@ -123,7 +243,7 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
         else
             yield [ bold (sprintf "You do not need to make any selections for the %s" draftTextLower) ] |> para theme paraCentredSmallest ]
 
-let render (useDefaultTheme, state, authUser:AuthUser, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option>, squadsProjection:Projection<_ * SquadDic>) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option>, usersProjection:Projection<_ * UserDic>, squadsProjection:Projection<_ * SquadDic>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "Drafts" ] |> para theme paraCentredSmall
@@ -134,18 +254,34 @@ let render (useDefaultTheme, state, authUser:AuthUser, draftsProjection:Projecti
         | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Ready (_, draftDic, currentUserDraftDto), Ready (_, squadDic) ->
-            let currentDraft = draftDic |> currentDraft
-            let activeDraft =
-                match currentDraft with
-                | Some (draftId, draft) ->
-                    match draft.DraftStatus with | Opened _ -> (draftId, draft, true) |> Some | PendingProcessing _ -> (draftId, draft, false) |> Some | _ -> None
-                | None -> None
-            let userDraftPickDic = currentUserDraftDto |> userDraftPickDic
-            let squad, players = authUser.UserId |> pickedByUser squadDic
-            let pickedCounts = (squad, players) |> pickedCounts
-            let needsMorePicks = match pickedCounts |> stillRequired with | Some _ -> true | None -> false
-            match activeDraft with
-            | Some (draftId, draft, isOpen) ->
-                yield lazyViewOrHMR2 renderActiveDraft (useDefaultTheme, state, draftId, draft, isOpen, needsMorePicks, userDraftPickDic, squadDic) dispatch
-            | None ->
-                yield [ str "Processed draft details coming soon" ] |> para theme paraCentredSmaller ]
+            let relevantDrafts =
+                draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> draftId, draft)
+                |> List.filter (fun (_, draft) -> match draft.DraftStatus with | Opened _ | PendingProcessing _ | Processed -> true | _ -> false)
+                |> List.sortBy (fun (_, draft) -> draft.DraftOrdinal)
+            match relevantDrafts |> List.rev with
+            | (latestDraftId, latestDraft) :: _ ->
+                let currentDraft = match state.CurrentDraftId with | Some currentDraftId -> relevantDrafts |> List.tryFind (fun (draftId, _) -> draftId = currentDraftId) | None -> None
+                let currentDraftId, draft = match currentDraft with | Some (draftId, draft) -> draftId, draft | None -> latestDraftId, latestDraft
+                let draftTabs = draftTabs relevantDrafts currentDraftId dispatch
+                yield div divCentred [ tabs theme { tabsDefault with Tabs = draftTabs } ]
+                yield br
+                let isOpen = match draft.DraftStatus with | Opened _ -> true | _ -> false
+                match draft.DraftStatus with
+                | Opened _ | PendingProcessing _ ->
+                    let userDraftPickDic = currentUserDraftDto |> userDraftPickDic
+                    let squad, players = authUser.UserId |> pickedByUser squadDic
+                    let pickedCounts = (squad, players) |> pickedCounts
+                    let needsMorePicks = match pickedCounts |> stillRequired with | Some _ -> true | None -> false
+                    yield lazyViewOrHMR2 renderActiveDraft (useDefaultTheme, state, currentDraftId, draft, isOpen, needsMorePicks, userDraftPickDic, squadDic) dispatch
+                | Processed ->
+                    match usersProjection, draft.ProcessingDetails with
+                    | Pending, _ ->
+                        yield div divCentred [ icon iconSpinnerPulseLarge ]
+                    | Failed, _ -> // note: should never happen
+                        yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
+                    | Ready (_, userDic), Some processingDetails ->
+                        yield lazyViewOrHMR renderProcessingDetails (useDefaultTheme, processingDetails, userDic, squadDic)
+                    | Ready _, None ->  // note: should never happen
+                        yield [ str "There are no processing details for this draft" ] |> para theme paraCentredSmaller
+                | _ -> () // note: should never happen
+            | [] -> yield [ str "Coming soon" ] |> para theme paraCentredSmaller ] // note: should never happen

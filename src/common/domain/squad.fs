@@ -24,11 +24,11 @@ type PlayerType = | Goalkeeper | Defender | Midfielder | Forward
 
 type PlayerStatus = | Active | Withdrawn of dateWithdrawn : DateTimeOffset option
 
-type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : (UserId * DraftOrdinal option) option }
+type PickedBy = UserId * DraftOrdinal option * DateTimeOffset
 
-type SquadOnlyDto =
-    { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool
-      PickedBy : (UserId * DraftOrdinal option) option }
+type PlayerDto = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : PickedBy option }
+
+type SquadOnlyDto = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PickedBy : PickedBy option }
 
 type SquadDto = { SquadOnlyDto : SquadOnlyDto ; PlayerDtos : PlayerDto list }
 

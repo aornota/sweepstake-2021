@@ -570,7 +570,7 @@ let private applyFixturesDelta currentRvn deltaRvn (delta:Delta<FixtureId, Fixtu
 // #endregion
 
 // #region Draft/s
-let private draft (draftDto:DraftDto) = { Rvn = draftDto.Rvn ; DraftOrdinal = draftDto.DraftOrdinal ; DraftStatus = draftDto.DraftStatus }
+let private draft (draftDto:DraftDto) = { Rvn = draftDto.Rvn ; DraftOrdinal = draftDto.DraftOrdinal ; DraftStatus = draftDto.DraftStatus ; ProcessingDetails = draftDto.ProcessingDetails }
 
 let private draftDic (draftDtos:DraftDto list) =
     let draftDic = DraftDic ()
