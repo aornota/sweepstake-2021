@@ -23,7 +23,7 @@ open Elmish
 let initialize currentSquadId : State * Cmd<Input> =
     let pendingPicksState = { PendingPicks = [] ; PendingRvn = None }
     { CurrentSquadId = currentSquadId ; PendingPicksState = pendingPicksState ; AddPlayersState = None ; ChangePlayerNameState = None ; ChangePlayerTypeState = None
-      WithdrawPlayerState = None ; EliminateSquadState = None }, Cmd.none
+      WithdrawPlayerState = None ; EliminateSquadState = None ; FreePickState = None }, Cmd.none
 
 let private squadRvn (squadDic:SquadDic) squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId].Rvn |> Some else None
 
@@ -129,6 +129,23 @@ let private handleEliminateSquadCmdResult (result:Result<SquadName, AuthCmdError
     | _ ->
         state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadCmdResult when EliminateSquadState is None -> %A" result)
 
+let private handleFreePickCmdResult (result:Result<DraftPick, AuthCmdError<string>>) (squadDic:SquadDic) state : State * Cmd<Input> =
+    match state.FreePickState with
+    | Some freePickState ->
+        match freePickState.FreePickStatus with
+        | Some FreePickPending ->
+            match result with
+            | Ok draftPick ->
+                { state with FreePickState = None }, sprintf "<strong>%s</strong> has been picked" (draftPick |> draftPickText squadDic) |> successToastCmd
+            | Error error ->
+                let errorText = ifDebug (sprintf "FreePickCmdResult error -> %A" error) (error |> cmdErrorText)
+                let freePickState = { freePickState with FreePickStatus = errorText |> FreePickFailed |> Some }
+                { state with FreePickState = freePickState |> Some }, "Unable to eliminate team" |> errorToastCmd
+        | Some (FreePickFailed _) | None ->
+            state, shouldNeverHappenCmd (sprintf "Unexpected FreePickCmdResult when FreePickStatus is not FreePickPending -> %A" result)
+    | _ ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected FreePickCmdResult when FreePickState is None -> %A" result)
+
 let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : State * Cmd<Input> =
     match serverSquadsMsg with
     | AddPlayerCmdResult result ->
@@ -167,6 +184,8 @@ let private handleServerSquadsMsg serverSquadsMsg (squadDic:SquadDic) state : St
             let pendingPicksState = { pendingPicksState with PendingPicks = pendingPicks }
             { state with PendingPicksState = pendingPicksState }, Cmd.batch [ errorCmd ; errorToastCmd ]
         else state, Cmd.none
+    | FreePickCmdResult result ->
+        state |> handleFreePickCmdResult result squadDic
 
 let private handleAddPlayersInput addPlayersInput (squadDic:SquadDic) state : State * Cmd<Input> * bool =
     match addPlayersInput, state.AddPlayersState with
@@ -283,7 +302,25 @@ let private handleEliminateSquadInput eliminateSquadInput (squadDic:SquadDic) st
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected EliminateSquadInput when EliminateSquadState is None -> %A" eliminateSquadInput), false
 
-let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (currentUserDraftDto:CurrentUserDraftDto option) state =
+let private handleFreePickInput freePickInput (draftDic:DraftDic) state : State * Cmd<Input> * bool =
+    match freePickInput, state.FreePickState with
+    | ConfirmFreePick, Some freePickState ->
+        let freePickState = { freePickState with FreePickStatus = FreePickPending |> Some }   
+        let draftId, draftPick = freePickState.DraftId, freePickState.DraftPick
+        let currentRvn = if draftId |> draftDic.ContainsKey then draftDic.[draftId].Rvn else initialRvn
+        let cmd = (draftId, currentRvn, draftPick) |> FreePickCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+        { state with FreePickState = freePickState |> Some }, cmd, true
+    | CancelFreePick, Some freePickState ->
+        match freePickState.FreePickStatus with
+        | Some FreePickPending ->
+            state, shouldNeverHappenCmd "Unexpected CancelFreePick when FreePickPending", false
+        | Some (FreePickFailed _) | None ->
+            { state with FreePickState = None }, Cmd.none, false
+    | _, None ->
+        state, shouldNeverHappenCmd (sprintf "Unexpected FreePickInput when FreePickState is None -> %A" freePickInput), false
+
+let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (draftDic:DraftDic option) (currentUserDraftDto:CurrentUserDraftDto option) state =
+    let draftDic = match draftDic with | Some draftDic -> draftDic | None -> DraftDic ()
     let state, cmd, isUserNonApiActivity =
         match input, squadsProjection with
         | AddNotificationMessage _, _ -> // note: expected to be handled by Program.State.transition
@@ -299,7 +336,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
             { state with CurrentSquadId = squadId |> Some }, Cmd.none, true
         | AddToDraft (draftId, userDraftPick), Ready _ ->
             match authUser with
-            | Some authUser ->
+            | Some _ ->
                 let isPicked =
                     match currentUserDraftDto with
                     | Some currentUserDraftDto -> currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick)
@@ -315,7 +352,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                                 let (Rvn currentRvn) = currentUserDraftDto.Rvn
                                 match pendingPicksState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
                             | None -> match pendingPicksState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
-                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> AddToDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                        let cmd = (draftId, currentRvn, userDraftPick) |> AddToDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
                         let pendingPicksState = { pendingPicksState with PendingPicks = pendingPick :: pendingPicks ; PendingRvn = currentRvn |> incrementRvn |> Some }
                         { state with PendingPicksState = pendingPicksState }, cmd, true
                     else state, UNEXPECTED_ERROR |> errorToastCmd, true
@@ -324,7 +361,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                 state, Cmd.none, false
         | RemoveFromDraft (draftId, userDraftPick), Ready _ ->
             match authUser with
-            | Some authUser ->
+            | Some _ ->
                 let isPicked =
                     match currentUserDraftDto with
                     | Some currentUserDraftDto -> currentUserDraftDto.UserDraftPickDtos |> List.exists (fun userDraftPickDto -> userDraftPickDto.UserDraftPick = userDraftPick)
@@ -340,7 +377,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                                 let (Rvn currentRvn) = currentUserDraftDto.Rvn
                                 match pendingPicksState.PendingRvn with | Some (Rvn rvn) when rvn > currentRvn -> Rvn rvn | Some _ | None -> Rvn currentRvn
                             | None -> match pendingPicksState.PendingRvn with | Some rvn -> rvn | None -> initialRvn
-                        let cmd = (authUser.UserId, draftId, currentRvn, userDraftPick) |> UiAuthSquadsMsg.RemoveFromDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                        let cmd = (draftId, currentRvn, userDraftPick) |> UiAuthSquadsMsg.RemoveFromDraftCmd |> UiAuthSquadsMsg |> SendUiAuthMsg |> Cmd.ofMsg
                         let pendingPicksState = { pendingPicksState with PendingPicks = pendingPick :: pendingPicks ; PendingRvn = currentRvn |> incrementRvn |> Some }
                         { state with PendingPicksState = pendingPicksState }, cmd, true
                     else state, UNEXPECTED_ERROR |> errorToastCmd, true
@@ -372,6 +409,11 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
             { state with EliminateSquadState = eliminateSquadState |> Some }, Cmd.none, true
         | EliminateSquadInput eliminateSquadInput, Ready (_, squadDic) ->
             state |> handleEliminateSquadInput eliminateSquadInput squadDic
+        | ShowFreePickModal (draftId, draftPick), Ready _ -> // note: no need to check for unknown draftId (should never happen)
+            let freePickState = { DraftId = draftId ; DraftPick = draftPick ; FreePickStatus = None }
+            { state with FreePickState = freePickState |> Some }, Cmd.none, true
+        | FreePickInput freePickInput, Ready _ ->
+            state |> handleFreePickInput freePickInput draftDic
         | _, _ ->
             state, shouldNeverHappenCmd (sprintf "Unexpected Input when %A -> %A" squadsProjection input), false
     state, cmd, isUserNonApiActivity

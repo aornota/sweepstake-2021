@@ -1098,7 +1098,7 @@ let private handleUnauthInput unauthInput (unauthState:UnauthState) state =
         state |> shouldNeverHappen "Unexpected SquadsInput SendUiAuthMsg when Unauth"
     | UnauthPageInput (SquadsInput squadsInput), _ ->
         let squadsState = unauthState.UnauthPageStates.SquadsState
-        let squadsState, squadsCmd, _ = squadsState |> Squads.State.transition squadsInput None unauthState.UnauthProjections.SquadsProjection None
+        let squadsState, squadsCmd, _ = squadsState |> Squads.State.transition squadsInput None unauthState.UnauthProjections.SquadsProjection None None
         let unauthPageStates = { unauthState.UnauthPageStates with SquadsState = squadsState }
         let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UnauthPageInput >> UnauthInput >> AppInput)
         { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, squadsCmd
@@ -1212,11 +1212,11 @@ let private handleAuthInput authInput authState state =
     | PageInput (UPageInput (SquadsInput squadsInput)), _, _ ->
         let squadsState = authState.UnauthPageStates.SquadsState
         let squadsState, squadsCmd, isUserNonApiActivity =
-            let currentUserDraftDto =
+            let draftDic, currentUserDraftDto =
                 match authState.AuthProjections.DraftsProjection with
-                | Ready (_, _, currentUserDraftDto) -> currentUserDraftDto
-                | Pending | Failed -> None
-            squadsState |> Squads.State.transition squadsInput (authState.AuthUser |> Some) authState.UnauthProjections.SquadsProjection currentUserDraftDto
+                | Ready (_, draftDic, currentUserDraftDto) -> draftDic |> Some, currentUserDraftDto
+                | Pending | Failed -> None, None
+            squadsState |> Squads.State.transition squadsInput (authState.AuthUser |> Some) authState.UnauthProjections.SquadsProjection draftDic currentUserDraftDto
         let unauthPageStates = { authState.UnauthPageStates with SquadsState = squadsState }
         let squadsCmd = squadsCmd |> Cmd.map (SquadsInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
         { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, squadsCmd, isUserNonApiActivity

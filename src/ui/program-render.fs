@@ -387,7 +387,7 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
                     match stillRequired with
                     | Some _ ->
                         [
-                            str "Please select teams/coaches, goalkeepers and outfield players on the "
+                            str "Please select teams/coaches, goalkeepers and outfield players (as required) on the "
                             [ str "Squads" ] |> link theme (ClickableLink (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
                             str " page. You can prioritize your selections on the "
                             [ str "Drafts" ] |> link theme (ClickableLink (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
@@ -410,12 +410,21 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
                 let status = if processingStarted then "is currently being processed" else "will be processed soon"
                 let contents = [ [ bold (sprintf "The %s is now closed and %s" draftTextLower status) ] |> para theme paraCentredSmaller ]
                 (Info, contents) |> Some
-            | FreeSelection -> // TODO-SOON-ISH: Finesse this, e.g. only show if user needs more picks?...
-                let contents = [
-                    [ bold "There are no further drafts" ] |> para theme paraCentredSmaller
-                    br
-                    [ str "Please pick team/coach | goalkeeper | outfield players (as required) on the Squads page." ] |> para theme paraDefaultSmallest ]
-                (Info, contents) |> Some
+            | FreeSelection ->
+                match stillRequired with
+                | Some stillRequired ->
+                    let required = match pickedCounts |> required with | Some required -> required | None -> "whatever is still required" // note: should never happen
+                    let contents = [
+                        [ bold "The draft phase is over and \"free pick\" mode has commenced" ] |> para theme paraCentredSmaller
+                        br
+                        stillRequired
+                        br
+                        [ str (sprintf "Please pick %s on the Squads page." required) ] |> para theme paraDefaultSmallest
+                        br
+                        [ italic "Note that you will only be credited with points scored by these \"free picks\" in forthcoming fixtures, not with points that they have already scored." ]
+                        |> para theme paraDefaultSmallest ]
+                    (Warning, contents) |> Some
+                | None -> None
             | _ -> None // note: should never happen
         match semanticAndContents with
         | Some (semantic, contents) -> columnContent [ notification theme { notificationDefault with NotificationSemantic = semantic |> Some } contents ] |> Some

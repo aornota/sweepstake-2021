@@ -85,6 +85,15 @@ let activeDraft (draftDic:DraftDic) =
     | (draftId, draft) :: _ -> if draft.DraftStatus |> isActive then (draftId, draft) |> Some else None
     | [] -> None
 
+let draftPickText (squadDic:SquadDic) draftPick =
+    match draftPick with
+    | TeamPicked squadId ->
+        let (SquadName squadName) = squadId |> squadName squadDic
+        squadName
+    | PlayerPicked (squadId, playerId) ->
+        let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
+        playerName
+
 let userDraftPickDic currentUserDraftDto =
     match currentUserDraftDto with
     | Some currentUserDraftDto ->
@@ -123,7 +132,7 @@ let pickedCounts (squad:(Squad * _ * _) option, players:(Squad * Player * _ * _)
         players |> List.filter (fun (_, player, _, _) ->
             match player.PlayerType, player.PlayerStatus with | Goalkeeper, _ -> false | _, Active -> true | _ -> false) |> List.length
     teamCount, goalkeeperCount, outfieldPlayerCount
-let stillRequired (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) =
+let required (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) =
     let required = [
         if pickedTeamCount < MAX_TEAM_PICKS then yield "1 team/coach"
         if pickedGoalkeeperCount < MAX_GOALKEEPER_PICKS then yield "1 goalkeeper"
@@ -135,5 +144,9 @@ let stillRequired (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerC
     if items > 0 then
         let required = required |> List.mapi (fun i item -> if i = 0 then item else if i + 1 < items then sprintf ", %s" item else sprintf " and %s" item)
         let required = required |> List.fold (fun text item -> sprintf "%s%s" text item) String.Empty
-        sprintf "%s still required" required |> Some
+        required |> Some
     else None
+let stillRequired (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) =
+    match (pickedTeamCount, pickedGoalkeeperCount, pickedOutfieldPlayerCount) |> required with
+    | Some required -> sprintf "%s still required" required |> Some
+    | None -> None

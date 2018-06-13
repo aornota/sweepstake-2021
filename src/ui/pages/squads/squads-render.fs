@@ -229,6 +229,32 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
             [ str "Eliminate team" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
     cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
 
+let private renderFreePickModal (useDefaultTheme, squadDic:SquadDic, freePickState:FreePickState) dispatch =
+    let theme = getTheme useDefaultTheme
+    let draftPickText = freePickState.DraftPick |> draftPickText squadDic
+    let confirmInteraction, onDismiss =
+        let confirm = (fun _ -> ConfirmFreePick |> dispatch)
+        let cancel = (fun _ -> CancelFreePick |> dispatch)
+        match freePickState.FreePickStatus with
+        | Some FreePickPending -> Loading, None
+        | Some (FreePickFailed _) | None -> Clickable (confirm, None), cancel |> Some
+    let errorText = match freePickState.FreePickStatus with | Some (FreePickFailed errorText) -> errorText |> Some | Some FreePickPending | None -> None
+    let warning = [
+        [ bold (sprintf "Are you sure you want to pick %s?" draftPickText) ] |> para theme paraCentredSmaller
+        br
+        [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
+    let body = [
+        match errorText with
+        | Some errorText ->
+            yield notification theme notificationDanger [ [ str errorText ] |> para theme paraDefaultSmallest ]
+            yield br
+        | None -> ()
+        yield notification theme notificationWarning warning
+        yield br
+        yield field theme { fieldDefault with Grouped = Centred |> Some } [
+            [ str (sprintf "Pick %s" draftPickText) ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
+    cardModal theme [ [ bold (sprintf "Pick %s" draftPickText) ] |> para theme paraCentredSmall ] onDismiss body
+
 let private group squadId (squadDic:SquadDic) = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
 
 let private groupTab currentGroup dispatch group =
@@ -260,6 +286,17 @@ let private activeDraftIdAndOrdinalAndIsOpen authUser currentDraft =
         match draft.DraftStatus with
         | Opened _ -> (draftId, draft.DraftOrdinal, true) |> Some
         | PendingProcessing _ -> (draftId, draft.DraftOrdinal, false) |> Some
+        | _ -> None
+    | _ -> None
+let private freePickDraftId authUser currentDraft =
+    let canDraft =
+        match authUser with
+        | Some authUser -> match authUser.Permissions.DraftPermission with | Some userId when userId = authUser.UserId -> true | Some _ | None -> false
+        | None -> false
+    match canDraft, currentDraft with
+    | true, Some (draftId, draft) ->
+        match draft.DraftStatus with
+        | FreeSelection -> draftId |> Some
         | _ -> None
     | _ -> None
 
@@ -310,6 +347,13 @@ let private draftLeftAndRight theme draftId draftOrdinal isOpen needsMorePicks u
         | None -> None
     draftLeft, draftRight
 
+let private freePick theme draftId needsMorePicks draftPick dispatch =
+    let pickType = match draftPick with | TeamPicked _ -> "team" | PlayerPicked _ -> "player"
+    if needsMorePicks then
+        let onClick = (fun _ -> (draftId, draftPick) |> ShowFreePickModal |> dispatch)
+        [ [ str (sprintf "Pick %s" pickType) ] |> para theme paraCentredSmallest ] |> link theme (ClickableLink onClick) |> Some
+    else None
+
 // #region customAgo
 let private customAgo (timestamp:DateTime) =
 #if TICK
@@ -326,7 +370,7 @@ let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pick
         let pickedBy =
             match draftOrdinal with
             | Some draftOrdinal -> [ div divDefault [ bold userName ; str (sprintf " (%s)" (draftOrdinal |> draftTextLower)) ] ]
-            | None -> [ div divDefault [ bold userName ; str (sprintf "(%s)" (customAgo timestamp.LocalDateTime)) ] ]
+            | None -> [ div divDefault [ bold userName ; str (sprintf " (%s)" (customAgo timestamp.LocalDateTime)) ] ]
         let tagData = match authUser with | Some authUser when authUser.UserId = userId -> tagSuccess | Some _ | None -> tagPrimary
         pickedBy |> tag theme { tagData with IsRounded = false } |> Some
     | None -> None
@@ -349,11 +393,16 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
         else None
     let draftLeft, draftRight =
         let isPicked = match squad.PickedBy with | Some _ -> true | None -> false
-        match isPicked, activeDraftIdAndOrdinalAndIsOpen authUser currentDraft with
-        | false, Some (draftId, draftOrdinal, isOpen) ->
+        let activeDraftIdAndOrdinalAndIsOpen = activeDraftIdAndOrdinalAndIsOpen authUser currentDraft
+        let freePickDraftId = freePickDraftId authUser currentDraft
+        match isPicked, activeDraftIdAndOrdinalAndIsOpen, freePickDraftId with
+        | false, Some (draftId, draftOrdinal, isOpen), _ ->
             let userDraftPick = squadId |> TeamPick
             let rank = userDraftPickDic |> rank userDraftPick
             draftLeftAndRight theme draftId draftOrdinal isOpen needsTeam userDraftPick rank (pendingPicks |> pendingTeamPick squadId) dispatch
+        | false, _, Some draftId ->
+            let draftPick = squadId |> TeamPicked
+            freePick theme draftId needsTeam draftPick dispatch, None
         | _ -> None, None
     let pickedBy = squad.PickedBy |> pickedByTag theme userDic authUser
     let score = 0 // TEMP-NMB...
@@ -367,7 +416,7 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
                     th [ [ bold "Coach" ] |> para theme paraDefaultSmallest ]
                     th []
                     th []
-                    th [ [ bold "Picked by" ] |> para theme paraCentredSmallest ]
+                    th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
                     th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     th [] ] ]
             tbody [
@@ -420,15 +469,17 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
     let draftLeftAndRight playerId (player:Player) =
         let isPicked = match player.PickedBy with | Some _ -> true | None -> false
         let isWithdrawn, _ = player |> isWithdrawnAndDate
-        let needsMorePicks =
-            match player.PlayerType with
-            | Goalkeeper -> needsGoalkeeper
-            | _ -> needsOutfieldPlayers
-        match isPicked, isWithdrawn, activeDraftIdAndOrdinalAndIsOpen authUser currentDraft with
-        | false, false, Some (draftId, draftOrdinal, isOpen) ->
+        let needsMorePicks = match player.PlayerType with | Goalkeeper -> needsGoalkeeper | _ -> needsOutfieldPlayers
+        let activeDraftIdAndOrdinalAndIsOpen = activeDraftIdAndOrdinalAndIsOpen authUser currentDraft
+        let freePickDraftId = freePickDraftId authUser currentDraft
+        match isPicked, isWithdrawn, activeDraftIdAndOrdinalAndIsOpen, freePickDraftId with
+        | false, false, Some (draftId, draftOrdinal, isOpen), _ ->
             let userDraftPick = (squadId, playerId) |> PlayerPick
             let rank = userDraftPickDic |> rank userDraftPick
             draftLeftAndRight theme draftId draftOrdinal isOpen needsMorePicks userDraftPick (rank) (pendingPicks |> pendingPlayerPick playerId) dispatch
+        | false, false, _, Some draftId ->
+            let draftPick = (squadId, playerId) |> PlayerPicked
+            freePick theme draftId needsMorePicks draftPick dispatch, None
         | _ -> None, None
     let playerRow (playerId, player) =
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
@@ -461,7 +512,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
                         th []
                         th []
                         th []
-                        th [ [ bold "Picked by" ] |> para theme paraCentredSmallest ]
+                        th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
                         th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                         th [] ] ]
                 tbody [ yield! playerRows ] ]
@@ -530,6 +581,10 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
             match hasModal, state.EliminateSquadState with
             | false, Some eliminateSquadState ->
                 yield div divDefault [ lazyViewOrHMR2 renderEliminateSquadModal (useDefaultTheme, squadDic, eliminateSquadState) (EliminateSquadInput >> dispatch) ]
+            | _ -> ()
+            match hasModal, state.FreePickState with
+            | false, Some freePickState ->
+                yield div divDefault [ lazyViewOrHMR2 renderFreePickModal (useDefaultTheme, squadDic, freePickState) (FreePickInput >> dispatch) ]
             | _ -> ()
             yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             match squadTabs with

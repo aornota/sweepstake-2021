@@ -52,15 +52,16 @@ type UiAuthSquadsMsg =
     | ChangePlayerTypeCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerType : PlayerType
     | WithdrawPlayerCmd of squadId : SquadId * currentRvn : Rvn * playerId : PlayerId
     | EliminateSquadCmd of squadId : SquadId * currentRvn : Rvn
-    | AddToDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
-    | RemoveFromDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | AddToDraftCmd of draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | RemoveFromDraftCmd of draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | FreePickCmd of draftId : DraftId * currentRvn : Rvn * draftPick : DraftPick
 
 type UiAuthFixturesMsg =
     | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
 
 type UiAuthDraftsMsg =
-    | ChangePriorityCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChange : PriorityChange
-    | RemoveFromDraftCmd of userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | ChangePriorityCmd of draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChange : PriorityChange
+    | RemoveFromDraftCmd of draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
 
 type UiAuthChatMsg =
     | InitializeChatProjectionQry

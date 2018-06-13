@@ -736,9 +736,9 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthSquadsMsg (AddToDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
+                | UiAuthMsg (jwt, UiAuthSquadsMsg (AddToDraftCmd (draftId, currentRvn, userDraftPick))) ->
                     let source = "AddToDraftCmd"
-                    sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
@@ -746,7 +746,7 @@ type Connections () =
                             |> Result.bind (fun userTokens ->
                                 match userTokens.DraftToken with
                                 | Some draftToken ->
-                                    (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick, connectionId) |> Entities.Drafts.drafts.HandleAddToDraftCmd |> Ok
+                                    (draftToken, auditUserId, draftId, currentRvn, userDraftPick, connectionId) |> Entities.Drafts.drafts.HandleAddToDraftCmd |> Ok
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
                         match result with
                         | Ok _ -> ()
@@ -756,9 +756,9 @@ type Connections () =
                             error |> Error |> logResult source (sprintf "%A" >> Some) })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthSquadsMsg (UiAuthSquadsMsg.RemoveFromDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
+                | UiAuthMsg (jwt, UiAuthSquadsMsg (UiAuthSquadsMsg.RemoveFromDraftCmd (draftId, currentRvn, userDraftPick))) ->
                     let source = "UiAuthSquadsMsg.RemoveFromDraftCmd"
-                    sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
@@ -767,12 +767,32 @@ type Connections () =
                                 match userTokens.DraftToken with
                                 | Some draftToken ->
                                     let toServerMsg = (ServerSquadsMsg.RemoveFromDraftCmdResult >> ServerSquadsMsg)
-                                    (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmd |> Ok
+                                    (draftToken, auditUserId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmd |> Ok
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
                         match result with
                         | Ok _ -> ()
                         | Error error ->
                             let serverMsg = (userDraftPick, error) |> Error |> ServerSquadsMsg.RemoveFromDraftCmdResult |> ServerSquadsMsg
+                            do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
+                            error |> Error |> logResult source (sprintf "%A" >> Some) })
+                    do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
+                    return! managingConnections serverStarted connectionDic signedInUserDic
+                | UiAuthMsg (jwt, UiAuthSquadsMsg (FreePickCmd (draftId, currentRvn, draftPick))) ->
+                    let source = "FreePickCmd"
+                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn draftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    let fWithConnection = (fun (_, (auditUserId, _)) -> async {
+                        let result =
+                            if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
+                            else signedInUserDic |> tokensForAuthCmdApi source true auditUserId jwt // note: if successful, updates SignedInUser.LastApi (and broadcasts UserActivity)
+                            |> Result.bind (fun userTokens ->
+                                match userTokens.DraftToken with
+                                | Some draftToken ->
+                                    (draftToken, auditUserId, draftId, currentRvn, draftPick, connectionId) |> Entities.Drafts.drafts.HandleFreePickCmd |> Ok
+                                | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
+                        match result with
+                        | Ok _ -> ()
+                        | Error error ->
+                            let serverMsg = error |> Error |> FreePickCmdResult |> ServerSquadsMsg
                             do! (connectionDic, signedInUserDic) |> sendMsg serverMsg [ connectionId ]
                             error |> Error |> logResult source (sprintf "%A" >> Some) })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
@@ -797,9 +817,9 @@ type Connections () =
                         result |> logResult source (sprintf "%A" >> Some) }) // note: log success/failure here (rather than assuming that calling code will do so)                   
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthDraftsMsg (ChangePriorityCmd (userId, draftId, currentRvn, userDraftPick, priorityChange))) ->
+                | UiAuthMsg (jwt, UiAuthDraftsMsg (ChangePriorityCmd (draftId, currentRvn, userDraftPick, priorityChange))) ->
                     let source = "ChangePriorityCmd"
-                    sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
@@ -807,7 +827,7 @@ type Connections () =
                             |> Result.bind (fun userTokens ->
                                 match userTokens.DraftToken with
                                 | Some draftToken ->
-                                    (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, connectionId)
+                                    (draftToken, auditUserId, draftId, currentRvn, userDraftPick, priorityChange, connectionId)
                                     |> Entities.Drafts.drafts.HandleChangePriorityCmd |> Ok
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
                         match result with
@@ -818,9 +838,9 @@ type Connections () =
                             error |> Error |> logResult source (sprintf "%A" >> Some) })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthDraftsMsg (UiAuthDraftsMsg.RemoveFromDraftCmd (userId, draftId, currentRvn, userDraftPick))) ->
+                | UiAuthMsg (jwt, UiAuthDraftsMsg (UiAuthDraftsMsg.RemoveFromDraftCmd (draftId, currentRvn, userDraftPick))) ->
                     let source = "UiAuthDraftsMsg.RemoveFromDraftCmd"
-                    sprintf "%s for %A %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source userId draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source draftId currentRvn userDraftPick connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
@@ -829,7 +849,7 @@ type Connections () =
                                 match userTokens.DraftToken with
                                 | Some draftToken ->
                                     let toServerMsg = (ServerDraftsMsg.RemoveFromDraftCmdResult >> ServerDraftsMsg)
-                                    (draftToken, auditUserId, userId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmd |> Ok
+                                    (draftToken, auditUserId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> Entities.Drafts.drafts.HandleRemoveFromDraftCmd |> Ok
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
                         match result with
                         | Ok _ -> ()

@@ -34,6 +34,10 @@ type EliminateSquadInput =
     | ConfirmEliminateSquad
     | CancelEliminateSquad
 
+type FreePickInput =
+    | ConfirmFreePick
+    | CancelFreePick
+
 type Input =
     | AddNotificationMessage of notificationMessage : NotificationMessage
     | SendUiAuthMsg of uiAuthMsg : UiAuthMsg
@@ -52,6 +56,8 @@ type Input =
     | WithdrawPlayerInput of withdrawPlayerInput : WithdrawPlayerInput
     | ShowEliminateSquadModal of squadId : SquadId
     | EliminateSquadInput of eliminateSquadInput : EliminateSquadInput
+    | ShowFreePickModal of draftId : DraftId * draftPick : DraftPick
+    | FreePickInput of freePickInput : FreePickInput
 
 type AddPlayerStatus =
     | AddPlayerPending
@@ -104,6 +110,15 @@ type EliminateSquadState = {
     SquadId : SquadId
     EliminateSquadStatus : EliminateSquadStatus option }
 
+type FreePickStatus =
+    | FreePickPending
+    | FreePickFailed of errorText : string
+
+type FreePickState = {
+    DraftId : DraftId
+    DraftPick : DraftPick
+    FreePickStatus : FreePickStatus option }
+
 type PendingPickStatus = | Adding | Removing
 
 type PendingPick = { UserDraftPick : UserDraftPick ; PendingPickStatus : PendingPickStatus }
@@ -119,7 +134,8 @@ type State = {
     ChangePlayerNameState : ChangePlayerNameState option
     ChangePlayerTypeState : ChangePlayerTypeState option
     WithdrawPlayerState : WithdrawPlayerState option
-    EliminateSquadState : EliminateSquadState option }
+    EliminateSquadState : EliminateSquadState option
+    FreePickState : FreePickState option }
 
 let isAdding pendingPick = match pendingPick.PendingPickStatus with | Adding -> true | Removing -> false
 let isRemoving pendingPick = match pendingPick.PendingPickStatus with | Adding -> false | Removing -> true

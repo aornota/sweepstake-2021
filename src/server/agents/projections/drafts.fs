@@ -72,9 +72,13 @@ let private userDraftPickDtos (userDraftPickDic:UserDraftPickDic) : UserDraftPic
     userDraftPickDic |> List.ofSeq |> List.map (fun (KeyValue (userDraftPick, rank)) -> { UserDraftPick = userDraftPick ; Rank = rank })
 
 let private draftDto (draftId, draft:Draft) : DraftDto =
-    let userDraftPicks = draft.ProcessedUserDraftPicks |> List.map (fun (userId, userDraftPickDic) -> userId, userDraftPickDic |> userDraftPickDtos)
-    let processingDetails = { UserDraftPicks = userDraftPicks ; ProcessingEvents = draft.ProcessingEvents |> List.rev }
-    { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus ; ProcessingDetails = processingDetails |> Some }
+    let processingDetails =
+        match draft.DraftStatus with
+        | Processed ->
+            let userDraftPicks = draft.ProcessedUserDraftPicks |> List.map (fun (userId, userDraftPickDic) -> userId, userDraftPickDic |> userDraftPickDtos)       
+            { UserDraftPicks = userDraftPicks ; ProcessingEvents = draft.ProcessingEvents |> List.rev } |> Some
+        | _ -> None    
+    { DraftId = draftId ; Rvn = draft.Rvn ; DraftOrdinal = draft.DraftOrdinal ; DraftStatus = draft.DraftStatus ; ProcessingDetails = processingDetails }
 
 let private draftDtoDic (draftDic:DraftDic) =
     let draftDtoDic = DraftDtoDic ()
@@ -346,7 +350,12 @@ type Drafts () =
                                             { draft with Rvn = rvn ; ProcessingEvents = processingEvents }
                                         | _ -> draft
                                     draft, false
-                                | _ -> draft, false
+                                | DraftEvent.FreePick _ ->
+                                    let draft =
+                                        match draft.DraftStatus with
+                                        | FreeSelection -> {draft with Rvn = rvn }
+                                        | _ -> draft
+                                    draft, false
                             draftDic.[draftId] <- draft
                             let state = (draftDic, state) |> DraftChange |> updateState source projecteeDic
                             if userDraftChanged then (userDraftDic, state) |> UserDraftChange |> updateState source projecteeDic else state

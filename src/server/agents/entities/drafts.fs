@@ -51,24 +51,29 @@ type private DraftsInput =
     | HandleCreateDraftCmd of token : ProcessDraftToken * auditUserId : UserId * draftId : DraftId * draftOrdinal : DraftOrdinal * draftType : DraftType
         * reply : AsyncReplyChannel<Result<unit, AuthCmdError<string>>>
     | HandleProcessDraftCmd of token : ProcessDraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn * connectionId : ConnectionId
-    | HandleChangePriorityCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | HandleChangePriorityCmd of token : DraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
         * priorityChange : PriorityChange * connectionId : ConnectionId        
-    | HandleAddToDraftCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | HandleAddToDraftCmd of token : DraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
         * connectionId : ConnectionId
-    | HandleRemoveFromDraftCmd of token : DraftToken * auditUserId : UserId * userId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
+    | HandleRemoveFromDraftCmd of token : DraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick
         * toServerMsg : RemoveFromDraftCmdResultToServerMsg * connectionId : ConnectionId
+    | HandleFreePickCmd of token : DraftToken * auditUserId : UserId * draftId : DraftId * currentRvn : Rvn * draftPick : DraftPick * connectionId : ConnectionId
 
-type private Player = { PlayerType : PlayerType ; Withdrawn : bool }
-type private PlayerDic = Dictionary<PlayerId, Player>
-type private SquadDic = Dictionary<SquadId, PlayerDic>
+type private PickPriorityDic = Dictionary<UserId, uint32>
 
-type private Draft = { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * PickedBy) list ; ProcessingEvents : ProcessingEvent list }
+type private Draft =
+    { Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * PickedBy) list ; ProcessingEvents : ProcessingEvent list
+      PickPriorityDic : PickPriorityDic }
 type private DraftDic = Dictionary<DraftId, Draft>
 
 type private UserDraftPickDic = Dictionary<UserDraftPick, int>
 type private UserDraft = { Rvn : Rvn ; UserDraftKey : UserDraftKey ; UserDraftPickDic : UserDraftPickDic }
 type private UserDraftDic = Dictionary<UserDraftId, UserDraft>
 type private UserDraftLookupDic = Dictionary<UserDraftKey, UserDraftId>
+
+type private Player = { PlayerType : PlayerType ; Withdrawn : bool }
+type private PlayerDic = Dictionary<PlayerId, Player>
+type private SquadDic = Dictionary<SquadId, PlayerDic>
 
 let [<Literal>] private HOUSEKEEPING_INTERVAL = 1.<minute>
 
@@ -94,7 +99,10 @@ let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft opti
     | Ok (draftId, Some draft), _ when validateNextRvn (Some draft.Rvn) nextRvn |> not -> // note: should never happen
         ifDebug (sprintf "Invalid next Rvn for %A (%A) -> %A (%A)" draftId draft.Rvn nextRvn draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, None), DraftCreated (_, draftOrdinal, draftType) ->
-        (draftId, { Rvn = initialRvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus ; DraftPicks = [] ; ProcessingEvents = [] } |> Some) |> Ok
+        let draft =
+            { Rvn = initialRvn ; DraftOrdinal = draftOrdinal ; DraftStatus = draftType |> defaultDraftStatus ; DraftPicks = [] ; ProcessingEvents = []
+              PickPriorityDic = PickPriorityDic () }
+        (draftId, draft |> Some) |> Ok
     | Ok (draftId, None), _ -> // note: should never happen
         ifDebug (sprintf "Invalid initial DraftEvent for %A -> %A" draftId draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, Some draft), DraftCreated _ -> // note: should never happen
@@ -165,6 +173,8 @@ let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft opti
         match draft.DraftStatus with
         | PendingProcessing true ->
             let processingEvents = ((userId, pickPriority) |> ProcessingEvent.PickPriorityChanged) :: draft.ProcessingEvents
+            let pickPriorityDic = draft.PickPriorityDic
+            if userId |> pickPriorityDic.ContainsKey then pickPriorityDic.[userId] <- pickPriority else (userId, pickPriority) |> pickPriorityDic.Add
             (draftId, { draft with Rvn = nextRvn ; ProcessingEvents = processingEvents } |> Some) |> Ok
         | _ -> ifDebug (sprintf "Invalid DraftEvent for %A (%A) -> %A" draftId draft draftEvent) UNEXPECTED_ERROR |> otherError
     | Ok (draftId, Some draft), DraftEvent.Picked (_, draftOrdinal, draftPick, userId, timestamp) ->
@@ -211,24 +221,24 @@ let private updateDraft draftId draft (draftDic:DraftDic) = if draftId |> draftD
 let private tryFindDraft draftId onError (draftDic:DraftDic) =
     if draftId |> draftDic.ContainsKey then (draftId, draftDic.[draftId]) |> Ok else ifDebug (sprintf "%A does not exist" draftId) UNEXPECTED_ERROR |> onError
 
-let private tryApplyDraftEvent source draftId draft nextRvn draftEvent =
+let private tryApplyDraftEvent source draftId draft nextRvn thing draftEvent =
     match applyDraftEvent source (Ok (draftId, draft)) (nextRvn, draftEvent) with
-    | Ok (_, Some post) -> (post, nextRvn, draftEvent) |> Ok
+    | Ok (_, Some post) -> (post, nextRvn, draftEvent, thing) |> Ok
     | Ok (_, None) -> ifDebug "applyDraftEvent returned Ok (_, None)" UNEXPECTED_ERROR |> otherCmdError source // note: should never happen
     | Error otherError -> otherError |> OtherAuthCmdError |> Error
 
-let private tryWriteDraftEventAsync auditUserId rvn draftEvent (draft:Draft) = async {
+let private tryWriteDraftEventAsync auditUserId rvn draftEvent (draft:Draft) thing = async {
     let! result = (auditUserId, rvn, draftEvent) |> persistence.WriteDraftEventAsync
-    return match result with | Ok _ -> (draftEvent.DraftId, draft) |> Ok | Error persistenceError -> persistenceError |> AuthCmdPersistenceError |> Error }
+    return match result with | Ok _ -> (draftEvent.DraftId, draft, thing) |> Ok | Error persistenceError -> persistenceError |> AuthCmdPersistenceError |> Error }
 
 let rec private tryApplyAndWriteDraftEventsAsync source auditUserId currentRvn draftId draft draftEvents = async {
     match draftEvents with
     | draftEvent :: draftEvents ->
-        match tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn currentRvn) draftEvent with
-        | Ok (draft, rvn, draftEvent) ->
-            let! result = tryWriteDraftEventAsync auditUserId rvn draftEvent draft
+        match tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn currentRvn) () draftEvent with
+        | Ok (draft, rvn, draftEvent, _) ->
+            let! result = tryWriteDraftEventAsync auditUserId rvn draftEvent draft ()
             match result with
-            | Ok (draftId, draft) -> return! draftEvents |> tryApplyAndWriteDraftEventsAsync source auditUserId rvn draftId draft
+            | Ok (draftId, draft, _) -> return! draftEvents |> tryApplyAndWriteDraftEventsAsync source auditUserId rvn draftId draft
             | Error error -> return error |> Error
         | Error error -> return error |> Error
     | [] -> return (draftId, draft, currentRvn) |> Ok }
@@ -432,7 +442,7 @@ let rec private processRounds (random:Random) draftId draftOrdinal (userStatuses
         "All user draft picks processed" |> Verbose |> log
         (allEvents @ roundEvents) |> Ok
 
-let private processDraft source draftId draftOrdinal (userDrafts:UserDraft list) (existingPicks:(DraftPick * UserId) list) squadDic : Result<DraftEvent list, OtherError<string>> =
+let private processDraft source draftId draftOrdinal (pickPriorityDic:PickPriorityDic) (userDrafts:UserDraft list) (existingPicks:(DraftPick * UserId) list) squadDic : Result<DraftEvent list, OtherError<string>> =
     sprintf "%s for %A (%i user draft/s) (%i already picked)" source draftId userDrafts.Length existingPicks.Length |> Verbose |> log
     let userStatuses =
         userDrafts |> List.map (fun userDraft ->
@@ -440,7 +450,8 @@ let private processDraft source draftId draftOrdinal (userDrafts:UserDraft list)
             let alreadyPicked = DraftPickSet ()
             existingPicks |> List.iter (fun (draftPick, forUserId) -> if forUserId = userId then draftPick |> alreadyPicked.Add |> ignore)
             let pendingPicks = userDraft.UserDraftPickDic |> List.ofSeq |> List.sortBy (fun (KeyValue (_, rank)) -> rank) |> List.map (fun (KeyValue (userDraftPick, _)) -> userDraftPick)
-            { UserId = userId ; AlreadyPicked = alreadyPicked ; PendingPicks = pendingPicks ; PickPriority = 0u } )
+            let pickPriority = if userId |> pickPriorityDic.ContainsKey then pickPriorityDic.[userId] else 0u
+            { UserId = userId ; AlreadyPicked = alreadyPicked ; PendingPicks = pendingPicks ; PickPriority = pickPriority } )
     let allPicked = DraftPickSet ()
     existingPicks |> List.iter (fun (draftPick, _) -> draftPick |> allPicked.Add |> ignore)
     "Ignoring withdrawn players" |> Verbose |> log
@@ -556,6 +567,44 @@ let private ifAllRead (draftDic:DraftDic option, userDraftDic:UserDraftDic optio
         (draftDic, userDraftDic, userDraftLookupDic, squadDic) |> Some
     | _ -> None
 
+let private housekeeping source (draftDic:DraftDic) =
+    // Note: Only limited "validation" (since other scenarios should never arise).
+    let now = DateTimeOffset.UtcNow
+    let pendingProcessing = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (_, draft)) ->
+        match draft.DraftStatus with | PendingProcessing _ -> draft |> Some | _ -> None)
+    if pendingProcessing.Length = 0 then
+        let noLongerPendingOpen =
+            draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
+                match draft.DraftStatus with | PendingOpen (starts, _) when starts < now -> (draftId, draft, starts) |> Some | _ -> None)
+            |> List.sortBy (fun (_, _, starts) -> starts)
+        match noLongerPendingOpen with
+        | (draftId, draft, _) :: _ ->
+            let result =
+                draftId |> DraftOpened |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn) ()
+                |> Result.bind (fun (draft, rvn, draftEvent, _) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft () } |> Async.RunSynchronously)
+            result |> logResult source (fun (draftId, draft, _) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
+            match result with | Ok (draftId, draft, _) -> draftDic |> updateDraft draftId draft | Error _ -> ()
+        | [] -> ()
+    let noLongerOpened = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
+        match draft.DraftStatus with | Opened ends when ends < now -> (draftId, draft) |> Some | _ -> None)
+    noLongerOpened |> List.iter (fun (draftId, draft) ->
+        let result =
+            draftId |> DraftPendingProcessing |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn) ()
+            |> Result.bind (fun (draft, rvn, draftEvent, _) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft () } |> Async.RunSynchronously)
+        result |> logResult source (fun (draftId, draft, _) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
+        match result with | Ok (draftId, draft, _) -> draftDic |> updateDraft draftId draft | Error _ -> ())
+    let unprocessed = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (_, draft)) ->
+        match draft.DraftStatus with | PendingOpen _ | Opened _ | PendingProcessing _ -> draft |> Some | _ -> None)
+    if unprocessed.Length = 0 then
+        let noLongerPendingFreeSelection = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
+            match draft.DraftStatus with | PendingFreeSelection -> (draftId, draft) |> Some | _ -> None)               
+        noLongerPendingFreeSelection |> List.iter (fun (draftId, draft) ->
+            let result =
+                draftId |> DraftFreeSelection |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn) ()
+                |> Result.bind (fun (draft, rvn, draftEvent, _) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft () } |> Async.RunSynchronously)
+            result |> logResult source (fun (draftId, draft, _) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
+            match result with | Ok (draftId, draft, _) -> draftDic |> updateDraft draftId draft | Error _ -> ())
+
 type Drafts () =
     let agent = MailboxProcessor.Start (fun inbox ->
         let rec awaitingStart () = async {
@@ -578,7 +627,8 @@ type Drafts () =
             | HandleProcessDraftCmd _ -> "HandleProcessDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleChangePriorityCmd _ -> "HandleChangePriorityCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
             | HandleAddToDraftCmd _ -> "HandleAddToDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
-            | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
+            | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart ()
+            | HandleFreePickCmd _ -> "HandleFreePickCmd when awaitingStart" |> IgnoredInput |> Agent |> log ; return! awaitingStart () }
         and pendingAllRead draftDic userDraftDic squadsRead = async {
             let! input = inbox.Receive ()
             match input with
@@ -630,7 +680,8 @@ type Drafts () =
             | HandleProcessDraftCmd _ -> "HandleProcessDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleChangePriorityCmd _ -> "HandleChangePriorityCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
             | HandleAddToDraftCmd _ -> "HandleAddToDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
-            | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead }
+            | HandleRemoveFromDraftCmd _ -> "HandleRemoveFromDraftCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead
+            | HandleFreePickCmd _ -> "HandleFreePickCmd when pendingAllRead" |> IgnoredInput |> Agent |> log ; return! pendingAllRead draftDic userDraftDic squadsRead }
         and managingDrafts draftDic userDraftDic userDraftLookupDic squadDic = async {
             let! input = inbox.Receive ()
             match input with
@@ -643,42 +694,7 @@ type Drafts () =
             | Housekeeping ->
                 let source = "Housekeeping"
                 sprintf "%s when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source draftDic.Count userDraftDic.Count squadDic.Count |> Info |> log
-                // Note: Only limited validation (since other scenarios should never arise).
-                let now = DateTimeOffset.UtcNow
-                let pendingProcessing = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (_, draft)) ->
-                    match draft.DraftStatus with | PendingProcessing _ -> draft |> Some | _ -> None)
-                if pendingProcessing.Length = 0 then
-                    let noLongerPendingOpen =
-                        draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
-                            match draft.DraftStatus with | PendingOpen (starts, _) when starts < now -> (draftId, draft, starts) |> Some | _ -> None)
-                        |> List.sortBy (fun (_, _, starts) -> starts)
-                    match noLongerPendingOpen with
-                    | (draftId, draft, _) :: _ ->
-                        let result =
-                            draftId |> DraftOpened |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn)
-                            |> Result.bind (fun (draft, rvn, draftEvent) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft } |> Async.RunSynchronously)
-                        result |> logResult source (fun (draftId, draft) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
-                        match result with | Ok (draftId, draft) -> draftDic |> updateDraft draftId draft | Error _ -> ()
-                    | [] -> ()
-                let noLongerOpened = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
-                    match draft.DraftStatus with | Opened ends when ends < now -> (draftId, draft) |> Some | _ -> None)
-                noLongerOpened |> List.iter (fun (draftId, draft) ->
-                    let result =
-                        draftId |> DraftPendingProcessing |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn)
-                        |> Result.bind (fun (draft, rvn, draftEvent) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft } |> Async.RunSynchronously)
-                    result |> logResult source (fun (draftId, draft) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
-                    match result with | Ok (draftId, draft) -> draftDic |> updateDraft draftId draft | Error _ -> ())
-                let unprocessed = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (_, draft)) ->
-                    match draft.DraftStatus with | PendingOpen _ | Opened _ | PendingProcessing _ -> draft |> Some | _ -> None)
-                if unprocessed.Length = 0 then
-                    let noLongerPendingFreeSelection = draftDic |> List.ofSeq |> List.choose (fun (KeyValue (draftId, draft)) ->
-                        match draft.DraftStatus with | PendingFreeSelection -> (draftId, draft) |> Some | _ -> None)               
-                    noLongerPendingFreeSelection |> List.iter (fun (draftId, draft) ->
-                        let result =
-                            draftId |> DraftFreeSelection |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn draft.Rvn)
-                            |> Result.bind (fun (draft, rvn, draftEvent) -> async { return! tryWriteDraftEventAsync agentId rvn draftEvent draft } |> Async.RunSynchronously)
-                        result |> logResult source (fun (draftId, draft) -> sprintf "Audit%A %A %A" agentId draftId draft |> Some)
-                        match result with | Ok (draftId, draft) -> draftDic |> updateDraft draftId draft | Error _ -> ())
+                draftDic |> housekeeping source
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
             | OnSquadsRead _ -> sprintf "OnSquadsRead when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" draftDic.Count userDraftDic.Count squadDic.Count |> IgnoredInput |> Agent |> log ; return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
             | OnPlayerAdded (squadId, playerId, playerType) ->
@@ -725,11 +741,11 @@ type Drafts () =
                                     ordinal) |> List.max
                         let (DraftOrdinal newOrdinal) = draftOrdinal
                         if newOrdinal <> highestOrdinal + 1 then ifDebug (sprintf "%A is not contiguous with highest existing ordinal %i" draftOrdinal highestOrdinal) UNEXPECTED_ERROR |> otherCmdError source
-                        else (draftId, draftOrdinal, draftType) |> DraftCreated |> tryApplyDraftEvent source draftId None initialRvn)
-                let! result = match result with | Ok (draft, rvn, draftEvent) -> tryWriteDraftEventAsync auditUserId rvn draftEvent draft | Error error -> error |> Error |> thingAsync
-                result |> logResult source (fun (draftId, draft) -> sprintf "Audit%A %A %A" auditUserId draftId draft |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                        else (draftId, draftOrdinal, draftType) |> DraftCreated |> tryApplyDraftEvent source draftId None initialRvn ())
+                let! result = match result with | Ok (draft, rvn, draftEvent, _) -> tryWriteDraftEventAsync auditUserId rvn draftEvent draft () | Error error -> error |> Error |> thingAsync
+                result |> logResult source (fun (draftId, draft, _) -> sprintf "Audit%A %A %A" auditUserId draftId draft |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                 result |> discardOk |> reply.Reply
-                match result with | Ok (draftId, draft) -> (draftId, draft) |> draftDic.Add | Error _ -> ()
+                match result with | Ok (draftId, draft, _) -> (draftId, draft) |> draftDic.Add | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
             | HandleProcessDraftCmd (_, auditUserId, draftId, currentRvn, connectionId) ->
                 let source = "HandleProcessDraftCmd"
@@ -745,33 +761,41 @@ type Drafts () =
                         let existingPicks =
                             draftDic |> List.ofSeq |> List.map (fun (KeyValue (_, draft)) -> draft.DraftPicks) |> List.collect id
                             |> List.map (fun (draftPick, (userId, _, _)) -> draftPick, userId)
-                        let userDraftIds = userDraftLookupDic |> List.ofSeq |> List.choose (fun (KeyValue ((_, forDraftId), userDraftId)) ->
-                            if forDraftId = draftId then userDraftId |> Some else None)
+                        let userDraftIds = userDraftLookupDic |> List.ofSeq |> List.choose (fun (KeyValue ((_, otherDraftId), userDraftId)) ->
+                            if otherDraftId = draftId then userDraftId |> Some else None)
                         let userDrafts = userDraftIds |> List.choose (fun userDraftId -> if userDraftId |> userDraftDic.ContainsKey then userDraftDic.[userDraftId] |> Some else None)
-                        match processDraft source draftId draft.DraftOrdinal userDrafts existingPicks squadDic with
+                        let (DraftOrdinal draftOrdinal) = draft.DraftOrdinal
+                        let previousDraftOrdinal = DraftOrdinal (draftOrdinal - 1)
+                        let previousDraft = draftDic |> List.ofSeq |> List.tryFind (fun (KeyValue (_, otherDraft)) -> otherDraft.DraftOrdinal = previousDraftOrdinal)
+                        let pickPriorityDic = match previousDraft with | Some (KeyValue (_, draft)) -> draft.PickPriorityDic | None -> PickPriorityDic ()
+                        match processDraft source draftId draft.DraftOrdinal pickPriorityDic userDrafts existingPicks squadDic with
                         | Ok draftEvents -> (draftId, draft, draftEvents) |> Ok
                         | Error error -> error |> OtherAuthCmdError |> Error)
                 let! result =
                     match result with
                     | Ok (draftId, draft, draftEvents) -> draftEvents |> tryApplyAndWriteDraftEventsAsync source auditUserId currentRvn draftId draft
                     | Error error -> error |> Error |> thingAsync
-                let result = result |> Result.bind (fun (draftId, draft, rvn) -> draftId |> DraftProcessed |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn rvn))
+                let result = result |> Result.bind (fun (draftId, draft, rvn) -> draftId |> DraftProcessed |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn rvn) ())
                 let! result =
                     match result with
-                    | Ok (draft, rvn, draftEvent) -> tryWriteDraftEventAsync auditUserId rvn draftEvent draft
-                    | Error error -> error |> Error |> thingAsync
-                result |> logResult source (fun (draftId, draft) -> Some (sprintf "Audit%A %A %A" auditUserId draftId draft)) // note: log success/failure here (rather than assuming that calling code will do so)
+                    | Ok (draft, rvn, draftEvent, _) -> tryWriteDraftEventAsync auditUserId rvn draftEvent draft ()
+                    | Error error -> error |> Error |> thingAsync               
+                result |> logResult source (fun (draftId, draft, _) -> Some (sprintf "Audit%A %A %A" auditUserId draftId draft)) // note: log success/failure here (rather than assuming that calling code will do so)
                 let serverMsg = result |> discardOk |> ProcessDraftCmdResult |> ServerDraftAdminMsg
                 (serverMsg, [ connectionId ]) |> SendMsg |> broadcaster.Broadcast
-                match result with | Ok (draftId, draft) -> draftDic |> updateDraft draftId draft | Error _ -> ()
+                match result with
+                | Ok (draftId, draft, _) ->
+                    draftDic |> updateDraft draftId draft
+                    draftDic |> housekeeping source
+                | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
-            | HandleChangePriorityCmd (_, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) ->
+            | HandleChangePriorityCmd (_, auditUserId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) ->
                 let source = "HandleChangePriorityCmd"
-                sprintf "%s for %A %A (%A %A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source userId draftId currentRvn userDraftPick priorityChange draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
+                sprintf "%s for %A %A (%A %A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source auditUserId draftId currentRvn userDraftPick priorityChange draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
                 let result =
                     tryFindDraft draftId (otherCmdError source) draftDic
                     |> Result.bind (fun (_, draft) -> match draft.DraftStatus with | Opened _ -> () |> Ok | _ -> ifDebug (sprintf "%A is not Opened" draftId) UNEXPECTED_ERROR |> otherCmdError source)
-                    |> Result.bind (fun _ -> tryFindUserDraft userId draftId (otherCmdError source) userDraftDic userDraftLookupDic)
+                    |> Result.bind (fun _ -> tryFindUserDraft auditUserId draftId (otherCmdError source) userDraftDic userDraftLookupDic)
                     |> Result.bind (fun (_, userDraftId, userDraft) ->
                         if userDraftPick |> userDraft.UserDraftPickDic.ContainsKey then (userDraftId, userDraft, userDraft.UserDraftPickDic.[userDraftPick]) |> Ok
                         else ifDebug (sprintf "%A not drafted" userDraftPick) UNEXPECTED_ERROR |> otherCmdError source)
@@ -792,27 +816,27 @@ type Drafts () =
                 (serverMsg, [ connectionId ]) |> SendMsg |> broadcaster.Broadcast
                 match result with | Ok (userDraftId, userDraft, _) -> userDraftDic |> updateUserDraft userDraftId userDraft | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
-            | HandleAddToDraftCmd (_, auditUserId, userId, draftId, currentRvn, userDraftPick, connectionId) ->
+            | HandleAddToDraftCmd (_, auditUserId, draftId, currentRvn, userDraftPick, connectionId) ->
                 let source = "HandleAddToDraftCmd"
-                sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source userId draftId currentRvn userDraftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
+                sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source auditUserId draftId currentRvn userDraftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
                 let result =
                     tryFindDraft draftId (otherCmdError source) draftDic
                     |> Result.bind (fun (_, draft) -> match draft.DraftStatus with | Opened _ -> () |> Ok | _ -> ifDebug (sprintf "%A is not Opened" draftId) UNEXPECTED_ERROR |> otherCmdError source)                   
                 let! result =
                     match result with
                     | Ok _ ->
-                        if (userId, draftId) |> userDraftLookupDic.ContainsKey then async {
-                            let result = tryFindUserDraft userId draftId (otherCmdError source) userDraftDic userDraftLookupDic
+                        if (auditUserId, draftId) |> userDraftLookupDic.ContainsKey then async {
+                            let result = tryFindUserDraft auditUserId draftId (otherCmdError source) userDraftDic userDraftLookupDic
                             return result |> Result.bind (fun (_, userDraftId, userDraft) -> (userDraftId, userDraft) |> Ok) }
                         else async {
                             let userDraftId = UserDraftId.Create ()
-                            let result = (userDraftId, userId, draftId) |> UserDraftCreated |> tryApplyUserDraftEvent source userDraftId None initialRvn ()
+                            let result = (userDraftId, auditUserId, draftId) |> UserDraftCreated |> tryApplyUserDraftEvent source userDraftId None initialRvn ()
                             let! result = match result with | Ok (userDraft, rvn, userDraftEvent, _) -> tryWriteUserDraftEventAsync auditUserId rvn userDraftEvent userDraft () | Error error -> error |> Error |> thingAsync
                             result |> logResult source (fun (userDraftId, userDraft, _) -> sprintf "Audit%A %A %A" auditUserId userDraftId userDraft |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
                             match result with
                             | Ok (userDraftId, userDraft, _) ->
                                 (userDraftId, userDraft) |> userDraftDic.Add
-                                ((userId, draftId), userDraftId) |> userDraftLookupDic.Add
+                                ((auditUserId, draftId), userDraftId) |> userDraftLookupDic.Add
                             | Error _ -> ()
                             return result |> Result.bind (fun (userDraftId, userDraft, _) -> (userDraftId, userDraft) |> Ok) }
                     | Error error -> error |> Error |> thingAsync
@@ -832,13 +856,13 @@ type Drafts () =
                 (serverMsg, [ connectionId ]) |> SendMsg |> broadcaster.Broadcast
                 match result with | Ok (userDraftId, userDraft, _) -> userDraftDic |> updateUserDraft userDraftId userDraft | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
-            | HandleRemoveFromDraftCmd (_, auditUserId, userId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) ->
+            | HandleRemoveFromDraftCmd (_, auditUserId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) ->
                 let source = "HandleRemoveFromDraftCmd"
-                sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source userId draftId currentRvn userDraftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
+                sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source auditUserId draftId currentRvn userDraftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
                 let result =
                     tryFindDraft draftId (otherCmdError source) draftDic
                     |> Result.bind (fun (_, draft) -> match draft.DraftStatus with | Opened _ -> () |> Ok | _ -> ifDebug (sprintf "%A is not Opened" draftId) UNEXPECTED_ERROR |> otherCmdError source)
-                    |> Result.bind (fun _ -> tryFindUserDraft userId draftId (otherCmdError source) userDraftDic userDraftLookupDic)
+                    |> Result.bind (fun _ -> tryFindUserDraft auditUserId draftId (otherCmdError source) userDraftDic userDraftLookupDic)
                     |> Result.bind (fun (_, userDraftId, userDraft) ->
                         if userDraftPick |> userDraft.UserDraftPickDic.ContainsKey then (userDraftId, userDraft) |> Ok
                         else ifDebug (sprintf "%A not drafted" userDraftPick) UNEXPECTED_ERROR |> otherCmdError source)
@@ -853,6 +877,62 @@ type Drafts () =
                     result |> Result.bind (fun (_, _, userDraftPick) -> userDraftPick |> Ok) |> tupleError userDraftPick |> toServerMsg
                 (serverMsg, [ connectionId ]) |> SendMsg |> broadcaster.Broadcast
                 match result with | Ok (userDraftId, userDraft, _) -> userDraftDic |> updateUserDraft userDraftId userDraft | Error _ -> ()
+                return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic
+            | HandleFreePickCmd (_, auditUserId, draftId, currentRvn, draftPick, connectionId) ->
+                let source = "HandleFreePickCmd"
+                sprintf "%s for %A %A (%A %A) when managingDrafts (%i draft/s) (%i user draft/s) (%i squad/s)" source auditUserId draftId currentRvn draftPick draftDic.Count userDraftDic.Count squadDic.Count |> Verbose |> log
+                let result =
+                    tryFindDraft draftId (otherCmdError source) draftDic
+                    |> Result.bind (fun (_, draft) ->
+                        match draft.DraftStatus with
+                        | FreeSelection -> (draftId, draft) |> Ok
+                        | _ -> ifDebug (sprintf "%A is not FreeSelection" draftId) UNEXPECTED_ERROR |> otherCmdError source)
+                    |> Result.bind (fun (draftId, draft) ->
+                        let existingPicks =
+                            draftDic |> List.ofSeq |> List.map (fun (KeyValue (_, draft)) -> draft.DraftPicks) |> List.collect id
+                            |> List.map (fun (draftPick, (userId, _, _)) -> draftPick, userId)
+                        if existingPicks |> List.exists (fun (existingDraftPick, _) -> existingDraftPick = draftPick) |> not then (draftId, draft, existingPicks) |> Ok
+                        else ifDebug (sprintf "%A has already been picked" draftPick) UNEXPECTED_ERROR |> otherCmdError source)
+                    |> Result.bind (fun (draftId, draft, existingPicks) ->
+                        let userPicks = existingPicks |> List.choose (fun (draftPick, userId) -> if userId = auditUserId then draftPick |> Some else None)
+                        let teamCount = userPicks |> List.filter (fun draftPick -> match draftPick with | TeamPicked _-> true | PlayerPicked _ -> false ) |> List.length
+                        let goalkeeperCount =
+                            userPicks
+                            |> List.filter (fun draftPick ->
+                                match draftPick with
+                                | TeamPicked _ -> false
+                                | PlayerPicked (squadId, playerId) -> match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with | Some (Goalkeeper, false) -> true | _ -> false)
+                            |> List.length
+                        let outfieldPlayerCount =
+                            userPicks
+                            |> List.filter (fun draftPick ->
+                                match draftPick with
+                                | TeamPicked _ -> false
+                                | PlayerPicked (squadId, playerId) ->
+                                    match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with | Some (Goalkeeper, _) -> false | Some (_, false) -> true | _ -> false)
+                            |> List.length
+                        let ok = (draftId, draft) |> Ok
+                        match draftPick with
+                        | TeamPicked _ ->
+                            if teamCount < MAX_TEAM_PICKS then ok else ifDebug "Team/coach is not required" UNEXPECTED_ERROR |> otherCmdError source
+                        | PlayerPicked (squadId, playerId) -> 
+                            match (squadId, playerId) |> playerTypeAndWithdrawn squadDic with
+                            | Some (Goalkeeper, _) ->
+                                if goalkeeperCount < MAX_GOALKEEPER_PICKS then ok else ifDebug "Goalkeeper is not required" UNEXPECTED_ERROR |> otherCmdError source
+                            | Some _ -> 
+                                if outfieldPlayerCount < MAX_OUTFIELD_PLAYER_PICKS then ok else ifDebug "Outfield player is not required" UNEXPECTED_ERROR |> otherCmdError source
+                            | None -> UNEXPECTED_ERROR |> otherCmdError source)
+                    |> Result.bind (fun (draftId, draft) ->
+                        (draftId, draftPick, auditUserId, DateTimeOffset.UtcNow) |> FreePick |> tryApplyDraftEvent source draftId (draft |> Some) (incrementRvn currentRvn) draftPick)
+                let! result =
+                    match result with
+                    | Ok (draft, rvn, draftEvent, draftPick) -> tryWriteDraftEventAsync auditUserId rvn draftEvent draft draftPick
+                    | Error error -> error |> Error |> thingAsync
+                result |> logResult source (fun (userDraftId, userDraft, _) -> sprintf "Audit%A %A %A" auditUserId userDraftId userDraft |> Some) // note: log success/failure here (rather than assuming that calling code will do so)
+                let serverMsg =
+                    result |> Result.bind (fun (_, _, draftPick) -> draftPick |> Ok) |> FreePickCmdResult |> ServerSquadsMsg
+                (serverMsg, [ connectionId ]) |> SendMsg |> broadcaster.Broadcast
+                match result with | Ok (draftId, draft, _) -> draftDic |> updateDraft draftId draft | Error _ -> ()
                 return! managingDrafts draftDic userDraftDic userDraftLookupDic squadDic }
         "agent instantiated -> awaitingStart" |> Info |> log
         awaitingStart ())
@@ -886,11 +966,13 @@ type Drafts () =
     member __.HandleCreateDraftCmdAsync (token, auditUserId, draftId, draftOrdinal, draftType) =
         (fun reply -> (token, auditUserId, draftId, draftOrdinal, draftType, reply) |> HandleCreateDraftCmd) |> agent.PostAndAsyncReply
     member __.HandleProcessDraftCmd (token, auditUserId, draftId, currentRvn, connectionId) = (token, auditUserId, draftId, currentRvn, connectionId) |> HandleProcessDraftCmd |> agent.Post
-    member __.HandleChangePriorityCmd (token, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) =
-        (token, auditUserId, userId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) |> HandleChangePriorityCmd |> agent.Post
-    member __.HandleAddToDraftCmd (token, auditUserId, userId, draftId, currentRvn, userDraftPick, connectionId) =
-        (token, auditUserId, userId, draftId, currentRvn, userDraftPick, connectionId) |> HandleAddToDraftCmd |> agent.Post
-    member __.HandleRemoveFromDraftCmd (token, auditUserId, userId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) =
-        (token, auditUserId, userId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> HandleRemoveFromDraftCmd |> agent.Post
+    member __.HandleChangePriorityCmd (token, auditUserId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) =
+        (token, auditUserId, draftId, currentRvn, userDraftPick, priorityChange, connectionId) |> HandleChangePriorityCmd |> agent.Post
+    member __.HandleAddToDraftCmd (token, auditUserId, draftId, currentRvn, userDraftPick, connectionId) =
+        (token, auditUserId, draftId, currentRvn, userDraftPick, connectionId) |> HandleAddToDraftCmd |> agent.Post
+    member __.HandleRemoveFromDraftCmd (token, auditUserId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) =
+        (token, auditUserId, draftId, currentRvn, userDraftPick, toServerMsg, connectionId) |> HandleRemoveFromDraftCmd |> agent.Post
+    member __.HandleFreePickCmd (token, auditUserId, draftId, currentRvn, draftPick, connectionId) =
+        (token, auditUserId, draftId, currentRvn, draftPick, connectionId) |> HandleFreePickCmd |> agent.Post
 
 let drafts = Drafts ()

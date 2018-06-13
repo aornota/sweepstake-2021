@@ -117,6 +117,7 @@ type ServerSquadsMsg =
     | EliminateSquadCmdResult of result : Result<SquadName, AuthCmdError<string>>
     | AddToDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
     | RemoveFromDraftCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>
+    | FreePickCmdResult of result : Result<DraftPick, AuthCmdError<string>>
 
 type ServerFixturesMsg =
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>

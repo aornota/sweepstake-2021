@@ -58,7 +58,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
             { state with CurrentDraftId = draftId |> Some }, Cmd.none, true
         | ChangePriority (draftId, userDraftPick, priorityChange), Ready _ ->
             match authUser, state.RemovalPending, state.ChangePriorityPending with
-            | Some authUser, None, None ->
+            | Some _, None, None ->
                 let isPickedRvn =
                     match currentUserDraftDto with
                     | Some currentUserDraftDto ->
@@ -68,7 +68,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                     | None -> None
                 match isPickedRvn with
                 | Some rvn ->
-                    let cmd = (authUser.UserId, draftId, rvn, userDraftPick, priorityChange) |> UiAuthDraftsMsg.ChangePriorityCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                    let cmd = (draftId, rvn, userDraftPick, priorityChange) |> UiAuthDraftsMsg.ChangePriorityCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
                     let changePriorityPending = (userDraftPick, priorityChange, rvn |> incrementRvn)
                     { state with ChangePriorityPending = changePriorityPending |> Some }, cmd, true
                 | None -> state, UNEXPECTED_ERROR |> errorToastCmd, true
@@ -76,7 +76,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                 state, Cmd.none, false
         | RemoveFromDraft (draftId, userDraftPick), Ready _ ->
             match authUser, state.RemovalPending, state.ChangePriorityPending with
-            | Some authUser, None, None ->
+            | Some _, None, None ->
                 let isPickedRvn =
                     match currentUserDraftDto with
                     | Some currentUserDraftDto ->
@@ -86,7 +86,7 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
                     | None -> None
                 match isPickedRvn with
                 | Some rvn ->
-                    let cmd = (authUser.UserId, draftId, rvn, userDraftPick) |> UiAuthDraftsMsg.RemoveFromDraftCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
+                    let cmd = (draftId, rvn, userDraftPick) |> UiAuthDraftsMsg.RemoveFromDraftCmd |> UiAuthDraftsMsg |> SendUiAuthMsg |> Cmd.ofMsg
                     let removalPending = (userDraftPick, rvn |> incrementRvn)
                     { state with RemovalPending = removalPending |> Some }, cmd, true
                 | _ -> state, UNEXPECTED_ERROR |> errorToastCmd, true
