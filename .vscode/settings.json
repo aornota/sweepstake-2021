@@ -15,6 +15,7 @@
 		"src/ui/public/" : true,
 		".gitignore" : true,
 		"build.cmd" : true,
+		"dotnet-install.ps1" : true,
 		"global.json" : true,
 		"LICENSE.txt" : true,
 		"paket.lock" : true,
