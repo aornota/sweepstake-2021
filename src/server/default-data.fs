@@ -797,26 +797,34 @@ let private createInitialFixturesEventsIfNecessary = async {
         let brazilVsSwitzerlandKO = (2018, 06, 17, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Group GroupE, Confirmed brazilId, Confirmed switzerlandId, brazilVsSwitzerlandKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 9u)
-        (* TEMP-NMB... *)
-        //let xId = Guid "" |> PlayerId
-        let alissonId = Guid "6550e6f4-95cd-4259-87a6-b1352bd91b3e" |> PlayerId
         let casemiroId = Guid "68fa98df-0070-489b-ab31-3d85564ebd52" |> PlayerId
         let coutinhoId = Guid "df1c6d7b-e4ea-40f7-bc8f-69f5eb67be94" |> PlayerId
+        let behramiId = Guid "be4b38c5-234c-47de-b150-546b1e691ce3" |> PlayerId
         let lichtsteinerId = Guid "bcc5aecd-8a03-43c1-b5a4-11740c982480" |> PlayerId
+        let schärId = Guid "368aeb8e-c72b-4a62-874b-5798794a881e" |> PlayerId
+        let shaqiriId = Guid "60fd83dd-3ec0-4fd8-be5a-43559ccf6c0f" |> PlayerId
+        let zuberId = Guid "5e267e1a-1dc3-4f02-89b6-fa41c6eb0100" |> PlayerId
         let matchEvent = (brazilId, coutinhoId, None) |> Goal
         let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
-        let matchEvent = (switzerlandId, lichtsteinerId) |> YellowCard
+        let matchEvent = (switzerlandId, zuberId, shaqiriId |> Some) |> Goal
         let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
         let matchEvent = (brazilId, casemiroId) |> YellowCard
         let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
-        let matchEvent = (brazilId, alissonId) |> CleanSheet
+        let matchEvent = (switzerlandId, lichtsteinerId) |> YellowCard
         let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
-        //let matchEvent = (serbiaId, kolarovId) |> ManOfTheMatch
-        // TEMP-NMB: Above is TBC...
+        let matchEvent = (switzerlandId, schärId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (switzerlandId, behramiId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (brazilId, coutinhoId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 9u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
 
         let brazilVsCostaRicaKO = (2018, 06, 22, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 25u, Group GroupE, Confirmed brazilId, Confirmed costaRicaId, brazilVsCostaRicaKO) |> fixtures.HandleCreateFixtureCmdAsync)
