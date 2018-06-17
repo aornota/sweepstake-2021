@@ -90,7 +90,7 @@ readPersistedEvents ()
 serverStarted |> connections.Start
 
 (* TEMP-NMB: Finesse logging for development/debugging purposes... *)
-("development/debugging", function | Entity Entity.Drafts | Projection Projection.Drafts -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
+("development/debugging", function | Entity Entity.Fixtures | Projection Projection.Fixtures -> allCategories | Persistence -> allExceptVerbose | _ -> onlyWarningsAndWorse) |> consoleLogger.ChangeLogFilter
 
 "ready" |> Info |> log
 

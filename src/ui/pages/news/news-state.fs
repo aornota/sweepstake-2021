@@ -308,7 +308,10 @@ let transition input state =
             let post = if postId |> postDic.ContainsKey then postDic.[postId] |> Some else None
             let messageText =
                 match post with
-                | Some post -> match post.PostTypeDto with | StandardDto (Markdown messageText) -> messageText
+                | Some post ->
+                    match post.PostTypeDto with
+                    | StandardDto (Markdown messageText) -> messageText
+                    | MatchResultDto (Markdown messageText, _) -> messageText
                 | None -> String.Empty // note: should never happen
             let editPostState = { PostId = postId ; MessageText = messageText ; MessageErrorText = None ; EditPostStatus = None }
             let readyState = { readyState with EditPostState = editPostState |> Some }

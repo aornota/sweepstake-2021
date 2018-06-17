@@ -87,7 +87,10 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
     let post = if postId |> postDic.ContainsKey then postDic.[postId] |> Some else None
     let messageText =
         match post with
-        | Some post -> match post.PostTypeDto with | StandardDto messageText -> messageText
+        | Some post ->
+            match post.PostTypeDto with
+            | StandardDto messageText -> messageText
+            | MatchResultDto (messageText, _) -> messageText
         | None -> Markdown String.Empty
     let confirmInteraction, onDismiss =
         let confirm = (fun _ -> ConfirmRemovePost |> dispatch)
@@ -139,7 +142,12 @@ let private renderPost theme authUser userDic dispatch (postId, post) =
 #endif
             [ str timestampText ] |> para theme paraDefaultSmallest
         let (UserName userName) = post.UserId |> userName userDic
-        let messageText = if post.Removed then Markdown REMOVED_MARKDOWN else match post.PostTypeDto with | StandardDto messageText -> messageText
+        let messageText =
+            if post.Removed then Markdown REMOVED_MARKDOWN
+            else
+                match post.PostTypeDto with
+                | StandardDto messageText -> messageText
+                | MatchResultDto (messageText, _) -> messageText
         yield level true [
             levelLeft [ levelItem [ [ bold userName ; str " posted" ] |> para theme paraDefaultSmallest ] ]
             levelRight [ levelItem [ rightItem ] ] ]

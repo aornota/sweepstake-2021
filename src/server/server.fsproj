@@ -16,9 +16,9 @@
     <Compile Include="../common/delta.fs" />
     <Compile Include="../common/domain/core.fs" />
     <Compile Include="../common/domain/user.fs" />
-    <Compile Include="../common/domain/news.fs" />
     <Compile Include="../common/domain/squad.fs" />
     <Compile Include="../common/domain/fixture.fs" />
+    <Compile Include="../common/domain/news.fs" />
     <Compile Include="../common/domain/draft.fs" />
     <Compile Include="../common/domain/chat.fs" />
     <Compile Include="../common/ws-api/ui-msg.fs" />

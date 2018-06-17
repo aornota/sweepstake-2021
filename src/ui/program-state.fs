@@ -541,7 +541,8 @@ let private applyPlayersDelta currentRvn deltaRvn (delta:Delta<PlayerId, PlayerD
 
 // #region Fixture/s
 let private fixture (fixtureDto:FixtureDto) =
-    { Rvn = fixtureDto.Rvn ; Stage = fixtureDto.Stage ; HomeParticipant = fixtureDto.HomeParticipant ; AwayParticipant = fixtureDto.AwayParticipant ; KickOff = fixtureDto.KickOff }
+    { Rvn = fixtureDto.Rvn ; Stage = fixtureDto.Stage ; HomeParticipant = fixtureDto.HomeParticipant ; AwayParticipant = fixtureDto.AwayParticipant ; KickOff = fixtureDto.KickOff
+      MatchResult = fixtureDto.MatchResult }
 
 let private fixtureDic (fixtureDtos:FixtureDto list) =
     let fixtureDic = FixtureDic ()

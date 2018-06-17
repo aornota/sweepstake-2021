@@ -3,6 +3,7 @@ module Aornota.Sweepstake2018.Common.Domain.News
 open Aornota.Common.Markdown
 open Aornota.Common.Revision
 
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.User
 
 open System
@@ -12,11 +13,11 @@ type PostId = | PostId of guid : Guid with
 
 type PostType =
     | Standard
-    // TODO-SOON... | MatchResult of matchResultId : MatchResultId
+    | MatchResult of fixtureId : FixtureId
 
 type PostTypeDto =
     | StandardDto of messageText : Markdown
-    // TODO-SOON... | MatchResultDto of messageText : Markdown * matchResult : TBC
+    | MatchResultDto of messageText : Markdown * fixtureId : FixtureId
 
 type PostDto = { PostId : PostId ; Rvn : Rvn ; UserId : UserId ; PostTypeDto : PostTypeDto ; Timestamp : DateTimeOffset }
 

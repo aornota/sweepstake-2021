@@ -155,7 +155,10 @@ type News () =
                 |> List.filter (fun newsRead -> newsRead.Removed |> not)
                 |> List.sortBy (fun newsRead -> newsRead.Timestamp)
                 |> List.iteri (fun i newsRead ->
-                    let postTypeDto = match newsRead.PostType with | Standard -> newsRead.MessageText |> StandardDto
+                    let postTypeDto =
+                        match newsRead.PostType with
+                        | Standard -> newsRead.MessageText |> StandardDto
+                        | MatchResult fixtureId -> (newsRead.MessageText, fixtureId) |> MatchResultDto
                     let post = { Ordinal = i ; Rvn = newsRead.Rvn ; UserId = newsRead.UserId ; PostTypeDto = postTypeDto ; Timestamp = newsRead.Timestamp }
                     (newsRead.PostId, post) |> postDic.Add)
                 let projecteeDic = ProjecteeDic ()
@@ -180,7 +183,10 @@ type News () =
                         let nextOrdinal =
                             if postDic.Count = 0 then 1
                             else (postDic |> List.ofSeq |> List.map (fun (KeyValue (_, post)) -> post.Ordinal) |> List.max) + 1
-                        let postTypeDto = match postType with | Standard -> messageText |> StandardDto
+                        let postTypeDto =
+                            match postType with
+                            | Standard -> messageText |> StandardDto
+                            | MatchResult fixtureId -> (messageText, fixtureId) |> MatchResultDto
                         let post = { Ordinal = nextOrdinal ; Rvn = rvn ; UserId = userId ; PostTypeDto = postTypeDto ; Timestamp = timestamp }
                         (postId, post) |> postDic.Add
                         (postDic, state) |> PostChange |> updateState source projecteeDic
@@ -192,7 +198,10 @@ type News () =
                 let state =
                     if postId |> postDic.ContainsKey then // note: silently ignore unknown postId (should never happen)
                         let post = postDic.[postId]
-                        let postTypeDto = match post.PostTypeDto with | StandardDto _ -> messageText |> StandardDto
+                        let postTypeDto =
+                            match post.PostTypeDto with
+                            | StandardDto _ -> messageText |> StandardDto
+                            | MatchResultDto (_, fixtureId) -> (messageText, fixtureId) |> MatchResultDto
                         postDic.[postId] <- { post with Rvn = rvn ; PostTypeDto = postTypeDto }
                         (postDic, state) |> PostChange |> updateState source projecteeDic
                     else state

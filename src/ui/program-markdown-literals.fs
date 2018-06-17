@@ -28,8 +28,7 @@ The remaining teams are: Denmark; Iceland; Costa Rica; Sweden; Tunisia; Egypt; S
 **All players** will score (or lose) points for:
 + being named **man-of-the-match**: _**15**_
 + _**scoring**_ a **goal** or a **penalty**: _**12**_
-+ _**assisting**_ a **goal**: _**3**_ (note that a goal cannot be assisted by the same player who scored the goal - unless they win a free kick and then score directly from it)
-+ _**winning**_ a **penalty**: _**3**_ (note that a penalty can be won by the same player who took the penalty)
++ _**assisting**_ a **goal**: _**3**_ (note that a goal cannot be assisted by the same player who scored the goal)
 + _**missing**_ a **penalty**: _**-6**_
 + _**scoring**_ an **own goal**: _**-6**_
 + receiving a **yellow card**: _**-2**_

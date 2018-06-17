@@ -58,6 +58,8 @@ type UiAuthSquadsMsg =
 
 type UiAuthFixturesMsg =
     | ConfirmParticipantCmd of fixtureId : FixtureId * currentRvn : Rvn * role : Role * squadId : SquadId
+    | AddMatchEventCmd of fixtureId : FixtureId * currentRvn : Rvn * matchEvent : MatchEvent
+    | RemoveMatchEventCmd of fixtureId : FixtureId * currentRvn : Rvn * matchEventId : MatchEventId
 
 type UiAuthDraftsMsg =
     | ChangePriorityCmd of draftId : DraftId * currentRvn : Rvn * userDraftPick : UserDraftPick * priorityChange : PriorityChange

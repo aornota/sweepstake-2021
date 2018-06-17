@@ -121,6 +121,8 @@ type ServerSquadsMsg =
 
 type ServerFixturesMsg =
     | ConfirmParticipantCmdResult of result : Result<unit, AuthCmdError<string>>
+    | AddMatchEventCmdResult of result : Result<unit, AuthCmdError<string>>
+    | RemoveMatchEventCmdResult of result : Result<unit, AuthCmdError<string>>
 
 type ServerDraftsMsg =
     | ChangePriorityCmdResult of result : Result<UserDraftPick, UserDraftPick * AuthCmdError<string>>

@@ -22,6 +22,12 @@ let private handleServerFixturesMsg serverFixturesMsg state : State * Cmd<Input>
     | ConfirmParticipantCmdResult _result ->
         // TODO-SOON-ISH: Or just hack data?...
         state, Cmd.none
+    | AddMatchEventCmdResult _result ->
+        // TODO-NEXT...
+        state, Cmd.none
+    | RemoveMatchEventCmdResult _result ->
+        // TODO-NEXT...
+        state, Cmd.none
 
 let transition input (fixturesProjection:Projection<_ * FixtureDic>) state =
     let state, cmd, isUserNonApiActivity =

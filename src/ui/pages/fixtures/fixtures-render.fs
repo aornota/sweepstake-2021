@@ -55,7 +55,7 @@ let private startsIn (_timestamp:DateTime) : Fable.Import.React.ReactElement opt
 #endif
 // #endregion
 
-let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:FixtureDic, squadDic:SquadDic, authUser) dispatch = // TODO-SOON?: Enable ShowConfirmParticipantModal link in release builds...
+let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:FixtureDic, squadDic:SquadDic, authUser, _:int<tick>) dispatch = // TODO-SOON?: Enable ShowConfirmParticipantModal link in release builds...
     let theme = getTheme useDefaultTheme
     let matchesFilter fixture =
         match currentFixtureFilter with
@@ -89,7 +89,7 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             | ThirdPlacePlayOff -> "Third/fourth place play-off" |> Some
             | Final -> "Final" |> Some
         match stageText with | Some stageText -> [ str stageText ] |> para theme paraDefaultSmallest |> Some | None -> None
-    let participantText participant =
+    let details fixture =
         let unconfirmedText unconfirmed =
             match unconfirmed with
             | Winner (Group group) -> sprintf "%s winner" (group |> groupText)
@@ -99,27 +99,78 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
             | Winner (ThirdPlacePlayOff) | Winner (Final) -> SHOULD_NEVER_HAPPEN
             | RunnerUp group -> sprintf "%s runner-up" (group |> groupText)
             | Loser semiFinalOrdinal -> sprintf "Semi-final %i loser" semiFinalOrdinal
-        match participant with
-        | Confirmed squadId ->
-            let (SquadName squadName) = squadId |> squadName squadDic
-            squadName
-        | Unconfirmed unconfirmed -> unconfirmed |> unconfirmedText
-    let extra (local:DateTime) =
-        let extra, imminent = if local < DateTime.Now then italic "Result pending" |> Some, true else local |> startsIn
+        match fixture.HomeParticipant, fixture.AwayParticipant, fixture.MatchResult with
+        | Confirmed homeSquadId, Confirmed awaySquadId, Some matchResult ->
+            let matchOutcome = matchResult.MatchOutcome
+            let winnerSquadId, penaltyShootout =
+                match matchOutcome.PenaltyShootoutOutcome with
+                | Some penaltyShootoutOutcome ->
+                    if penaltyShootoutOutcome.HomeScore > penaltyShootoutOutcome.AwayScore then
+                        let (SquadName squadName) = homeSquadId |> squadName squadDic
+                        let penaltyShootoutText = sprintf "%s win %i - %i on penalities" squadName penaltyShootoutOutcome.HomeScore penaltyShootoutOutcome.AwayScore
+                        homeSquadId |> Some, [ str penaltyShootoutText ] |> para theme paraDefaultSmallest |> Some
+                    else if penaltyShootoutOutcome.AwayScore > penaltyShootoutOutcome.HomeScore then
+                        let (SquadName squadName) = awaySquadId |> squadName squadDic
+                        let penaltyShootoutText = sprintf "%s win %i - %i on penalities" squadName penaltyShootoutOutcome.AwayScore penaltyShootoutOutcome.HomeScore                       
+                        awaySquadId |> Some, [ str penaltyShootoutText ] |> para theme paraDefaultSmallest |> Some
+                    else None, None // note: should never happen
+                | None ->
+                    if matchOutcome.HomeGoals > matchOutcome.AwayGoals then homeSquadId |> Some, None
+                    else if matchOutcome.AwayGoals > matchOutcome.HomeGoals then awaySquadId |> Some, None
+                    else None, None
+            let home, homeGoals =
+                let (SquadName squadName) = homeSquadId |> squadName squadDic
+                if homeSquadId |> Some = winnerSquadId then bold squadName, [ bold (sprintf "%i" matchOutcome.HomeGoals) ] |> para theme paraDefaultSmallest |> Some
+                else str squadName, [ str (sprintf "%i" matchOutcome.HomeGoals) ] |> para theme paraDefaultSmallest |> Some
+            let away, awayGoals =
+                let paraAway = { paraDefaultSmallest with ParaAlignment = RightAligned }
+                let (SquadName squadName) = awaySquadId |> squadName squadDic
+                if awaySquadId |> Some = winnerSquadId then bold squadName, [ bold (sprintf "%i" matchOutcome.AwayGoals) ] |> para theme paraAway |> Some
+                else str squadName, [ str (sprintf "%i" matchOutcome.AwayGoals) ] |> para theme paraAway |> Some
+            home, homeGoals, str "-", away, awayGoals, penaltyShootout
+        | homeParticipant, awayParticipant, _ ->
+            let home = 
+                match homeParticipant with
+                | Confirmed squadId ->
+                    let (SquadName squadName) = squadId |> squadName squadDic
+                    squadName
+                | Unconfirmed unconfirmed -> unconfirmed |> unconfirmedText
+            let away = 
+                match awayParticipant with
+                | Confirmed squadId ->
+                    let (SquadName squadName) = squadId |> squadName squadDic
+                    squadName
+                | Unconfirmed unconfirmed -> unconfirmed |> unconfirmedText
+            str home, None, str "vs.", str away, None, None
+    let extra fixture =
+        let local = fixture.KickOff.LocalDateTime
+        let hasResult = match fixture.HomeParticipant, fixture.AwayParticipant, fixture.MatchResult with | Confirmed _ , Confirmed _, Some _ -> true | _ -> false
+        let extra, imminent =
+            if hasResult then
+            
+                // TODO-SOON...
+            
+                None, false
+            else if local < DateTime.Now then italic "Result pending" |> Some, true
+            else local |> startsIn
         let paraExtra = { paraDefaultSmallest with ParaAlignment = RightAligned ; ParaColour = GreyscalePara Grey }
         let paraExtra = if imminent then { paraExtra with ParaColour = GreyscalePara GreyDarker } else paraExtra
         match extra with | Some extra -> [ extra ] |> para theme paraExtra |> Some | None -> None
     let fixtureRow (fixtureId, fixture) =
+        let home, homeGoals, vs, away, awayGoals, penaltyShootout = fixture |> details
         tr false [
             td [ [ str (fixture.KickOff.LocalDateTime |> dateText) ] |> para theme paraDefaultSmallest ]
             td [ [ str (fixture.KickOff.LocalDateTime.ToString ("HH:mm")) ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (stageText fixture.Stage) ]
             td [ Rct.ofOption (confirmParticipant Home fixture.HomeParticipant fixtureId) ]
-            td [ [ str (fixture.HomeParticipant |> participantText) ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
-            td [ [ str "vs." ] |> para theme paraDefaultSmallest ]
-            td [ [ str (fixture.AwayParticipant |> participantText) ] |> para theme paraDefaultSmallest ]
+            td [ [ home ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+            td [ Rct.ofOption homeGoals ]
+            td [ [ vs ] |> para theme paraCentredSmallest ]
+            td [ Rct.ofOption awayGoals ]
+            td [ [ away ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (confirmParticipant Away fixture.AwayParticipant fixtureId) ]
-            td [ Rct.ofOption (fixture.KickOff.LocalDateTime |> extra) ] ]   
+            td [ Rct.ofOption penaltyShootout ]
+            td [ Rct.ofOption (fixture |> extra) ] ]   
     let fixtures =
         fixtureDic
         |> List.ofSeq
@@ -139,13 +190,16 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
                     th []
                     th []
                     th []
+                    th []
+                    th []
+                    th []
                     th [] ] ]
             tbody [ yield! fixtureRows ] ] ]    
 
-let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection:Projection<_ * FixtureDic>, squadsProjection:Projection<_ * SquadDic>, _hasModal, _:int<tick>) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection:Projection<_ * FixtureDic>, squadsProjection:Projection<_ * SquadDic>, _hasModal, ticks:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "Fixtures" ] |> para theme paraCentredSmall
+        yield [ bold "Fixtures / Results" ] |> para theme paraCentredSmall
         yield hr theme false
         match squadsProjection, fixturesProjection with
         | Pending, _ | _, Pending ->
@@ -162,4 +216,4 @@ let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection
                 yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             | [] -> ()
             yield br
-            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic, squadDic, authUser) dispatch ]
+            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic, squadDic, authUser, ticks) dispatch ]

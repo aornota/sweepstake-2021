@@ -28,7 +28,9 @@ type NewsRead = { PostId : PostId ; Rvn : Rvn ; UserId : UserId ; PostType : Pos
 type PlayerRead = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
 type SquadRead = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayersRead : PlayerRead list }
 
-type FixtureRead = { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset }
+type MatchEventRead = { MatchEventId : MatchEventId ; MatchEvent : MatchEvent }
+type FixtureRead =
+    { FixtureId : FixtureId ; Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset ; MatchEventsRead : MatchEventRead list }
 
 type DraftRead =
     { DraftId : DraftId ; Rvn : Rvn ; DraftOrdinal : DraftOrdinal ; DraftStatus : DraftStatus ; DraftPicks : (DraftPick * PickedBy) list ; ProcessingEvents : ProcessingEvent list }

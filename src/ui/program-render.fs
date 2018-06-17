@@ -51,7 +51,7 @@ let private headerPages (appState:AppState) =
             unseenNewsCount |> newsText, unauthState.CurrentUnauthPage = NewsPage, UnauthPage NewsPage, NewsPage |> ShowUnauthPage |> UnauthInput
             "Scores", unauthState.CurrentUnauthPage = ScoresPage, UnauthPage ScoresPage, ScoresPage |> ShowUnauthPage |> UnauthInput
             "Squads", unauthState.CurrentUnauthPage = SquadsPage, UnauthPage SquadsPage, SquadsPage |> ShowUnauthPage |> UnauthInput
-            "Fixtures", unauthState.CurrentUnauthPage = FixturesPage, UnauthPage FixturesPage, FixturesPage |> ShowUnauthPage |> UnauthInput
+            "Fixtures / Results", unauthState.CurrentUnauthPage = FixturesPage, UnauthPage FixturesPage, FixturesPage |> ShowUnauthPage |> UnauthInput
         ]
     | Auth authState ->
         let unseenNewsCount = authState.UnauthPageStates.NewsState.UnseenCount
@@ -61,7 +61,7 @@ let private headerPages (appState:AppState) =
             unseenNewsCount |> newsText, authState.CurrentPage = UnauthPage NewsPage, UnauthPage NewsPage, NewsPage |> UnauthPage |> ShowPage |> AuthInput
             "Scores", authState.CurrentPage = UnauthPage ScoresPage, UnauthPage ScoresPage, ScoresPage |> UnauthPage |> ShowPage |> AuthInput
             "Squads", authState.CurrentPage = UnauthPage SquadsPage, UnauthPage SquadsPage, SquadsPage |> UnauthPage |> ShowPage |> AuthInput
-            "Fixtures", authState.CurrentPage = UnauthPage FixturesPage, UnauthPage FixturesPage, FixturesPage |> UnauthPage |> ShowPage |> AuthInput
+            "Fixtures / Results", authState.CurrentPage = UnauthPage FixturesPage, UnauthPage FixturesPage, FixturesPage |> UnauthPage |> ShowPage |> AuthInput
             "User administration", authState.CurrentPage = AuthPage UserAdminPage, AuthPage UserAdminPage, UserAdminPage |> AuthPage |> ShowPage |> AuthInput
             "Draft administration", authState.CurrentPage = AuthPage DraftAdminPage, AuthPage DraftAdminPage, DraftAdminPage |> AuthPage |> ShowPage |> AuthInput
             "Drafts", authState.CurrentPage = AuthPage DraftsPage, AuthPage DraftsPage, DraftsPage |> AuthPage |> ShowPage |> AuthInput
@@ -241,10 +241,11 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, usersProjection, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
         | ScoresPage ->
             let scoresState = unauthState.UnauthPageStates.ScoresState
-            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection, fixturesProjection) (ScoresInput >> UnauthPageInput >> dispatch)
         | SquadsPage ->
             let squadsState = unauthState.UnauthPageStates.SquadsState
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, usersProjection, None, hasModal) (SquadsInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, usersProjection, fixturesProjection, None, hasModal)
+                (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
             let fixturesState = unauthState.UnauthPageStates.FixturesState
             yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch) ]
@@ -460,10 +461,11 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, usersProjection, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage ScoresPage ->
             let scoresState = authState.UnauthPageStates.ScoresState
-            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection) (ScoresInput >> UPageInput >> PageInput >> dispatch)
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection, fixturesProjection)
+                (ScoresInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState
-            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser |> Some, squadsProjection, usersProjection, draftsProjection |> Some, hasModal)
+            yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, authUser |> Some, squadsProjection, usersProjection, fixturesProjection, draftsProjection |> Some, hasModal)
                 (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
             let fixturesState = authState.UnauthPageStates.FixturesState

@@ -1,6 +1,7 @@
 module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 
 open Aornota.Common.IfDebug
+open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LazyViewOrHMR
 open Aornota.UI.Common.TimestampHelper
@@ -272,10 +273,6 @@ let private squadTabs currentSquadId dispatch (squadDic:SquadDic) =
         groupSquads |> List.map squadTab
     | None -> []
 
-let private scoreText score =
-    let scoreText = sprintf "%i" score
-    if score > 0 then bold scoreText else str scoreText
-
 let private activeDraftIdAndOrdinalAndIsOpen authUser currentDraft =
     let canDraft =
         match authUser with
@@ -375,7 +372,22 @@ let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pick
         pickedBy |> tag theme { tagData with IsRounded = false } |> Some
     | None -> None
 
-let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
+let private score (points:int<point>) (pickedByPoints:int<point> option) pickedByUserId (userDic:UserDic) =
+    let pointsOnly =
+        let pointsText = sprintf "%i" (int points)
+        if points > 0<point> then bold pointsText else if points < 0<point> then italic pointsText else str pointsText
+    match pickedByPoints, pickedByUserId with
+    | Some pickedByPoints, Some pickedByUserId ->
+        if points = pickedByPoints then pointsOnly
+        else
+            let (UserName userName) = pickedByUserId |> userName userDic
+            let pickedByPointsText = sprintf "%i" (int pickedByPoints)
+            let pickedByPoints = if pickedByPoints > 0<point> then bold pickedByPointsText else if pickedByPoints < 0<point> then italic pickedByPointsText else str pickedByPointsText
+            let pickedByUser = str (sprintf " for %s)" userName)
+            div divDefault [ pointsOnly ; str " (" ; pickedByPoints ; pickedByUser ]
+    | _ -> pointsOnly
+
+let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, fixtureDic:FixtureDic, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
     let theme = getTheme useDefaultTheme
     let pickedTeamCount, _, _ = pickedCounts
     let needsTeam = pickedTeamCount < MAX_TEAM_PICKS
@@ -404,15 +416,17 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
             let draftPick = squadId |> TeamPicked
             freePick theme draftId needsTeam draftPick dispatch, None
         | _ -> None, None
-    let pickedBy = squad.PickedBy |> pickedByTag theme userDic authUser
-    let score = 0 // TEMP-NMB...
+    let pickedByTag = squad.PickedBy |> pickedByTag theme userDic authUser
+    let pickedByUserId, pickedDate = match squad.PickedBy with | Some (userId, _, date) -> userId |> Some, date |> Some | None -> None, None
+    let points, pickedByPoints = teamPoints fixtureDic squadId pickedDate
+    let score = score points pickedByPoints pickedByUserId userDic
     div divCentred [
         table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
             thead [ 
                 tr false [
                     th [ [ bold "Team"] |> para theme paraDefaultSmallest ]
                     th []
-                    th [ [ bold "Seeding" ] |> para theme paraDefaultSmallest ]
+                    th [ [ bold "Seeding" ] |> para theme paraCentredSmallest ]
                     th [ [ bold "Coach" ] |> para theme paraDefaultSmallest ]
                     th []
                     th []
@@ -423,15 +437,15 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
                 tr false [
                     td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                     td [ Rct.ofOption eliminated ]
-                    td [ [ str (sprintf "%i" seeding) ] |> para theme paraDefaultSmallest ]
+                    td [ [ str (sprintf "%i" seeding) ] |> para theme paraCentredSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
                     td [ Rct.ofOption draftLeft ]
                     td [ Rct.ofOption draftRight ]
-                    td [ Rct.ofOption pickedBy ]
-                    td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                    td [ Rct.ofOption pickedByTag ]
+                    td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     td [ Rct.ofOption eliminate ] ] ] ] ]
 
-let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, authUser) dispatch =
+let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, fixtureDic:FixtureDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
     let _, pickedGoalkeeperCount, pickedOutfieldPlayerCount = pickedCounts
     let needsGoalkeeper = pickedGoalkeeperCount < MAX_GOALKEEPER_PICKS
@@ -485,7 +499,9 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
         let (PlayerName playerName), playerTypeText = player.PlayerName, player.PlayerType |> playerTypeText
         let draftLeft, draftRight = draftLeftAndRight playerId player
         let pickedBy = player.PickedBy |> pickedByTag theme userDic authUser
-        let score = 0 // TEMP-NMB...
+        let pickedByUserId, pickedDate = match player.PickedBy with | Some (userId, _, date) -> userId |> Some, date |> Some | None -> None, None
+        let points, pickedByPoints = playerPoints fixtureDic (squadId, playerId) pickedDate
+        let score = score points pickedByPoints pickedByUserId userDic
         tr false [
             td [ [ str playerName ] |> para theme paraDefaultSmallest ]
             td [ Rct.ofOption (editName playerId) ]
@@ -495,7 +511,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             td [ Rct.ofOption draftLeft ]
             td [ Rct.ofOption draftRight ]
             td [ Rct.ofOption pickedBy ]
-            td [ [ scoreText score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+            td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
             td [ Rct.ofOption (withdraw playerId player) ] ]
     let players = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
         player.PlayerType |> playerTypeSortOrder, player.PlayerName)
@@ -534,17 +550,17 @@ let private addPlayers theme squadId squad authUser dispatch =
         | None -> None
     | _, _ -> None
 
-let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, usersProjection:Projection<_ * UserDic>, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option> option, hasModal) dispatch =
+let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, usersProjection:Projection<_ * UserDic>, fixturesProjection:Projection<_ * FixtureDic>, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option> option, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
         yield [ bold "Squads" ] |> para theme paraCentredSmall
         yield hr theme false
-        match squadsProjection, usersProjection with
-        | Pending, _ | _, Pending ->
+        match squadsProjection, usersProjection, fixturesProjection with
+        | Pending, _, _ | _, Pending, _ | _, _, Pending ->
             yield div divCentred [ icon iconSpinnerPulseLarge ]
-        | Failed, _ | _, Failed -> // note: should never happen
+        | Failed, _, _ | _, Failed, _ | _, _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
-        | Ready (_, squadDic), Ready (_, userDic) ->
+        | Ready (_, squadDic), Ready (_, userDic), Ready (_, fixtureDic) ->
             let currentDraft, userDraftPickDic =
                 match draftsProjection with
                 | Some draftsProjection ->
@@ -596,8 +612,8 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
                 let squad = squadDic.[currentSquadId]
                 let pendingPicks = state.PendingPicksState.PendingPicks
                 yield br
-                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, authUser) dispatch
+                yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, fixtureDic, authUser) dispatch
                 yield br
-                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, authUser) dispatch
+                yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, fixtureDic, authUser) dispatch
                 yield Rct.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
             | Some _ | None -> () ] // note: should never happen
