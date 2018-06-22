@@ -20,10 +20,10 @@ open System
 
 open Elmish
 
-let initialize currentSquadId : State * Cmd<Input> =
+let initialize () : State * Cmd<Input> =
     let pendingPicksState = { PendingPicks = [] ; PendingRvn = None }
-    { CurrentSquadId = currentSquadId ; PendingPicksState = pendingPicksState ; AddPlayersState = None ; ChangePlayerNameState = None ; ChangePlayerTypeState = None
-      WithdrawPlayerState = None ; EliminateSquadState = None ; FreePickState = None }, Cmd.none
+    { CurrentGroup = None ; CurrentSquadId = None ; LastSquads = LastSquads () ; PendingPicksState = pendingPicksState ; AddPlayersState = None ; ChangePlayerNameState = None
+      ChangePlayerTypeState = None ; WithdrawPlayerState = None ; EliminateSquadState = None ; FreePickState = None }, Cmd.none
 
 let private squadRvn (squadDic:SquadDic) squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId].Rvn |> Some else None
 
@@ -319,6 +319,17 @@ let private handleFreePickInput freePickInput (draftDic:DraftDic) state : State 
     | _, None ->
         state, shouldNeverHappenCmd (sprintf "Unexpected FreePickInput when FreePickState is None -> %A" freePickInput), false
 
+let private updateLast (squadDic:SquadDic) state =
+    match state.CurrentSquadId with
+    | Some squadId ->
+        if squadId |> squadDic.ContainsKey then
+            let squad = squadDic.[squadId]
+            let group = squad.Group
+            let lastSquads = state.LastSquads
+            if group |> lastSquads.ContainsKey then lastSquads.[group] <- squadId else (group, squadId) |> lastSquads.Add
+        else () // note: should never happen
+    | None -> ()
+
 let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ * SquadDic>) (draftDic:DraftDic option) (currentUserDraftDto:CurrentUserDraftDto option) state =
     let draftDic = match draftDic with | Some draftDic -> draftDic | None -> DraftDic ()
     let state, cmd, isUserNonApiActivity =
@@ -331,8 +342,21 @@ let transition input (authUser:AuthUser option) (squadsProjection:Projection<_ *
             let state, cmd = state |> handleServerSquadsMsg serverSquadsMsg squadDic
             state, cmd, false
         | ShowGroup group, Ready (_, squadDic) ->
-            { state with CurrentSquadId = group |> defaultSquadId squadDic }, Cmd.none, true
-        | ShowSquad squadId, Ready _ -> // note: no need to check for unknown squadId (should never happen)
+            state |> updateLast squadDic
+            let squad =
+                match state.CurrentSquadId with
+                | Some currentSquadId -> if currentSquadId |> squadDic.ContainsKey then squadDic.[currentSquadId] |> Some else None
+                | None -> None
+            let state =
+                match squad with
+                | Some squad when squad.Group = group -> state
+                | _ ->
+                    let lastSquads = state.LastSquads
+                    let currentGroup, currentSquadId = if group |> lastSquads.ContainsKey then None, lastSquads.[group] |> Some else group |> Some, None
+                    { state with CurrentGroup = currentGroup ; CurrentSquadId = currentSquadId }
+            state, Cmd.none, true
+        | ShowSquad squadId, Ready (_, squadDic) -> // note: no need to check for unknown squadId (should never happen)
+            state |> updateLast squadDic
             { state with CurrentSquadId = squadId |> Some }, Cmd.none, true
         | AddToDraft (draftId, userDraftPick), Ready _ ->
             match authUser with

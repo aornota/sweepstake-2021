@@ -241,7 +241,7 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, None, usersProjection, hasModal, ticks) (NewsInput >> UnauthPageInput >> dispatch)
         | ScoresPage ->
             let scoresState = unauthState.UnauthPageStates.ScoresState
-            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection, fixturesProjection) (ScoresInput >> UnauthPageInput >> dispatch)
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, None, usersProjection, squadsProjection, fixturesProjection) (ScoresInput >> UnauthPageInput >> dispatch)
         | SquadsPage ->
             let squadsState = unauthState.UnauthPageStates.SquadsState
             yield lazyViewOrHMR2 Squads.Render.render (useDefaultTheme, squadsState, None, squadsProjection, usersProjection, fixturesProjection, None, hasModal)
@@ -461,7 +461,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
             yield lazyViewOrHMR2 News.Render.render (useDefaultTheme, newsState, authState.AuthUser |> Some, usersProjection, hasModal, ticks) (NewsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage ScoresPage ->
             let scoresState = authState.UnauthPageStates.ScoresState
-            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, usersProjection, squadsProjection, fixturesProjection)
+            yield lazyViewOrHMR2 Scores.Render.render (useDefaultTheme, scoresState, authUser |> Some, usersProjection, squadsProjection, fixturesProjection)
                 (ScoresInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage SquadsPage ->
             let squadsState = authState.UnauthPageStates.SquadsState

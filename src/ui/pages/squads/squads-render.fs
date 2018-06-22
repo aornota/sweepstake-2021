@@ -256,7 +256,11 @@ let private renderFreePickModal (useDefaultTheme, squadDic:SquadDic, freePickSta
             [ str (sprintf "Pick %s" draftPickText) ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
     cardModal theme [ [ bold (sprintf "Pick %s" draftPickText) ] |> para theme paraCentredSmall ] onDismiss body
 
-let private group squadId (squadDic:SquadDic) = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
+let private group (squadDic:SquadDic) squadId = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
+
+let private defaultSquadId (squadDic:SquadDic) group =
+    let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
+    match groupSquads |> List.sortBy (fun (_, squad) -> squad.SquadName) with | (squadId, _) :: _ -> squadId |> Some | [] -> None
 
 let private groupTab currentGroup dispatch group =
     let isActive = match currentGroup with | Some currentGroup when currentGroup = group -> true | Some _ | None -> false
@@ -267,7 +271,7 @@ let private squadTabs currentSquadId dispatch (squadDic:SquadDic) =
         let (SquadName squadName) = squad.SquadName
         let isActive = match currentSquadId with | Some currentSquadId when currentSquadId = squadId -> true | Some _ | None -> false
         { IsActive = isActive ; TabText = squadName ; TabLinkType = ClickableLink (fun _ -> squadId |> ShowSquad |> dispatch ) }
-    match squadDic |> group currentSquadId with
+    match currentSquadId |> group squadDic with
     | Some group ->
         let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
         groupSquads |> List.map squadTab
@@ -568,8 +572,13 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
                     | Ready (_, draftDic, currentUserDraftDto) -> draftDic |> currentDraft, currentUserDraftDto |> userDraftPickDic
                     | Pending | Failed -> None, UserDraftPickDic ()
                 | None -> None, UserDraftPickDic ()
-            let currentSquadId = state.CurrentSquadId
-            let currentGroup = squadDic |> group currentSquadId
+            let currentGroup, currentSquadId =
+                match state.CurrentSquadId with
+                | Some currentSquadId -> currentSquadId |> Some |> group squadDic, currentSquadId |> Some
+                | None ->
+                    let currentGroup = match state.CurrentGroup with | Some group -> group | None -> GroupA
+                    let currentSquadId = currentGroup |> defaultSquadId squadDic
+                    currentGroup |> Some, currentSquadId
             let groupTabs = groups |> List.map (groupTab currentGroup dispatch)
             let squadTabs = squadDic |> squadTabs currentSquadId dispatch
             let pickedCounts =

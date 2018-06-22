@@ -7,9 +7,9 @@ open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
-type FixtureFilter =
+type FixturesFilter =
     | AllFixtures
-    | GroupFixtures of group : Group
+    | GroupFixtures of group : Group option
     | KnockoutFixtures
 
 type ConfirmParticipantInput = // TODO-SOON-ISH: Or just hack data?...
@@ -34,5 +34,6 @@ type ConfirmParticipantState = { // TODO-SOON-ISH: Or just hack data?...
     ConfirmParticipantStatus : ConfirmParticipantStatus option }
 
 type State = {
-    CurrentFixtureFilter : FixtureFilter
+    CurrentFixturesFilter : FixturesFilter
+    LastGroup : Group option
     ConfirmParticipantState : ConfirmParticipantState option }

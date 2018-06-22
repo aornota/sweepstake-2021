@@ -24,7 +24,7 @@ open System.IO
 
 let private deleteExistingUsersEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
 let private deleteExistingSquadsEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
-let private deleteExistingFixturesEvents = ifDebug true false // note: should *not* generally set to true for Release (and only with caution for Debug!)
+let private deleteExistingFixturesEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
 let private deleteExistingDraftsEvents = ifDebug false false // note: should *not* generally set to true for Release (and only with caution for Debug!)
 
 let private log category = (Host, category) |> consoleLogger.Log
@@ -459,7 +459,7 @@ let private createInitialFixturesEventsIfNecessary = async {
         [] |> fixtures.OnFixturesEventsRead
 
         // #region: Group A
-        let russiaVsSaudiArabiaKO = (2018, 06, 14, 15, 00) |> dateTimeOffsetUtc
+        (*let russiaVsSaudiArabiaKO = (2018, 06, 14, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 1u, Group GroupA, Confirmed russiaId, Confirmed saudiArabiaId, russiaVsSaudiArabiaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 1u)
         let akinfeevId = Guid "a35cb647-5972-4976-b22e-970ccdb87181" |> PlayerId
@@ -502,11 +502,11 @@ let private createInitialFixturesEventsIfNecessary = async {
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 2u)
         let gimenezId = Guid "0064a341-6544-43a7-a290-2f5f60c1e046" |> PlayerId
         let musleraId = Guid "70af641b-2756-470a-aa37-f717cef335cf" |> PlayerId
-        let sanchezId = Guid "c911a019-bdd7-458d-94b0-da23ded6f82a" |> PlayerId
+        let sánchezUruguayId = Guid "c911a019-bdd7-458d-94b0-da23ded6f82a" |> PlayerId
         let elShenawyId = Guid "b3865226-9a0d-4c5d-a4a0-5ddd4251273b" |> PlayerId
         let hegaziId = Guid "1d66d5bc-6fbc-45c8-be36-8e77b64e06ce" |> PlayerId
         let morsyId = Guid "d3dafd89-d889-4da2-b101-db9bcdeaaf9e" |> PlayerId
-        let matchEvent = (uruguayId, gimenezId, sanchezId |> Some) |> Goal
+        let matchEvent = (uruguayId, gimenezId, sánchezUruguayId |> Some) |> Goal
         let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 2u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
         result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
         let matchEvent = (egyptId, hegaziId) |> YellowCard
@@ -525,15 +525,56 @@ let private createInitialFixturesEventsIfNecessary = async {
         let russiaVsEgyptKO = (2018, 06, 19, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Group GroupA, Confirmed russiaId, Confirmed egyptId, russiaVsEgyptKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 17u)
+        let fernandesId = Guid "f84b6eb1-dfa4-48cb-bc41-c5a36de875b8" |> PlayerId
+        let kutepovId = Guid "a251d666-d1bc-4eb2-bc14-63bc15befb89" |> PlayerId
+        let smolovId = Guid "34e642bf-8860-4948-9d31-49df81fcd610" |> PlayerId
+        let fathyId = Guid "b9c37743-3fc6-4a30-b8a1-5e1fe82b3bad" |> PlayerId
+        let salahId = Guid "b4b58dd3-12a7-4334-887b-0e7b4de60588" |> PlayerId
+        let trézéguetId = Guid "d45709e5-0349-4773-8b52-7af10ab5584c" |> PlayerId
+        let matchEvent = (egyptId, fathyId) |> OwnGoal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (russiaId, cheryshevId, fernandesId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (russiaId, dzyubaId, kutepovId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (egyptId, salahId, Scored) |> Penalty
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (russiaId, smolovId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (egyptId, trézéguetId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (russiaId, cheryshevId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 17u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let uruguayVsSaudiArabiaKO = (2018, 06, 20, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 18u, Group GroupA, Confirmed uruguayId, Confirmed saudiArabiaId, uruguayVsSaudiArabiaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 18u)
+        let suárezId = Guid "41c4d5dd-92bf-4794-9872-7b6c092ae3ea" |> PlayerId
+        let matchEvent = (uruguayId, suárezId, sánchezUruguayId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 18u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (uruguayId, musleraId) |> CleanSheet
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 18u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (uruguayId, suárezId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 18u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let uruguayVsRussiaKO = (2018, 06, 25, 14, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 33u, Group GroupA, Confirmed uruguayId, Confirmed russiaId, uruguayVsRussiaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 33u)
+
         let saudiArabiaVsEgyptKO = (2018, 06, 25, 14, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 34u, Group GroupA, Confirmed saudiArabiaId, Confirmed egyptId, saudiArabiaVsEgyptKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 34u)
+        
         // #endregion
         // #region: Group B
         let moroccoVsIranKO = (2018, 06, 15, 15, 00) |> dateTimeOffsetUtc
@@ -608,15 +649,56 @@ let private createInitialFixturesEventsIfNecessary = async {
         let portugalVsMoroccoKO = (2018, 06, 20, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Group GroupB, Confirmed portugalId, Confirmed moroccoId, portugalVsMoroccoKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 19u)
+        let moutinhoId = Guid "115dcbf3-3dc0-42f6-8b09-0f8a2fad682a" |> PlayerId
+        let patricioId = Guid "f24e3dce-13ca-4bb2-9380-b7f699fd55e1" |> PlayerId
+        let silvaId = Guid "7422ac07-78b4-4be9-9744-00ba7980a66c" |> PlayerId
+        let benatiaId = Guid "bff84865-aa88-4d9d-b77c-00e6b90b1f49" |> PlayerId
+        let matchEvent = (portugalId, ronaldoId, moutinhoId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (portugalId, silvaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (moroccoId, benatiaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (portugalId, patricioId) |> CleanSheet
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (portugalId, ronaldoId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 19u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let iranVsSpainKO = (2018, 06, 20, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Group GroupB, Confirmed iranId, Confirmed spainId, iranVsSpainKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 20u)
+        let amiriId = Guid "c9b55a95-95f1-4b3b-bc2e-dc8839364df1" |> PlayerId
+        let ebrahimiId = Guid "02a8b632-7bbf-4eea-a807-5ed59ffb2b15" |> PlayerId
+        let deGeaId = Guid "e91e34ea-3d77-4bda-8d11-8e63bf6a7deb" |> PlayerId
+        let matchEvent = (spainId, costaId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (iranId, amiriId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (iranId, ebrahimiId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (spainId, deGeaId) |> CleanSheet
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (spainId, costaId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 20u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let iranVsPortugalKO = (2018, 06, 25, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 35u, Group GroupB, Confirmed iranId, Confirmed portugalId, iranVsPortugalKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 35u)
+
         let spainVsMoroccoKO = (2018, 06, 25, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 36u, Group GroupB, Confirmed spainId, Confirmed moroccoId, spainVsMoroccoKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 36u)
+
         // #endregion
         // #region: Group C
         let franceVsAustraliaKO = (2018, 06, 16, 10, 00) |> dateTimeOffsetUtc
@@ -687,15 +769,61 @@ let private createInitialFixturesEventsIfNecessary = async {
         let denmarkVsAustraliaKO = (2018, 06, 21, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Group GroupC, Confirmed denmarkId, Confirmed australiaId, denmarkVsAustraliaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 22u)
+        let jørgensenNId = Guid "a9ea63a8-b6d6-4d58-87dd-82d52fa772df" |> PlayerId
+        let sistoId = Guid "4ab9cdbe-e581-4742-ac44-9e8787ca9824" |> PlayerId
+        let matchEvent = (denmarkId, eriksenId, jørgensenNId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (australiaId, jedinakId, Scored) |> Penalty
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (denmarkId, poulsenId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (denmarkId, sistoId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (denmarkId, eriksenId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 22u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let franceVsPeruKO = (2018, 06, 21, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Group GroupC, Confirmed franceId, Confirmed peruId, franceVsPeruKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 21u)
+        let llorisId = Guid "03988f09-6419-484d-8e06-211b5a427fea" |> PlayerId
+        let matuidiId = Guid "9624b28e-2c87-45a7-832e-d5bc0ddeab40" |> PlayerId
+        let mbappéId = Guid "4b5c8405-cf0b-43fc-909f-6dd8a8362c81" |> PlayerId
+        let pogbaId = Guid "2c7e2def-1297-4d4c-9983-ecc5e94e4198" |> PlayerId
+        let aquinoId = Guid "f2d9c984-6ca6-49e0-a09b-2996d667b7cd" |> PlayerId
+        let guerreroId = Guid "aea460a0-913b-4dee-b465-d51363de7f68" |> PlayerId
+        let matchEvent = (franceId, mbappéId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (franceId, matuidiId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (franceId, pogbaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (peruId, guerreroId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (peruId, aquinoId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (franceId, llorisId) |> CleanSheet
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (franceId, mbappéId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 21u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let denmarkVsFranceKO = (2018, 06, 26, 14, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 37u, Group GroupC, Confirmed denmarkId, Confirmed franceId, denmarkVsFranceKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 37u)
         let australiaVsPeruKO = (2018, 06, 26, 14, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 38u, Group GroupC, Confirmed australiaId, Confirmed peruId, australiaVsPeruKO) |> fixtures.HandleCreateFixtureCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 38u)
+        result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 38u)*)
         // #endregion
         // #region: Group D
         let argentinaVsIcelandKO = (2018, 06, 16, 13, 00) |> dateTimeOffsetUtc
@@ -752,9 +880,55 @@ let private createInitialFixturesEventsIfNecessary = async {
         let argentinaVsCroatiaKO = (2018, 06, 21, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Group GroupD, Confirmed argentinaId, Confirmed croatiaId, argentinaVsCroatiaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 23u)
+        let acuñaId = Guid "1eae6233-c07c-4545-ad28-a3d1b134e562" |> PlayerId
+        let mercadoId = Guid "76f332ad-588c-4737-928a-5f3ea8d29378" |> PlayerId
+        let otamendiId = Guid "3a6757f1-8198-450d-a54b-b56fa1b66aab" |> PlayerId
+        let corlukaId = Guid "f6615095-48d5-40ae-89f7-0f59016488e9" |> PlayerId
+        let kovačićId = Guid "2cf2512f-0270-490a-83e5-75377701a306" |> PlayerId
+        let mandžukićId = Guid "0ced2454-77bb-461a-9907-37f6dfdf051f" |> PlayerId
+        let rebićId = Guid "ae289f35-8ef2-4320-a65c-f7f41f3f07ad" |> PlayerId
+        let vrsaljkoId = Guid "d46a99d1-72f8-44b7-b43e-c00dadaafe38" |> PlayerId
+        let matchEvent = (croatiaId, rebićId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, modrićId, brozovićId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, rakitićId, kovačićId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (argentinaId, mercadoId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (argentinaId, otamendiId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (argentinaId, acuñaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, rebićId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, mandžukićId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 8, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, vrsaljkoId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 9, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, corlukaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 10, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, subašićId) |> CleanSheet
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 11, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (croatiaId, modrićId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 23u, Rvn 12, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+
         let nigeriaVsIcelandKO = (2018, 06, 22, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 24u, Group GroupD, Confirmed nigeriaId, Confirmed icelandId, nigeriaVsIcelandKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 24u)
+
         let nigeriaVsArgentinaKO = (2018, 06, 26, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 39u, Group GroupD, Confirmed nigeriaId, Confirmed argentinaId, nigeriaVsArgentinaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 39u)
@@ -829,9 +1003,11 @@ let private createInitialFixturesEventsIfNecessary = async {
         let brazilVsCostaRicaKO = (2018, 06, 22, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 25u, Group GroupE, Confirmed brazilId, Confirmed costaRicaId, brazilVsCostaRicaKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 25u)
+
         let serbiaVsSwitzerlandKO = (2018, 06, 22, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 26u, Group GroupE, Confirmed serbiaId, Confirmed switzerlandId, serbiaVsSwitzerlandKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 26u)
+
         let serbiaVsBrazilKO = (2018, 06, 27, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 41u, Group GroupE, Confirmed serbiaId, Confirmed brazilId, serbiaVsBrazilKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 41u)
@@ -840,7 +1016,7 @@ let private createInitialFixturesEventsIfNecessary = async {
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 42u)
         // #endregion
         // #region: Group F
-        let germanyVsMexicoKO = (2018, 06, 17, 15, 00) |> dateTimeOffsetUtc
+        (*let germanyVsMexicoKO = (2018, 06, 17, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 11u, Group GroupF, Confirmed germanyId, Confirmed mexicoId, germanyVsMexicoKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 11u)
         let hummelsId = Guid "f2501d38-bc99-41f4-a07e-39f9ac7db80e" |> PlayerId
@@ -971,13 +1147,25 @@ let private createInitialFixturesEventsIfNecessary = async {
         let tunisiaVsEnglandKO = (2018, 06, 18, 18, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Group GroupG, Confirmed tunisiaId, Confirmed englandId, tunisiaVsEnglandKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 14u)
-        //let xId = Guid "" |> PlayerId
-        //let matchEvent = (belgiumId, mertensId, None) |> Goal
-        //let matchEvent = (belgiumId, meunierId) |> YellowCard
-        //let matchEvent = (belgiumId, courtoisId) |> CleanSheet
-        //let matchEvent = (belgiumId, lukakuId) |> ManOfTheMatch
-        (*let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)*)
+        let sassiId = Guid "2065805e-4e56-46c1-9197-d9c283eb1ffd" |> PlayerId
+        let kaneId = Guid "00000072-0000-0000-0000-000000000001" |> PlayerId
+        let maguireId = Guid "00000072-0000-0005-0000-000000000000" |> PlayerId
+        let walkerId = Guid "00000072-0000-0009-0000-000000000000" |> PlayerId
+        let matchEvent = (englandId, kaneId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (tunisiaId, sassiId, Scored) |> Penalty
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (englandId, kaneId, maguireId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (englandId, walkerId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (englandId, kaneId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 14u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
 
         let belgiumVsTunisiaKO = (2018, 06, 23, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 29u, Group GroupG, Confirmed belgiumId, Confirmed tunisiaId, belgiumVsTunisiaKO) |> fixtures.HandleCreateFixtureCmdAsync)
@@ -996,10 +1184,69 @@ let private createInitialFixturesEventsIfNecessary = async {
         let colombiaVsJapanKO = (2018, 06, 19, 12, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Group GroupH, Confirmed colombiaId, Confirmed japanId, colombiaVsJapanKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 16u)
+        let barriosId = Guid "e4d92de6-415d-41fb-9dac-57a3da0fd7a8" |> PlayerId
+        let quinteroId = Guid "fe1d1306-5f64-4d33-8ba3-5d3d3cf7bbf6" |> PlayerId
+        let rodríguezId = Guid "2d39c02d-2a69-4f95-9c19-ccc778cdf4bc" |> PlayerId
+        let sánchezColombiaId = Guid "ecfb6653-a353-4fe8-bf57-006249a4eb1f" |> PlayerId
+        let hondaId = Guid "5656320e-3655-403d-a959-bea9c3947f7b" |> PlayerId
+        let kagawaId = Guid "1a929ac7-45e1-4507-8b19-4324d5023baa" |> PlayerId
+        let kawashimaId = Guid "e756b578-1c0f-4af4-a861-7435a4f99353" |> PlayerId
+        let osakoId = Guid "e309a71d-00dd-4e8a-b7a4-6dedfa525e3a" |> PlayerId
+        let matchEvent = (japanId, kagawaId, Scored) |> Penalty
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (colombiaId, quinteroId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (japanId, osakoId, hondaId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (colombiaId, sánchezColombiaId) |> RedCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (colombiaId, barriosId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (colombiaId, rodríguezId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (japanId, kawashimaId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (japanId, osakoId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 16u, Rvn 8, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
 
         let polandVsSenegalKO = (2018, 06, 19, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Group GroupH, Confirmed polandId, Confirmed senegalId, polandVsSenegalKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 15u)
+        let cionekId = Guid "8f41ad65-938d-4c96-b35e-ac9cc0244e95" |> PlayerId
+        let grosickiId = Guid "f630a313-2209-4a9f-8853-6c0405f1906d" |> PlayerId
+        let krychowiakId = Guid "9b24eabc-e61b-4ca0-8c23-300e937d3fc1" |> PlayerId
+        let gueyeId = Guid "5dee97b6-4281-45b0-a895-5926c1ae56aa" |> PlayerId
+        let niangId = Guid "45c81291-cc52-4489-bfb1-8cef8fe58b25" |> PlayerId
+        let sanéId = Guid "3dd4ce75-e007-4b1d-a15b-a3ba4faf4a05" |> PlayerId
+        let matchEvent = (polandId, cionekId) |> OwnGoal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 1, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (senegalId, niangId, None) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 2, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (polandId, krychowiakId, grosickiId |> Some) |> Goal
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 3, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (polandId, krychowiakId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 4, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (senegalId, sanéId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 5, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (senegalId, gueyeId) |> YellowCard
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 6, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
+        let matchEvent = (senegalId, niangId) |> ManOfTheMatch
+        let! result = nephTokens.ResultsAdminToken |> ifToken (fun token -> (token, nephId, fixtureId 15u, Rvn 7, matchEvent) |> fixtures.HandleAddMatchEventSpecialCmdAsync)
+        result |> logShouldSucceed (sprintf "HandleAddMatchEventSpecialCmdAsync (%A)" matchEvent)
 
         let japanVsSenegalKO = (2018, 06, 24, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 32u, Group GroupH, Confirmed japanId, Confirmed senegalId, japanVsSenegalKO) |> fixtures.HandleCreateFixtureCmdAsync)
@@ -1070,7 +1317,7 @@ let private createInitialFixturesEventsIfNecessary = async {
         // #region: Final
         let winnerSF1VsWinnerSF2KO = (2018, 07, 15, 15, 00) |> dateTimeOffsetUtc
         let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 64u, Final, Unconfirmed (Winner (SemiFinal 1u)), Unconfirmed (Winner (SemiFinal 2u)), winnerSF1VsWinnerSF2KO) |> fixtures.HandleCreateFixtureCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 64u)
+        result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 64u)*)
         // #endregion
 
         // Note: Reset Fixtures agent [to pendingOnFixturesEventsRead] so that it handles subsequent FixturesEventsRead event appropriately (i.e. from readPersistedEvents).

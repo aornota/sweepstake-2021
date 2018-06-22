@@ -4,16 +4,15 @@ open Aornota.UI.Common.Notifications
 open Aornota.UI.Common.ShouldNeverHappen
 open Aornota.UI.Common.Toasts
 
-open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
 open Aornota.Sweepstake2018.UI.Shared
 
 open Elmish
 
-let initialize currentFixtureFilter : State * Cmd<Input> =
-    let currentFixtureFilter = match currentFixtureFilter with | Some currentFixtureFilter -> currentFixtureFilter | None -> AllFixtures
-    { CurrentFixtureFilter = currentFixtureFilter ; ConfirmParticipantState = None }, Cmd.none
+let initialize currentFixturesFilter : State * Cmd<Input> =
+    let currentFixturesFilter = match currentFixturesFilter with | Some currentFixturesFilter -> currentFixturesFilter | None -> AllFixtures
+    { CurrentFixturesFilter = currentFixturesFilter ; LastGroup = None ; ConfirmParticipantState = None }, Cmd.none
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
@@ -29,6 +28,8 @@ let private handleServerFixturesMsg serverFixturesMsg state : State * Cmd<Input>
         // TODO-NEXT...
         state, Cmd.none
 
+let private updateLast state = match state.CurrentFixturesFilter with | AllFixtures -> state | GroupFixtures group -> { state with LastGroup = group } | KnockoutFixtures -> state
+
 let transition input (fixturesProjection:Projection<_ * FixtureDic>) state =
     let state, cmd, isUserNonApiActivity =
         match input, fixturesProjection with
@@ -40,12 +41,19 @@ let transition input (fixturesProjection:Projection<_ * FixtureDic>) state =
             let state, cmd = state |> handleServerFixturesMsg serverFixturesMsg
             state, cmd, false
         | ShowAllFixtures, Ready _ ->
-            { state with CurrentFixtureFilter = AllFixtures }, Cmd.none, true
+            let state = state |> updateLast
+            { state with CurrentFixturesFilter = AllFixtures }, Cmd.none, true
         | ShowGroupFixtures group, Ready _ ->
-            let group = match group with | Some group -> group | None -> match state.CurrentFixtureFilter with | GroupFixtures group -> group | AllFixtures | KnockoutFixtures -> GroupA
-            { state with CurrentFixtureFilter = group |> GroupFixtures }, Cmd.none, true
+            let state = state |> updateLast
+            let state =
+                match state.CurrentFixturesFilter, group with
+                | GroupFixtures (Some _), None -> state
+                | _, None -> { state with CurrentFixturesFilter = state.LastGroup |> GroupFixtures }
+                | _ -> { state with CurrentFixturesFilter = group |> GroupFixtures }
+            state, Cmd.none, true
         | ShowKnockoutFixtures, Ready _ ->
-            { state with CurrentFixtureFilter = KnockoutFixtures }, Cmd.none, true
+            let state = state |> updateLast
+            { state with CurrentFixturesFilter = KnockoutFixtures }, Cmd.none, true
         | ShowConfirmParticipantModal (_fixtureId, _role), Ready _ -> // note: no need to check for unknown fixtureId (should never happen)
             // TODO-SOON-ISH: Or just hack data?...
             state, "Confirm participant functionality is not yet implemented" |> warningToastCmd, true

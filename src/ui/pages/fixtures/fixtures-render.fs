@@ -23,25 +23,25 @@ open System
 
 module Rct = Fable.Helpers.React
 
-let private filterTabs currentFixtureFilter dispatch =
+let private filterTabs currentFixturesFilter dispatch =
     let isActive filter =
         match filter with
-        | AllFixtures -> currentFixtureFilter = AllFixtures
-        | GroupFixtures _ -> match currentFixtureFilter with | GroupFixtures _ -> true | AllFixtures | KnockoutFixtures -> false
-        | KnockoutFixtures -> currentFixtureFilter = KnockoutFixtures
+        | AllFixtures -> currentFixturesFilter = AllFixtures
+        | GroupFixtures _ -> match currentFixturesFilter with | GroupFixtures _ -> true | AllFixtures | KnockoutFixtures -> false
+        | KnockoutFixtures -> currentFixturesFilter = KnockoutFixtures
     let filterText filter = match filter with | AllFixtures -> "All" | GroupFixtures _ -> "Group" | KnockoutFixtures -> "Knockout"
     let onClick filter =
         match filter with
         | AllFixtures -> (fun _ -> ShowAllFixtures |> dispatch )
         | GroupFixtures _ -> (fun _ -> None |> ShowGroupFixtures |> dispatch )
         | KnockoutFixtures -> (fun _ -> ShowKnockoutFixtures |> dispatch )
-    let filters = [ AllFixtures ; GroupA |> GroupFixtures ; KnockoutFixtures ]
+    let filters = [ AllFixtures ; None |> GroupFixtures ; KnockoutFixtures ]
     filters |> List.map (fun filter -> { IsActive = filter |> isActive ; TabText = filter |> filterText ; TabLinkType = ClickableLink (filter |> onClick) } )
 
-let private groupTabs currentFixtureFilter dispatch =
+let private groupTabs currentFixturesFilter dispatch =
     let groupTab currentGroup dispatch group =
-        { IsActive = group = currentGroup ; TabText = group |> groupText ; TabLinkType = ClickableLink (fun _ -> group |> Some |> ShowGroupFixtures |> dispatch ) }
-    match currentFixtureFilter with
+        { IsActive = group |> Some = currentGroup ; TabText = group |> groupText ; TabLinkType = ClickableLink (fun _ -> group |> Some |> ShowGroupFixtures |> dispatch ) }
+    match currentFixturesFilter with
     | GroupFixtures currentGroup -> groups |> List.map (groupTab currentGroup dispatch)
     | AllFixtures | KnockoutFixtures -> []
 
@@ -60,8 +60,10 @@ let private renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic:Fi
     let matchesFilter fixture =
         match currentFixtureFilter with
         | AllFixtures -> true
-        | GroupFixtures currentGroup -> match fixture.Stage with | Group group -> group = currentGroup | RoundOf16 _ | QuarterFinal _ | SemiFinal _ | ThirdPlacePlayOff | Final -> false
-        | KnockoutFixtures -> match fixture.Stage with | RoundOf16 _ | QuarterFinal _ | SemiFinal _ | ThirdPlacePlayOff | Final -> true | Group _ -> false
+        | GroupFixtures currentGroup ->
+            match fixture.Stage with | Group group -> group |> Some = currentGroup | RoundOf16 _ | QuarterFinal _ | SemiFinal _ | ThirdPlacePlayOff | Final -> false
+        | KnockoutFixtures ->
+            match fixture.Stage with | RoundOf16 _ | QuarterFinal _ | SemiFinal _ | ThirdPlacePlayOff | Final -> true | Group _ -> false
     let canConfirmParticipant =
         match authUser with
         | Some authUser ->
@@ -207,13 +209,16 @@ let render (useDefaultTheme, state, authUser:AuthUser option, fixturesProjection
         | Failed, _ | _, Failed -> // note: should never happen
             yield [ str "This functionality is not currently available" ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger ; Weight = Bold }
         | Ready (_, squadDic), Ready (_, fixtureDic) ->
-            let currentFixtureFilter = state.CurrentFixtureFilter
-            let filterTabs = filterTabs currentFixtureFilter dispatch
-            let groupTabs = groupTabs currentFixtureFilter dispatch
+            let currentFixturesFilter =
+                match state.CurrentFixturesFilter with
+                | GroupFixtures None -> GroupA |> Some |> GroupFixtures
+                | _ -> state.CurrentFixturesFilter
+            let filterTabs = filterTabs currentFixturesFilter dispatch
+            let groupTabs = groupTabs currentFixturesFilter dispatch
             yield div divCentred [ tabs theme { tabsDefault with TabsSize = Normal ; Tabs = filterTabs } ]
             match groupTabs with
             | _ :: _ ->
                 yield div divCentred [ tabs theme { tabsDefault with Tabs = groupTabs } ]
             | [] -> ()
             yield br
-            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixtureFilter, fixtureDic, squadDic, authUser, ticks) dispatch ]
+            yield lazyViewOrHMR2 renderFixtures (useDefaultTheme, currentFixturesFilter, fixtureDic, squadDic, authUser, ticks) dispatch ]

@@ -10,6 +10,8 @@ open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
 open Aornota.Sweepstake2018.Common.WsApi.UiMsg
 
+open System.Collections.Generic
+
 type AddPlayersInput =
     | NewPlayerNameTextChanged of newPlayerNameText : string
     | NewPlayerTypeChanged of newPlayerType : PlayerType
@@ -127,8 +129,12 @@ type PendingPicksState = {
     PendingPicks : PendingPick list
     PendingRvn : Rvn option }
 
+type LastSquads = Dictionary<Group, SquadId>
+
 type State = {
+    CurrentGroup : Group option
     CurrentSquadId : SquadId option
+    LastSquads : LastSquads
     PendingPicksState : PendingPicksState
     AddPlayersState : AddPlayersState option
     ChangePlayerNameState : ChangePlayerNameState option

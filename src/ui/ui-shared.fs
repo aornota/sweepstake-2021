@@ -53,9 +53,6 @@ let userType (userDic:UserDic) userId =
 let userNames (userDic:UserDic) = userDic |> List.ofSeq |> List.map (fun (KeyValue (_, (userName, _))) -> userName)
 
 let squadName (squadDic:SquadDic) squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId].SquadName else SquadName UNKNOWN
-let defaultSquadId (squadDic:SquadDic) group =
-    let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
-    match groupSquads |> List.sortBy (fun (_, squad) -> squad.SquadName) with | (squadId, _) :: _ -> squadId |> Some | [] -> None
 
 let playerName (squadDic:SquadDic) (squadId, playerId) =
     if squadId |> squadDic.ContainsKey then
