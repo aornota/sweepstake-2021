@@ -58,6 +58,9 @@ hr.dark { background-color : var(--dark) }
 /* Note: Needed to prevent use of background-color/s defined for .footer (&c.) by Bulma. */
 .footer.default, .input.default, .modal-card-body.default, .table.default, .textarea.default { background-color : var(--white) }
 .footer.dark, .input.dark, .modal-card-body.dark, .table.dark, .textarea.dark { background-color : var(--black) }
+/* Note: Needed to prevent use of color/s and background-color/s defined for .select select by Bulma. */
+.select.default select { color : var(--darker) ; background-color : var(--white) }
+.select.dark select { color : var(--lighter) ; background-color : var(--black) }
 /* Note: Needed to prevent use of color/s defined for .table thead td (&c.) by Bulma. */
 .table.default thead th { color : var(--darker) }
 .table.dark thead th { color : var(--lighter) }

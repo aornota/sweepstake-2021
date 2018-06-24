@@ -300,6 +300,21 @@ let progress theme useAlternativeClass progressData =
         yield Progress.Max progressData.MaxValue
     ] []
 
+// TODO-NMB-MEDIUM: "Genericize"?...
+let select theme values (defaultValue:string option) disabled (onChange:string -> unit) =
+    let className = getClassName theme false
+    let options = values |> List.map (fun (value, text) -> Rct.option [ Value value ] [ str text ])
+    Control.div [] [
+        Select.select [
+            Select.CustomClass className
+            Select.Size IsSmall
+            Select.Disabled disabled
+        ] [
+            Rct.select [
+                match defaultValue with | Some defaultValue -> yield DefaultValue defaultValue :> IHTMLProp | None -> ()
+                yield OnChange (fun ev -> !!ev.target?value |> onChange) :> IHTMLProp
+            ] [ yield! options ] ] ]
+
 let span theme spanData children =
     let spanData = theme.TransformSpanData spanData
     let customClasses = [

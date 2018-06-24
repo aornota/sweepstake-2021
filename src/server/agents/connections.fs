@@ -837,9 +837,9 @@ type Connections () =
                             error |> Error |> logResult source (sprintf "%A" >> Some) })
                     do! (connectionDic, signedInUserDic) |> ifSignedInSession source connectionId fWithConnection
                     return! managingConnections serverStarted connectionDic signedInUserDic
-                | UiAuthMsg (jwt, UiAuthFixturesMsg (RemoveMatchEventCmd (fixtureId, currentRvn, matchEventId))) ->
+                | UiAuthMsg (jwt, UiAuthFixturesMsg (RemoveMatchEventCmd (fixtureId, currentRvn, matchEventId, matchEvent))) ->
                     let source = "AddMatchEventCmd"
-                    sprintf "%s for %A (%A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source fixtureId currentRvn matchEventId connectionDic.Count signedInUserDic.Count |> Verbose |> log
+                    sprintf "%s for %A (%A %A %A) when managingConnections (%i connection/s) (%i signed-in user/s)" source fixtureId currentRvn matchEventId matchEvent connectionDic.Count signedInUserDic.Count |> Verbose |> log
                     let fWithConnection = (fun (_, (auditUserId, _)) -> async {
                         let result =
                             if debugFakeError () then sprintf "Fake %s error -> %A" source jwt |> OtherError |> OtherAuthCmdError |> Error
@@ -847,7 +847,7 @@ type Connections () =
                             |> Result.bind (fun userTokens ->
                                 match userTokens.ResultsAdminToken with
                                 | Some resultsAdminToken ->
-                                    (resultsAdminToken, auditUserId, fixtureId, currentRvn, matchEventId, connectionId) |> Entities.Fixtures.fixtures.HandleRemoveMatchEventCmd |> Ok
+                                    (resultsAdminToken, auditUserId, fixtureId, currentRvn, matchEventId, matchEvent, connectionId) |> Entities.Fixtures.fixtures.HandleRemoveMatchEventCmd |> Ok
                                 | None -> NotAuthorized |> AuthCmdAuthznError |> Error)
                         match result with
                         | Ok _ -> ()

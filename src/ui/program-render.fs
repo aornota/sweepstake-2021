@@ -248,7 +248,8 @@ let private renderUnauth (useDefaultTheme, unauthState, hasStaticModal, ticks) (
                 (SquadsInput >> UnauthPageInput >> dispatch)
         | FixturesPage ->
             let fixturesState = unauthState.UnauthPageStates.FixturesState
-            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, hasModal, ticks) (FixturesInput >> UnauthPageInput >> dispatch) ]
+            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, None, fixturesProjection, squadsProjection, usersProjection, hasModal, ticks)
+                (FixturesInput >> UnauthPageInput >> dispatch) ]
 
 let private renderChangePasswordModal (useDefaultTheme, changePasswordState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -469,7 +470,7 @@ let private renderAuth (useDefaultTheme, authState, hasStaticModal, ticks) dispa
                 (SquadsInput >> UPageInput >> PageInput >> dispatch)
         | UnauthPage FixturesPage ->
             let fixturesState = authState.UnauthPageStates.FixturesState
-            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser |> Some, fixturesProjection, squadsProjection, hasModal, ticks)
+            yield lazyViewOrHMR2 Fixtures.Render.render (useDefaultTheme, fixturesState, authUser |> Some, fixturesProjection, squadsProjection, usersProjection, hasModal, ticks)
                 (FixturesInput >> UPageInput >> PageInput >> dispatch)
         | AuthPage UserAdminPage ->
             match authState.AuthPageStates.UserAdminState with

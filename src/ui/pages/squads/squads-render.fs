@@ -1,6 +1,5 @@
 module Aornota.Sweepstake2018.UI.Pages.Squads.Render
 
-open Aornota.Common.IfDebug
 open Aornota.Common.UnitsOfMeasure
 
 open Aornota.UI.Common.LazyViewOrHMR
@@ -13,6 +12,7 @@ open Aornota.UI.Theme.Shared
 
 open Aornota.Sweepstake2018.Common.Domain.Core
 open Aornota.Sweepstake2018.Common.Domain.Draft
+open Aornota.Sweepstake2018.Common.Domain.Fixture
 open Aornota.Sweepstake2018.Common.Domain.Squad
 open Aornota.Sweepstake2018.Common.Domain.User
 open Aornota.Sweepstake2018.UI.Pages.Squads.Common
@@ -391,7 +391,7 @@ let private score (points:int<point>) (pickedByPoints:int<point> option) pickedB
             div divDefault [ pointsOnly ; str " (" ; pickedByPoints ; pickedByUser ]
     | _ -> pointsOnly
 
-let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, fixtureDic:FixtureDic, authUser) dispatch = // TODO-SOON: Enable ShowEliminateSquadModal link in release builds...
+let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, fixtureDic:FixtureDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
     let pickedTeamCount, _, _ = pickedCounts
     let needsTeam = pickedTeamCount < MAX_TEAM_PICKS
@@ -403,9 +403,16 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
     let eliminated = if squad.Eliminated then [ [ str "Eliminated" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme paraDefaultSmallest |> Some else None
     let eliminate =
         if canEliminate && squad.Eliminated |> not then
-            let onClick = (fun _ -> squadId |> ShowEliminateSquadModal |> dispatch)
-            let eliminate = [ [ str "Eliminate" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick)
-            ifDebug (eliminate |> Some) None // TEMP-NMB...
+            let pendingFixtures =
+                fixtureDic |> List.ofSeq |> List.filter (fun (KeyValue (_, fixture)) ->
+                    match fixture.HomeParticipant, fixture.AwayParticipant with
+                    | Confirmed otherSquadId, _ when otherSquadId = squadId -> match fixture.MatchResult with | Some _ -> false | None -> true
+                    | _, Confirmed otherSquadId when otherSquadId = squadId -> match fixture.MatchResult with | Some _ -> false | None -> true
+                    | _ -> false)
+            if pendingFixtures.Length = 0 then
+                let onClick = (fun _ -> squadId |> ShowEliminateSquadModal |> dispatch)
+                [ [ str "Eliminate" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
+            else None
         else None
     let draftLeft, draftRight =
         let isPicked = match squad.PickedBy with | Some _ -> true | None -> false

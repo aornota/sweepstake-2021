@@ -166,7 +166,7 @@ let private defaultUnauthState currentUnauthPage (unauthPageStates:UnauthPageSta
             let pendingPicksState = { PendingPicks = [] ; PendingRvn = None }
             { squadsState with PendingPicksState = pendingPicksState }, Cmd.none
         | None -> Squads.State.initialize ()
-    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
+    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize ()
     let usersProjection =
         match unauthProjections with
         | Some unauthProjections ->
@@ -220,7 +220,7 @@ let private defaultAuthState (authUser:AuthUser) currentPage (unauthPageStates:U
             unauthPageStates.ScoresState, scoresCmd
         | None -> Scores.State.initialize (authUser.UserId |> Some)
     let squadsState, squadsCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.SquadsState, Cmd.none | None -> Squads.State.initialize ()
-    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize None
+    let fixturesState, fixturesCmd = match unauthPageStates with | Some unauthPageStates -> unauthPageStates.FixturesState, Cmd.none | None -> Fixtures.State.initialize ()
     let initializeUserAdminState = currentPage = AuthPage UserAdminPage
     let userAdminState, userAdminCmd =
         if initializeUserAdminState then
@@ -1099,7 +1099,8 @@ let private handleUnauthInput unauthInput (unauthState:UnauthState) state =
         state |> shouldNeverHappen "Unexpected FixturesInput SendUiAuthMsg when Unauth"
     | UnauthPageInput (FixturesInput fixturesInput), _ ->
         let fixturesState = unauthState.UnauthPageStates.FixturesState
-        let fixturesState, fixturesCmd, _ = fixturesState |> Fixtures.State.transition fixturesInput unauthState.UnauthProjections.FixturesProjection
+        let fixturesState, fixturesCmd, _ =
+            fixturesState |> Fixtures.State.transition fixturesInput unauthState.UnauthProjections.FixturesProjection unauthState.UnauthProjections.SquadsProjection
         let unauthPageStates = { unauthState.UnauthPageStates with FixturesState = fixturesState }
         let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UnauthPageInput >> UnauthInput >> AppInput)
         { state with AppState = Unauth { unauthState with UnauthPageStates = unauthPageStates } }, fixturesCmd
@@ -1216,7 +1217,8 @@ let private handleAuthInput authInput authState state =
         { state with AppState = Auth authState }, cmd, false
     | PageInput (UPageInput (FixturesInput fixturesInput)), _, _ ->
         let fixturesState = authState.UnauthPageStates.FixturesState
-        let fixturesState, fixturesCmd, isUserNonApiActivity = fixturesState |> Fixtures.State.transition fixturesInput authState.UnauthProjections.FixturesProjection
+        let fixturesState, fixturesCmd, isUserNonApiActivity =
+            fixturesState |> Fixtures.State.transition fixturesInput authState.UnauthProjections.FixturesProjection authState.UnauthProjections.SquadsProjection
         let unauthPageStates = { authState.UnauthPageStates with FixturesState = fixturesState }
         let fixturesCmd = fixturesCmd |> Cmd.map (FixturesInput >> UPageInput >> PageInput >> AuthInput >> AppInput)
         { state with AppState = Auth { authState with UnauthPageStates = unauthPageStates } }, fixturesCmd, isUserNonApiActivity

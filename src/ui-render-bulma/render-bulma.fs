@@ -44,6 +44,8 @@ let columnContent children =
         Column.column [ Column.CustomClass "is-four-fifths-mobile is-four-fifths-tablet is-three-quarters-desktop is-three-fifths-widescreen is-half-fullhd" ] children
         columnEmpty ]
 
+let columnsLeftAndRight leftChildren rightChildren = columns true [ Column.column [] leftChildren ; Column.column [] rightChildren ]
+
 let container width children =
     let width =
         match width with | Some Fluid -> Some Container.IsFluid | Some Widescreen -> Some Container.IsWideScreen | Some FullHD -> Some Container.IsFullHD | None -> None
