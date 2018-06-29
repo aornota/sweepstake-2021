@@ -306,11 +306,52 @@ let private renderAddMatchEventModal (useDefaultTheme, fixtureDic:FixtureDic, sq
                     divVerticalSpace 5
                 ]
             interaction, contents
-        | PenaltyShootoutEvent (_awaySquadId, _homeScoreText, _awayScoreText) ->
-
-            // TODO-SOON...
-
-            NotEnabled None, []
+        | PenaltyShootoutEvent (awaySquadId, homeScore, awayScore) ->
+            let interaction = if homeScore <> awayScore then addMatchEventInteraction else NotEnabled None
+            let awaySquad = if awaySquadId |> squadDic.ContainsKey then squadDic.[awaySquadId] |> Some else None
+            let homeSquadName, awaySquadName =
+                match squad, awaySquad with
+                | Some squad, Some awaySquad ->
+                    let (SquadName squadName), (SquadName awaySquadName) = squad.SquadName, awaySquad.SquadName
+                    squadName, awaySquadName
+                | _ -> "Home", "Away" // note: should never happen
+            let warning = [
+                [ bold "Please enter the penalty shootout details" ] |> para theme paraCentredSmaller
+                br
+                [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
+            let left =
+                let decrementInteraction = if homeScore > 0u then Clickable ((fun _ -> HomeScoreDecremented |> dispatch), None) else NotEnabled None
+                let incrementInteraction = Clickable ((fun _ -> HomeScoreIncremented |> dispatch), None)
+                let decrement = [ str "-" ] |> button theme { buttonLinkSmall with Interaction = decrementInteraction }
+                let increment = [ str "+" ] |> button theme { buttonLinkSmall with Interaction = incrementInteraction }
+                [
+                    [ bold homeSquadName ] |> para theme paraCentredSmaller
+                    br
+                    div divCentred [
+                        decrement
+                        div { divDefault with PadH = 5 |> Some } [ [ str (sprintf "%i" homeScore) ] |> para theme paraCentredSmaller ]
+                        increment ]
+                ]
+            let right =
+                let decrementInteraction = if awayScore > 0u then Clickable ((fun _ -> AwayScoreDecremented |> dispatch), None) else NotEnabled None
+                let incrementInteraction = Clickable ((fun _ -> AwayScoreIncremented |> dispatch), None)
+                let decrement = [ str "-" ] |> button theme { buttonLinkSmall with Interaction = decrementInteraction }
+                let increment = [ str "+" ] |> button theme { buttonLinkSmall with Interaction = incrementInteraction }
+                [
+                    [ bold awaySquadName ] |> para theme paraCentredSmaller
+                    br
+                    div divCentred [
+                        decrement
+                        div { divDefault with PadH = 5 |> Some } [ [ str (sprintf "%i" awayScore) ] |> para theme paraCentredSmaller ]
+                        increment ]
+                ]
+            let contents =
+                [
+                    notification theme notificationWarning warning
+                    br
+                    columnsLeftAndRight left right
+                ]
+            interaction, contents
         | ManOfTheMatchEvent playerId ->
             let interaction = match playerId with | Some _ -> addMatchEventInteraction | None -> NotEnabled None
             let values = (String.Empty, String.Empty) :: (squadId |> possiblePlayers false squadDic)
@@ -324,7 +365,7 @@ let private renderAddMatchEventModal (useDefaultTheme, fixtureDic:FixtureDic, sq
                     divVerticalSpace 5
                 ]
             interaction, contents
-    let contents = match contents with | _ :: _ -> contents | [] -> [ [ str "Coming soon" ] |> para theme paraCentredSmaller ; br ]
+    let contents = match contents with | _ :: _ -> contents | [] -> [ [ str "Coming soon" ] |> para theme paraCentredSmaller ; br ] // note: should never happen
     let body = [
         match errorText with
         | Some errorText ->
@@ -571,7 +612,6 @@ let private renderFixture useDefaultTheme fixtureId (fixtureDic:FixtureDic) (squ
 
             // TODO-SOON: Points-4-sweepstakers? "Special" News post?...
 
-            //yield [ str "TODO:Points-4-sweepstakers..." ] |> para theme paraCentredSmaller
         ]
     | _ -> [] // note: should never happen
 

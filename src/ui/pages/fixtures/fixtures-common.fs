@@ -29,8 +29,10 @@ type AddMatchEventInput =
     | PenaltyTypeChanged of penaltyType : PenaltyType
     | OppositionPlayerSelected of playerIdJson : string
     | CardSelected of card : Card
-    | HomeScoreTextChanged of homeScoreText : string
-    | AwayScoreTextChanged of awayScoreText : string
+    | HomeScoreDecremented
+    | HomeScoreIncremented
+    | AwayScoreDecremented
+    | AwayScoreIncremented
     | AddMatchEvent
     | CancelAddMatchEvent
 
@@ -76,7 +78,7 @@ type AddMatchEvent =
     | PenaltyEvent of opponentSquadId : SquadId * opponentHasCleanSheet : bool * playerId : PlayerId option * penaltyType : PenaltyType option * savedBy : PlayerId option
     | CardEvent of playerId : PlayerId option * card : Card option
     | CleanSheetEvent of playerId : PlayerId option
-    | PenaltyShootoutEvent of awaySquadId : SquadId * homeScoreText : string * awayScoreText : string
+    | PenaltyShootoutEvent of awaySquadId : SquadId * homeScore : uint32 * awayScore : uint32
     | ManOfTheMatchEvent of playerId : PlayerId option
 
 type AddMatchEventStatus =
@@ -148,4 +150,4 @@ let matchEventText (squadDic:SquadDic) matchEvent =
     | ManOfTheMatch (squadId, playerId) ->
         let (PlayerName playerName) = (squadId, playerId) |> playerName squadDic
         sprintf "Man-of-the-match for %s" playerName
-    | PenaltyShootout _ -> SHOULD_NEVER_HAPPEN
+    | PenaltyShootout _ -> "Penalty shootout"

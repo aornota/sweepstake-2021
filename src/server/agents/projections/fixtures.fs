@@ -102,7 +102,7 @@ let private cards (matchEventDic:MatchEventDic) =
             let cards = cards |> List.mapi (fun i card -> match card, i with | Yellow, 0 -> Yellow | Yellow, _ -> SecondYellow | _ -> card)
             pair, cards)
 
-let private teamScoreEvents role forSquadId againstSquadId (cards:((SquadId * PlayerId) * Card list) list) matchOutcome (squadDic:SquadDic) =
+let private teamScoreEvents fixture role forSquadId againstSquadId (cards:((SquadId * PlayerId) * Card list) list) matchOutcome (squadDic:SquadDic) =
     let seeding squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
     match forSquadId |> seeding, againstSquadId |> seeding with
     | Some forSeeding, Some againstSeeding ->
@@ -121,8 +121,11 @@ let private teamScoreEvents role forSquadId againstSquadId (cards:((SquadId * Pl
                 let points = match forIsTop16, againstIsTop16 with | true, false -> 12<point> | false, true -> 20<point> | _ -> 16<point>
                 [ MatchWon, points ]
             | _, Draw ->
-                let points = match forIsTop16, againstIsTop16 with | true, false -> 4<point> | false, true -> 8<point> | _ -> 6<point>
-                [ MatchDrawn, points ]
+                match fixture.Stage with
+                | Group _ ->
+                    let points = match forIsTop16, againstIsTop16 with | true, false -> 4<point> | false, true -> 8<point> | _ -> 6<point>
+                    [ MatchDrawn, points ]
+                | _ -> [] // note: no draws for knockout matches
             | Home, AwayWin | Away, HomeWin -> []
         let cardEvents =
             cards |> List.collect (fun ((squadId, playerId), cards) ->
@@ -169,9 +172,9 @@ let private fixtureDto (squadDic:SquadDic) (fixtureId, fixture:Fixture) : Fixtur
         | Some (homeSquadId, awaySquadId, matchOutcome) ->
             let matchEventDic = fixture.MatchEventDic
             let cards = matchEventDic |> cards
-            let homeTeamScoreEvents = teamScoreEvents Home homeSquadId awaySquadId cards matchOutcome squadDic
+            let homeTeamScoreEvents = teamScoreEvents fixture Home homeSquadId awaySquadId cards matchOutcome squadDic
             let homePlayerScoreEvents = playerScoreEvents homeSquadId cards matchEventDic
-            let awayTeamScoreEvents = teamScoreEvents Away awaySquadId homeSquadId cards matchOutcome squadDic
+            let awayTeamScoreEvents = teamScoreEvents fixture Away awaySquadId homeSquadId cards matchOutcome squadDic
             let awayPlayerScoreEvents = playerScoreEvents awaySquadId cards matchEventDic
             let homeScoreEvents = { TeamScoreEvents = homeTeamScoreEvents ; PlayerScoreEvents = homePlayerScoreEvents }
             let awayScoreEvents = { TeamScoreEvents = awayTeamScoreEvents ; PlayerScoreEvents = awayPlayerScoreEvents }
