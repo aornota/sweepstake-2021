@@ -1,16 +1,12 @@
-module Aornota.UI.Render.Bulma
+module Aornota.Sweepstake2021.Ui.Render.Bulma
 
-open Aornota.UI.Render.Common
+open Aornota.Sweepstake2021.Ui.Render.Common
 
-module Rct = Fable.Helpers.React
-open Fable.Helpers.React.Props
+open Fable.React.Props
+module RctS = Fable.React.Standard
 
 open Fulma
-open Fulma.Components
-open Fulma.Elements
-open Fulma.Elements.Form
-open Fulma.Extensions
-open Fulma.Layouts
+open Fulma.Extensions.Wikiki
 
 type ContainerWidth = | Fluid | Widescreen | FullHD
 
@@ -79,7 +75,7 @@ let icon iconData =
     Icon.icon [
         match size with Some size -> yield size | None -> ()
         match alignment with Some alignment -> yield alignment | None -> ()
-    ] [ Rct.i [ ClassName (sprintf "fa %s %s" iconClass faSize) ] [] ]
+    ] [ RctS.i [ ClassName (sprintf "fa %s %s" iconClass faSize) ] [] ]
 
 let image source size =
     let option =
@@ -95,7 +91,7 @@ let image source size =
         | None -> None
     Image.image [
         yield Image.Props [ Key source ]
-        match option with | Some option -> yield option | None -> () ] [ Rct.img [ Src source] ]
+        match option with | Some option -> yield option | None -> () ] [ RctS.img [ Src source] ]
 
 let level hasContinuation children = Level.level [ if hasContinuation then yield Level.Level.CustomClass "hasContinuation" ] children
 
@@ -105,32 +101,21 @@ let levelItem children = Level.item [] children
 
 let navbarBrand children = Navbar.Brand.div [] children
 let navbarBurger onClick isActive =
-    Navbar.burger 
+    Navbar.burger
         [
-            if isActive then yield Fulma.Common.CustomClass "is-active"
-            yield Fulma.Common.Props [ OnClick onClick ]
+            if isActive then yield Navbar.Burger.CustomClass "is-active"
+            yield Navbar.Burger.Props [ OnClick onClick ]
         ]
-        [ for _ in 1..3 do yield Rct.span [] [] ]
+        [ for _ in 1..3 do yield RctS.span [] [] ]
 let navbarItem children = Navbar.Item.div [] children
 let navbarStart children = Navbar.Start.div [] children
 let navbarEnd children = Navbar.End.div [] children
 
-let radioInline text isChecked disabled onChange =
-    let colour, text = if isChecked then IsSuccess, bold text else IsPrimary, str text
-    Checkradio.radioInline [
-        Checkradio.HasBackgroundColor
-        Checkradio.Color colour
-        Checkradio.Size IsSmall
-        Checkradio.Checked isChecked
-        Checkradio.Disabled disabled
-        Checkradio.OnChange onChange
-    ] [ text ]
-
-let thead children = Rct.thead [] children
-let tbody children = Rct.tbody [] children
-let tr isSelected children = Rct.tr [ if isSelected then yield ClassName "is-selected" :> IHTMLProp ] children
-let th children = Rct.th [] children
-let td children = Rct.td [] children
+let thead children = RctS.thead [] children
+let tbody children = RctS.tbody [] children
+let tr isSelected children = RctS.tr [ if isSelected then yield ClassName "is-selected" :> IHTMLProp ] children
+let th children = RctS.th [] children
+let td children = RctS.td [] children
 
 let divTags children = div { divDefault with DivCustomClass = Some "tags" } children
 

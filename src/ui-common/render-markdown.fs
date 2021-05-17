@@ -1,17 +1,14 @@
-module Aornota.UI.Common.Render.Markdown
+module Aornota.Sweepstake2021.Ui.Common.Render.Markdown
 
-open Aornota.Common.Markdown
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Ui.Common.Marked
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Theme.Common
 
-open Aornota.UI.Common.Marked
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
+open Fable.React
+open Fable.React.Props
 
-open Fable.Core
-module Rct = Fable.Helpers.React
-open Fable.Helpers.React.Props
-
-[<Pojo>]
 type private DangerousInnerHtml = { __html : string }
 
 let [<Literal>] private MARKDOWN_CLASS = "markdown"
@@ -23,9 +20,9 @@ let contentFromMarkdown' theme inNotification (Markdown markdown) =
         if inNotification then yield sprintf "%s-in-notification" className else yield className ]
     let customClass = match customClasses with | _ :: _ -> ClassName (String.concat SPACE customClasses) |> Some | [] -> None
     content [
-        Rct.div [
+        div [
             match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> ()
-            yield DangerouslySetInnerHTML { __html = Marked.Globals.marked.parse markdown } :> IHTMLProp ] [] ]
+            yield DangerouslySetInnerHTML { __html = Globals.marked.parse markdown } :> IHTMLProp ] [] ]
 
 let contentFromMarkdown theme markdown = markdown |> contentFromMarkdown' theme false
 

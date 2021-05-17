@@ -1,15 +1,13 @@
-module Aornota.Sweepstake2018.Common.Domain.Draft
+module Aornota.Sweepstake2021.Common.Domain.Draft
 
-open Aornota.Common.Revision
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Revision
 
 open System
 
-type DraftId = | DraftId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> DraftId
+type DraftId = | DraftId of guid : Guid with static member Create () = Guid.NewGuid () |> DraftId
 
 type DraftType =
     | Constrained of starts : DateTimeOffset * ends : DateTimeOffset

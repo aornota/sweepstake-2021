@@ -1,14 +1,13 @@
-module Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
+module Aornota.Sweepstake2021.Ui.Pages.Fixtures.Common
 
-open Aornota.UI.Common.Notifications
-open Aornota.UI.Common.ShouldNeverHappen
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Ui.Shared
 
 type FixturesFilter =
     | AllFixtures
@@ -114,9 +113,9 @@ let unconfirmedText unconfirmed =
     | Winner (RoundOf16 matchNumber) -> sprintf "Match %i winner" matchNumber
     | Winner (QuarterFinal quarterFinalOrdinal) -> sprintf "Quarter-final %i winner" quarterFinalOrdinal
     | Winner (SemiFinal semiFinalOrdinal) -> sprintf "Semi-final %i winner" semiFinalOrdinal
-    | Winner (ThirdPlacePlayOff) | Winner (Final) -> SHOULD_NEVER_HAPPEN
+    | Winner (Final) -> SHOULD_NEVER_HAPPEN
     | RunnerUp group -> sprintf "%s runner-up" (group |> groupText)
-    | Loser semiFinalOrdinal -> sprintf "Semi-final %i loser" semiFinalOrdinal
+    | ThirdPlace groups -> sprintf "Third-place (%s)" (groups |> List.map groupText |> String.concat " | ")
 
 let matchEventText (squadDic:SquadDic) matchEvent =
     match matchEvent with

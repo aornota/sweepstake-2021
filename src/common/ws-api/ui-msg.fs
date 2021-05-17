@@ -1,15 +1,15 @@
-module Aornota.Sweepstake2018.Common.WsApi.UiMsg
+module Aornota.Sweepstake2021.Common.WsApi.UiMsg
 
-open Aornota.Common.Markdown
-open Aornota.Common.Revision
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.Revision
 
-open Aornota.Sweepstake2018.Common.Domain.Chat
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.Chat
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
 
 type UiUnauthAppMsg =
     | SignInCmd of sessionId : SessionId * userName : UserName * password : Password

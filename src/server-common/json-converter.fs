@@ -1,11 +1,19 @@
-module Aornota.Server.Common.JsonConverter
+module Aornota.Sweepstake2021.Server.Common.JsonConverter
 
-open Aornota.Common.Json
+open Aornota.Sweepstake2021.Common.Json
 
-open Newtonsoft.Json
+open Thoth.Json.Net
 
-let private jsonConverter = Fable.JsonConverter () :> JsonConverter
+let private extraCoders = // note: needed to handle unit (for some reason)
+    Extra.empty
+    |> Extra.withDecimal
+    |> Extra.withCustom (fun _ -> Encode.nil) (fun _ _ -> Ok ())
 
-let toJson value = JsonConvert.SerializeObject (value, [| jsonConverter |]) |> Json
+// Note: toJson/fromJson differ from Aornota.Sweepstake2019.Ui.Common.JsonConverter; see notes for Ui versions for details.
 
-let ofJson<'a> (Json json) : 'a = JsonConvert.DeserializeObject<'a> (json, [| jsonConverter |])
+let toJson<'a> value = Json (Encode.Auto.toString<'a> (SPACE_COUNT, value, extra = extraCoders))
+
+let fromJson<'a> (Json json) =
+    match Decode.Auto.fromString<'a> (json, extra = extraCoders) with
+    | Ok value -> value
+    | Error error -> failwithf "Unable to deserialize %s -> %s" json error

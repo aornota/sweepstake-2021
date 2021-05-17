@@ -1,4 +1,4 @@
-module Aornota.Sweepstake2018.Server.Connection
+module Aornota.Sweepstake2021.Server.Connection
 
 open System
 

@@ -1,23 +1,22 @@
-module Aornota.Sweepstake2018.UI.Pages.Drafts.Render
+module Aornota.Sweepstake2021.Ui.Pages.Drafts.Render
 
-open Aornota.UI.Common.LazyViewOrHMR
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Ui.Common.LazyViewOrHMR
+open Aornota.Sweepstake2021.Ui.Pages.Drafts.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Shared
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
-open Aornota.Sweepstake2018.UI.Shared
-
-module Rct = Fable.Helpers.React
+module RctH = Fable.React.Helpers
 
 let private draftTabs drafts currentDraftId dispatch =
     drafts |> List.map (fun (draftId, draft) ->
-        { IsActive = draftId = currentDraftId ; TabText = draft.DraftOrdinal |> draftText ; TabLinkType = ClickableLink (fun _ -> draftId |> ShowDraft |> dispatch ) })
+        { IsActive = draftId = currentDraftId ; TabText = draft.DraftOrdinal |> draftText ; TabLinkType = Internal (fun _ -> draftId |> ShowDraft |> dispatch ) })
 
 let private squadDescription (squadDic:SquadDic) squadId =
     if squadId |> squadDic.ContainsKey then       
@@ -59,7 +58,7 @@ let private renderUserDraftPicks theme userDraftPicks (userDic:UserDic) (squadDi
     |> List.sortBy fst
     |> List.map (fun (userName, userDraftPickDtos) ->
         [
-            yield [ bold userName ; str " wanted" ] |> para theme paraDefaultSmall
+            yield [ strong userName ; str " wanted" ] |> para theme paraDefaultSmall
             yield! userDraftPickDtos |> List.map userDraftPickElement
             yield br
         ])
@@ -73,7 +72,7 @@ let private draftPickText (squadDic:SquadDic) draftPick =
 let private renderProcessingEvents theme processingEvents (userDic:UserDic) (squadDic:SquadDic) =
     let ignoredElements reason (ignored:(UserId * DraftPick list) list) =
         let ignoredElement userName draftPick = 
-            [ str (sprintf "Removed %s for " (draftPick |> draftPickText squadDic)) ; bold userName ; str (sprintf ": %s" reason) ] |> para theme paraDefaultSmallest
+            [ str (sprintf "Removed %s for " (draftPick |> draftPickText squadDic)) ; strong userName ; str (sprintf ": %s" reason) ] |> para theme paraDefaultSmallest
         ignored
         |> List.map (fun (userId, draftPicks) -> userId |> userNameText userDic, draftPicks)
         |> List.sortBy fst
@@ -85,17 +84,17 @@ let private renderProcessingEvents theme processingEvents (userDic:UserDic) (squ
         |> List.collect id
     let eventElements event =
         match event with
-        | ProcessingStarted seed -> [ [ bold "Using random seed" ; str (sprintf " %i" seed) ] |> para theme paraDefaultSmall ]
+        | ProcessingStarted seed -> [ [ strong "Using random seed" ; str (sprintf " %i" seed) ] |> para theme paraDefaultSmall ]
         | WithdrawnPlayersIgnored ignored ->
             let ignored = ignored |> List.map (fun (userId, squadAndPlayerIds) -> userId, squadAndPlayerIds |> List.map PlayerPicked)
             ignored |> ignoredElements "player has been withdrawn"
-        | RoundStarted round -> [ br ; [ bold (sprintf "Round %i" round) ] |> para theme paraDefaultSmaller ]
+        | RoundStarted round -> [ br ; [ strong (sprintf "Round %i" round) ] |> para theme paraDefaultSmaller ]
         | AlreadyPickedIgnored ignored -> ignored |> ignoredElements "picked in an earlier draft / round"
         | NoLongerRequiredIgnored ignored -> ignored |> ignoredElements "no longer required"
         | UncontestedPick (draftPick, userId) ->
             [
                 br
-                [ bold (userId |> userNameText userDic) ; str " has a unique pick for this round: " ; bold (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest
+                [ strong (userId |> userNameText userDic) ; str " has a unique pick for this round: " ; strong (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest
             ]
         | ContestedPick (draftPick, userDetails, winner) ->
             let pickPriorities =
@@ -103,7 +102,7 @@ let private renderProcessingEvents theme processingEvents (userDic:UserDic) (squ
                 |> List.mapi (fun i (userId, pickPriority, _) ->
                     [
                         if i = 0 then yield br
-                        yield [ bold (userId |> userNameText userDic) ; str (sprintf " has pick priority %i" pickPriority) ] |> para theme paraDefaultSmallest
+                        yield [ strong (userId |> userNameText userDic) ; str (sprintf " has pick priority %i" pickPriority) ] |> para theme paraDefaultSmallest
                     ])
                 |> List.collect id
             let randomNumbers =
@@ -112,22 +111,22 @@ let private renderProcessingEvents theme processingEvents (userDic:UserDic) (squ
                 |> List.map (fun (userId, randomNumber) ->
                     [
                         br
-                        [ bold (userId |> userNameText userDic) ; str " has highest pick priority" ] |> para theme paraDefaultSmallest
-                        [ bold (userId |> userNameText userDic) ; str (sprintf " assigned random number %.8f" randomNumber) ] |> para theme paraDefaultSmallest
+                        [ strong (userId |> userNameText userDic) ; str " has highest pick priority" ] |> para theme paraDefaultSmallest
+                        [ strong (userId |> userNameText userDic) ; str (sprintf " assigned random number %.8f" randomNumber) ] |> para theme paraDefaultSmallest
                     ])
                 |> List.collect id
             [
                 yield br
-                yield [ bold (draftPick |> draftPickText squadDic) ; str " is a contested pick for this round" ] |> para theme paraDefaultSmallest
+                yield [ strong (draftPick |> draftPickText squadDic) ; str " is a contested pick for this round" ] |> para theme paraDefaultSmallest
                 yield! pickPriorities
                 yield! randomNumbers
                 yield br
-                yield [ bold (winner |> userNameText userDic) ; str " has the highest random number" ] |> para theme paraDefaultSmallest
+                yield [ strong (winner |> userNameText userDic) ; str " has the highest random number" ] |> para theme paraDefaultSmallest
             ]
         | PickPriorityChanged (userId, pickPriority) ->
-            [ br ; [ str (sprintf "Pick priority changed to %i for " pickPriority) ; bold (userId |> userNameText userDic) ] |> para theme paraDefaultSmallest ]
+            [ br ; [ str (sprintf "Pick priority changed to %i for " pickPriority) ; strong (userId |> userNameText userDic) ] |> para theme paraDefaultSmallest ]
         | Picked (_, draftPick, userId, _) ->
-            [ br ; [ bold (userId |> userNameText userDic) ; str " successfully picked " ; str (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest ]
+            [ br ; [ strong (userId |> userNameText userDic) ; str " successfully picked " ; str (draftPick |> draftPickText squadDic) ] |> para theme paraDefaultSmallest ]
     processingEvents |> List.collect eventElements
 
 let private renderPicked theme picked (userDic:UserDic) (squadDic:SquadDic) =
@@ -140,7 +139,7 @@ let private renderPicked theme picked (userDic:UserDic) (squadDic:SquadDic) =
     |> List.sortBy fst
     |> List.map (fun (userName, draftPicks) ->
         [
-            yield [ bold userName ; str " ended up with" ] |> para theme paraDefaultSmall
+            yield [ strong userName ; str " ended up with" ] |> para theme paraDefaultSmall
             yield! draftPicks |> List.map draftPickElement
             yield br
         ])
@@ -216,13 +215,13 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                 [ [ str (sprintf "Remove from %s" draftTextLower) ] |> button theme { buttonDangerSmall with Interaction = interaction } ] |> para theme paraDefaultSmallest |> Some
             else None
         tr false [
-            td [ Rct.ofOption increasePriorityButton ]
+            td [ RctH.ofOption increasePriorityButton ]
             td [ [ str (sprintf "#%i" rank) ] |> para theme paraCentredSmallest ]
-            td [ Rct.ofOption decreasePriorityButton ]
+            td [ RctH.ofOption decreasePriorityButton ]
             td [ description ]
-            td [ Rct.ofOption extra ]
-            td [ Rct.ofOption removeButton ]
-            td [ Rct.ofOption withdrawn ] ]
+            td [ RctH.ofOption extra ]
+            td [ RctH.ofOption removeButton ]
+            td [ RctH.ofOption withdrawn ] ]
     let userDraftPickRows =
         userDraftPickDic |> List.ofSeq |> List.sortBy (fun (KeyValue (_, rank)) -> rank) |> List.map (fun (KeyValue (userDraftPick, rank)) -> (userDraftPick, rank) |> userDraftPickRow)
     div divCentred [
@@ -231,7 +230,7 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                 thead [ 
                     tr false [
                         th []
-                        th [ [ bold "Rank" ] |> para theme paraCentredSmallest ]
+                        th [ [ strong "Rank" ] |> para theme paraCentredSmallest ]
                         th []
                         th []
                         th []
@@ -239,14 +238,14 @@ let private renderActiveDraft (useDefaultTheme, state, draftId, draft:Draft, isO
                         th [] ] ]
                 tbody [ yield! userDraftPickRows ] ]
         else if needsMorePicks then
-            yield [ bold (sprintf "You have not made any selections for the %s" draftTextLower) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger }
+            yield [ strong (sprintf "You have not made any selections for the %s" draftTextLower) ] |> para theme { paraCentredSmallest with ParaColour = SemanticPara Danger }
         else
-            yield [ bold (sprintf "You do not need to make any selections for the %s" draftTextLower) ] |> para theme paraCentredSmallest ]
+            yield [ strong (sprintf "You do not need to make any selections for the %s" draftTextLower) ] |> para theme paraCentredSmallest ]
 
 let render (useDefaultTheme, state, authUser:AuthUser, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option>, usersProjection:Projection<_ * UserDic>, squadsProjection:Projection<_ * SquadDic>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "Drafts" ] |> para theme paraCentredSmall
+        yield [ strong "Drafts" ] |> para theme paraCentredSmall
         yield hr theme false
         match draftsProjection, squadsProjection with
         | Pending, _ | _, Pending ->

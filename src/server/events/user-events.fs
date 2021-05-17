@@ -1,6 +1,6 @@
-module Aornota.Sweepstake2018.Server.Events.UserEvents
+module Aornota.Sweepstake2021.Server.Events.UserEvents
 
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.User
 
 type Salt = | Salt of string
 type Hash = | Hash of string

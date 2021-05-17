@@ -1,4 +1,4 @@
-module Aornota.Sweepstake2018.Server.Agents.Entities.Drafts
+module Aornota.Sweepstake2021.Server.Agents.Entities.Drafts
 
 (* Broadcasts: SendMsg
                DraftsRead
@@ -9,28 +9,26 @@ module Aornota.Sweepstake2018.Server.Agents.Entities.Drafts
                DraftsEventsRead
                UserDraftsEventsRead *)
 
-open Aornota.Common.IfDebug
-open Aornota.Common.Revision
-open Aornota.Common.UnexpectedError
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.Server.Common.Helpers
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Server.Agents.Broadcaster
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Agents.Persistence
-open Aornota.Sweepstake2018.Server.Agents.Ticker
-open Aornota.Sweepstake2018.Server.Authorization
-open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Events.DraftEvents
-open Aornota.Sweepstake2018.Server.Events.SquadEvents
-open Aornota.Sweepstake2018.Server.Events.UserDraftEvents
-open Aornota.Sweepstake2018.Server.Signal
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Server.Agents.Broadcaster
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Agents.Persistence
+open Aornota.Sweepstake2021.Server.Agents.Ticker
+open Aornota.Sweepstake2021.Server.Authorization
+open Aornota.Sweepstake2021.Server.Common.Helpers
+open Aornota.Sweepstake2021.Server.Connection
+open Aornota.Sweepstake2021.Server.Events.DraftEvents
+open Aornota.Sweepstake2021.Server.Events.SquadEvents
+open Aornota.Sweepstake2021.Server.Events.UserDraftEvents
+open Aornota.Sweepstake2021.Server.Signal
 
 open System
 open System.Collections.Generic
@@ -88,7 +86,6 @@ let private logResult source successText result =
 
 let private agentId = Guid "ffffffff-ffff-ffff-ffff-000000000001" |> UserId
 
-// #region Drafts
 let private applyDraftEvent source (idAndDraftResult:Result<DraftId * Draft option, OtherError<string>>) (nextRvn, draftEvent:DraftEvent) =
     let otherError errorText = otherError (sprintf "%s#applyDraftEvent" source) errorText
     match idAndDraftResult, draftEvent with
@@ -242,9 +239,6 @@ let rec private tryApplyAndWriteDraftEventsAsync source auditUserId currentRvn d
             | Error error -> return error |> Error
         | Error error -> return error |> Error
     | [] -> return (draftId, draft, currentRvn) |> Ok }
-// #endregion
-
-// #region Draft processing
 
 type private DraftPickSet = HashSet<DraftPick>
 
@@ -460,9 +454,7 @@ let private processDraft source draftId draftOrdinal (pickPriorityDic:PickPriori
     sprintf "Using random seed %i" seed |> Verbose |> log
     let random = Random seed
     processRounds random draftId draftOrdinal userStatuses allPicked squadDic 1u ([ (draftId, seed) |> DraftEvent.ProcessingStarted ] @ events)
-// #endregion
 
-// #region UserDrafts
 let private applyUserDraftEvent source idAndUserDraftResult (nextRvn, userDraftEvent:UserDraftEvent) =
     let otherError errorText = otherError (sprintf "%s#applyUserDraftEvent" source) errorText
     match idAndUserDraftResult, userDraftEvent with
@@ -549,7 +541,6 @@ let private tryApplyUserDraftEvent source userDraftId userDraft nextRvn thing us
 let private tryWriteUserDraftEventAsync auditUserId rvn userDraftEvent (userDraft:UserDraft) thing = async {
     let! result = (auditUserId, rvn, userDraftEvent) |> persistence.WriteUserDraftEventAsync
     return match result with | Ok _ -> (userDraftEvent.UserDraftId, userDraft, thing) |> Ok | Error persistenceError -> persistenceError |> AuthCmdPersistenceError |> Error }
-// #endregion
 
 let private ifAllRead (draftDic:DraftDic option, userDraftDic:UserDraftDic option, squadsRead:(SquadRead list) option) =
     match draftDic, userDraftDic, squadsRead with

@@ -1,13 +1,11 @@
-module Aornota.Sweepstake2018.Common.Domain.Chat
+module Aornota.Sweepstake2021.Common.Domain.Chat
 
-open Aornota.Common.Markdown
-
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
 
 open System
 
-type ChatMessageId = | ChatMessageId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> ChatMessageId
+type ChatMessageId = | ChatMessageId of guid : Guid with static member Create () = Guid.NewGuid () |> ChatMessageId
 
 type ChatMessageDto = { ChatMessageId : ChatMessageId ; UserId : UserId ; MessageText : Markdown ; Timestamp : DateTimeOffset }
 

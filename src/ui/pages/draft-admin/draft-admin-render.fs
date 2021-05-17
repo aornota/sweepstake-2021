@@ -1,20 +1,19 @@
-module Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Render
+module Aornota.Sweepstake2021.Ui.Pages.DraftAdmin.Render
 
-open Aornota.UI.Common.LazyViewOrHMR
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Ui.Common.LazyViewOrHMR
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Pages.DraftAdmin.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Shared
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Common
-open Aornota.Sweepstake2018.UI.Shared
-
-module Rct = Fable.Helpers.React
+module RctH = Fable.React.Helpers
 
 let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, processDraftState:ProcessDraftState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -24,6 +23,7 @@ let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, process
         match draft with
         | Some draft -> sprintf "Process %s" (draft.DraftOrdinal |> draftTextLower)
         | None -> "Process draft" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let confirmInteraction, onDismiss =
         let confirm = (fun _ -> ConfirmProcessDraft |> dispatch)
         let cancel = (fun _ -> CancelProcessDraft |> dispatch)
@@ -32,7 +32,7 @@ let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, process
         | Some (ProcessDraftFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match processDraftState.ProcessDraftStatus with | Some (ProcessDraftFailed errorText) -> errorText |> Some | Some ProcessDraftPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to process this draft?" ] |> para theme paraCentredSmaller
+        [ strong "Are you sure you want to process this draft?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -45,7 +45,7 @@ let private renderProcessDraftModal (useDefaultTheme, draftDic:DraftDic, process
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Process draft" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
@@ -54,7 +54,7 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch
         let isPendingProcessing = match draft.DraftStatus with | PendingProcessing false -> true | _ -> false
         if canProcessDraft && isPendingProcessing then
             let onClick = (fun _ -> draftId |> ShowProcessDraftModal |> dispatch)
-            [ [ str "Process" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
+            [ [ str "Process" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (Internal onClick) |> Some
         else None
     let draftRow (draftId, draft:Draft) =
         let (DraftOrdinal draftOrdinal) = draft.DraftOrdinal
@@ -62,7 +62,7 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch
         let draftOrdinal, status, starts, ends =
             match draft.DraftStatus with
             | PendingOpen (starts, ends) ->
-                let status = [ italic "Pending" ] |> para theme paraDefaultSmallest
+                let status = [ em "Pending" ] |> para theme paraDefaultSmallest
                 let starts, ends = starts.LocalDateTime |> dateAndTimeText, ends.LocalDateTime |> dateAndTimeText
                 let starts = [ str starts ] |> para theme paraDefaultSmallest
                 let ends = [ str ends ] |> para theme paraDefaultSmallest
@@ -73,10 +73,10 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch
                 let ends = [ str ends ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, ends |> Some
             | PendingProcessing false ->
-                let status = [ italic "Pending processing" ] |> para theme paraDefaultSmallest
+                let status = [ em "Pending processing" ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, None
             | PendingProcessing true ->
-                let status = [ bold "Processing in progress" ] |> para theme paraDefaultSmallest
+                let status = [ strong "Processing in progress" ] |> para theme paraDefaultSmallest
                 draftOrdinal |> Some, status |> Some, None, None
             | Processed ->
                 let status = [ str "Processed" ] |> para theme paraDefaultSmallest
@@ -86,11 +86,11 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch
                 None, status |> Some, None, None
             | _ -> None, None, None, None
         tr false [
-            td [ Rct.ofOption draftOrdinal ]
-            td [ Rct.ofOption status ]
-            td [ Rct.ofOption starts ]
-            td [ Rct.ofOption ends ]
-            td [ Rct.ofOption ((draftId, draft) |> processDraft) ] ]
+            td [ RctH.ofOption draftOrdinal ]
+            td [ RctH.ofOption status ]
+            td [ RctH.ofOption starts ]
+            td [ RctH.ofOption ends ]
+            td [ RctH.ofOption ((draftId, draft) |> processDraft) ] ]
     let drafts = draftDic |> List.ofSeq |> List.map (fun (KeyValue (draftId, draft)) -> draftId, draft) |> List.sortBy (fun (_, draft) -> draft.DraftOrdinal)
     let draftRows = drafts |> List.map draftRow
     div divCentred [
@@ -98,10 +98,10 @@ let private renderDrafts (useDefaultTheme, draftDic:DraftDic, authUser) dispatch
             yield table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
                 thead [ 
                     tr false [
-                        th [ [ bold "Draft" ] |> para theme paraCentredSmallest ]
-                        th [ [ bold "Status" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Starts" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Ends" ] |> para theme paraDefaultSmallest ]
+                        th [ [ strong "Draft" ] |> para theme paraCentredSmallest ]
+                        th [ [ strong "Status" ] |> para theme paraDefaultSmallest ]
+                        th [ [ strong "Starts" ] |> para theme paraDefaultSmallest ]
+                        th [ [ strong "Ends" ] |> para theme paraDefaultSmallest ]
                         th [] ] ]
                 tbody [ yield! draftRows ] ]
         else yield [ str "There are no drafts" ] |> para theme paraCentredSmaller ] // note: should never happen
@@ -127,15 +127,15 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
                 |> List.map (fun (KeyValue (_, userDraftSummaryDto)) -> userDraftSummaryDto)
             let userDraftSummaryRows = userDraftSummaries |> List.map userDraftSummaryRow
             [
-                yield [ bold (sprintf "Summary for %s" (draft.DraftOrdinal |> draftTextLower)) ] |> para theme paraCentredSmaller
+                yield [ strong (sprintf "Summary for %s" (draft.DraftOrdinal |> draftTextLower)) ] |> para theme paraCentredSmaller
                 yield hr theme true
                 if userDraftSummaries.Length > 0 then
                     yield div divCentred [
                         table theme false { tableDefault with IsNarrow = true } [
                             thead [ 
                                 tr false [
-                                    th [ [ bold "User" ] |> para theme paraDefaultSmallest ]
-                                    th [ [ bold "Selections" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
+                                    th [ [ strong "User" ] |> para theme paraDefaultSmallest ]
+                                    th [ [ strong "Selections" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ]
                             tbody [ yield! userDraftSummaryRows ] ] ]
                 else yield [ str "There are no user draft picks" ] |> para theme paraCentredSmallest
             ]
@@ -144,7 +144,7 @@ let private activeDraftSummary useDefaultTheme (userDraftProjection:Projection<_
 let render (useDefaultTheme, state, authUser:AuthUser, draftProjection:Projection<_ * DraftDic * _>, usersProjection:Projection<_ * UserDic>, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "Draft administration" ] |> para theme paraCentredSmall
+        yield [ strong "Draft administration" ] |> para theme paraCentredSmall
         yield hr theme false
         match usersProjection, draftProjection with
         | Pending, _ | _, Pending ->

@@ -1,9 +1,8 @@
-module Aornota.Sweepstake2018.Server.Events.NewsEvents
+module Aornota.Sweepstake2021.Server.Events.NewsEvents
 
-open Aornota.Common.Markdown
-
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
 
 open System
 

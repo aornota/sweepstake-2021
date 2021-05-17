@@ -1,9 +1,9 @@
-module Aornota.UI.Theme.Common
+module Aornota.Sweepstake2021.Ui.Theme.Common
 
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
 
-open Fable.Import.React
+open Browser.Types
 
 type ThemeClass = | ThemeClass of themeClass : string
 
@@ -26,7 +26,7 @@ type ButtonInteraction =
     | Loading
     | Static
     | NotEnabled of tooltipData : TooltipData option
-    
+
 type ButtonData = {
     ButtonSemantic : Semantic option
     ButtonSize : Size
@@ -38,10 +38,9 @@ type ButtonData = {
     IconRight : IconData option }
 
 type LinkType =
-    | SameWindow of url : string
+    | Internal of onClick : (MouseEvent -> unit)
     | NewWindow of url : string
     | DownloadFile of url : string * fileName : string
-    | ClickableLink of onClick : (MouseEvent -> unit)
 
 type MessageData = {
     MessageSemantic : Semantic option
@@ -81,6 +80,11 @@ type ProgressData = {
     Value : int
     MaxValue : int }
 
+type RadioData = {
+    RadioSemantic : Semantic option
+    RadioSize : Size
+    HasBackgroundColour : bool }
+
 type SpanClass = | Healthy | Unhealthy
 
 type SpanData = { SpanClass : SpanClass option }
@@ -102,7 +106,7 @@ type TabsData = {
     // TODO-NMB-LOW?... IsToggleRounded : bool
     TabsAlignment : Alignment
     TabsSize : Size
-    Tabs : TabData list }    
+    Tabs : TabData list }
 
 type TagData = {
     TagSemantic : Semantic option
@@ -120,6 +124,7 @@ type Theme = {
     TransformPageLoaderData : PageLoaderData -> PageLoaderData
     TransformParaData : ParaData -> ParaData
     TransformProgressData : ProgressData -> ProgressData
+    TransformRadioData : RadioData -> RadioData
     TransformSpanData : SpanData -> SpanData
     TransformTableData : TableData -> TableData
     TransformTabsData : TabsData -> TabsData
@@ -200,6 +205,9 @@ let paraCentredLargest = { paraCentredSmallest with ParaSize = LargestText }
 
 let progressDefault = { ProgressSemantic = None ; ProgressSize = Normal ; Value = 0 ; MaxValue = 100 }
 
+let radioDefault = { RadioSemantic = None ; RadioSize = Normal ; HasBackgroundColour = false }
+let radioDefaultSmall = { radioDefault with RadioSize = Small }
+
 let spanDefault = { SpanClass = None }
 
 let tableDefault = { IsBordered = false ; IsNarrow = false ; IsStriped = false ; IsFullWidth = false }
@@ -232,8 +240,7 @@ let tagBlackMedium = { tagBlack with TagSize = Medium }
 let tagWhite = { tagDefault with TagSemantic = Some White }
 let tagWhiteMedium = { tagWhite with TagSize = Medium }
 
-let tooltipDefaultTop = { TooltipSemantic = Some Black ; Position = TooltipTop ; IsMultiLine = false ; TooltipText = EMPTY_STRING }
+let tooltipDefaultTop = { TooltipSemantic = Some Info ; Position = TooltipTop ; IsMultiLine = false ; TooltipText = EMPTY_STRING }
 let tooltipDefaultRight = { tooltipDefaultTop with Position = TooltipRight }
 let tooltipDefaultBottom = { tooltipDefaultTop with Position = TooltipBottom }
 let tooltipDefaultLeft = { tooltipDefaultTop with Position = TooltipLeft }
-

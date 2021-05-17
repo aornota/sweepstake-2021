@@ -1,21 +1,17 @@
-module Aornota.UI.Theme.Render.Bulma
+module Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
 
 open System
 
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Theme.Common
 
 open Fable.Core.JsInterop
-module Rct = Fable.Helpers.React
-open Fable.Helpers.React.Props
+open Fable.React.Props
+module RctS = Fable.React.Standard
 
 open Fulma
-open Fulma.Components
-open Fulma.Elements
-open Fulma.Elements.Form
-open Fulma.Extensions
-open Fulma.Layouts
+open Fulma.Extensions.Wikiki
 
 type FieldData = {
     AddOns : Alignment option
@@ -71,7 +67,7 @@ let button theme buttonData children =
     let size = match buttonData.ButtonSize with | Large -> Some (Button.Size IsLarge) | Medium -> Some (Button.Size IsMedium) | Normal -> None | Small -> Some (Button.Size IsSmall)
     let customClasses = [
         match buttonData.ButtonSemantic with | Some Link -> yield IS_LINK | Some _ |  None -> ()
-        match tooltipData with 
+        match tooltipData with
         | Some tooltipData -> match getTooltipCustomClass tooltipData with | Some tooltipCustomClass -> yield tooltipCustomClass | None -> ()
         | None -> () ]
     let customClass = match customClasses with | _ :: _ -> Some (Button.CustomClass (String.concat SPACE customClasses)) | [] -> None
@@ -95,16 +91,22 @@ let button theme buttonData children =
         yield! children
         match buttonData.IconRight with | Some iconDataRight -> yield icon { iconDataRight with IconAlignment = Some RightAligned } | None -> () ]
 
-let cardModal theme title onDismiss body =
+let cardModal theme head body =
     let (ThemeClass className) = theme.ThemeClass
     let (AlternativeClass alternativeClassName) = theme.AlternativeClass
-    Modal.modal [ Modal.IsActive true ] [
+    Modal.modal [
+        Modal.IsActive true
+        Modal.Props [ match head with | Some(_, Some onDismiss) -> yield onEscapePressed onDismiss | _ -> () ]
+    ] [
         Modal.background [] []
         Modal.Card.card [] [
-            Modal.Card.head [ CustomClass alternativeClassName ] [
-                yield Modal.Card.title [ CustomClass alternativeClassName ] title
-                match onDismiss with | Some onDismiss -> yield Delete.delete [ Delete.OnClick onDismiss ] [] | None -> () ]
-            Modal.Card.body [ CustomClass className ] body ] ]
+            match head with
+            | Some(title, onDismiss) ->
+                yield Modal.Card.head [ CustomClass alternativeClassName ] [
+                    yield Modal.Card.title [ CustomClass className ] title
+                    match onDismiss with | Some onDismiss -> yield Delete.delete [ Delete.OnClick(fun _ -> onDismiss ()) ] [] | None -> () ]
+            | None -> ()
+            yield Modal.Card.body [ CustomClass className ] body ] ]
 
 let field theme fieldData children =
     let tooltipData = match fieldData.TooltipData with | Some tooltipData -> Some (theme.TransformTooltipData tooltipData) | None -> None
@@ -115,7 +117,7 @@ let field theme fieldData children =
         | Some RightAligned -> yield Field.HasAddonsRight
         | Some FullWidth -> yield Field.HasAddonsFullWidth
         | Some Justified | None -> ()
-        match fieldData.Grouped with 
+        match fieldData.Grouped with
         | Some Centred -> yield Field.IsGroupedCentered
         | Some LeftAligned -> yield Field.IsGrouped
         | Some RightAligned -> yield Field.IsGroupedRight
@@ -133,27 +135,25 @@ let footer theme useAlternativeClass children =
 
 let hr theme useAlternativeClass =
     let className = getClassName theme useAlternativeClass
-    Rct.hr [ ClassName className ] 
+    RctS.hr [ ClassName className ]
 
 let link theme linkType children =
     let (ThemeClass className) = theme.ThemeClass
     let customClasses = [
         yield className
-        match linkType with | ClickableLink _ -> yield "clickable" | _ -> () ]
+        match linkType with | Internal _ | DownloadFile _ -> yield "internal" | NewWindow _ -> yield "external" ]
     let customClass = match customClasses with | _ :: _ -> Some (String.concat SPACE customClasses) | [] -> None
-    Rct.a [
+    RctS.a [
         match customClass with | Some customClass -> yield ClassName customClass :> IHTMLProp | None -> ()
         match linkType with
+        | Internal onClick ->
+            yield OnClick onClick :> IHTMLProp
         | NewWindow url ->
             yield Href url :> IHTMLProp
             yield Target "_blank" :> IHTMLProp
-        | SameWindow url ->
-            yield Href url :> IHTMLProp
         | DownloadFile (url, fileName) ->
             yield Href url :> IHTMLProp
             yield Download fileName :> IHTMLProp
-        | ClickableLink onClick ->
-            yield OnClick onClick :> IHTMLProp
     ] children
 
 let media theme left content right =
@@ -174,7 +174,7 @@ let message theme messageData headerChildren bodyChildren =
         | Some Dark -> Some (Message.Color IsDark) | Some Light -> Some (Message.Color IsLight) | Some Black -> Some (Message.Color IsBlack) | Some White -> Some (Message.Color IsWhite)
         | None -> None
     let size = match messageData.MessageSize with | Large -> Some (Message.Size IsLarge) | Medium -> Some (Message.Size IsMedium) | Normal -> None | Small -> Some (Message.Size IsSmall)
-    Message.message [ 
+    Message.message [
         match semantic with | Some semantic -> yield semantic | None -> ()
         match messageData.MessageSemantic with | Some Link -> yield Message.CustomClass IS_LINK | _ -> ()
         match size with | Some size -> yield size | None -> ()
@@ -206,8 +206,8 @@ let navbarDropDown theme element children =
     let className = getClassName theme false
     Navbar.Item.div [ Navbar.Item.HasDropdown ; Navbar.Item.IsHoverable ] [
         // Note: Navbar.Link.CustomClass | Navbar.Dropdown.CustomClass do not work, so handle manually.
-        Rct.div [ ClassName (sprintf "navbar-link %s" className) ] [ element ]
-        Rct.div [ ClassName (sprintf "navbar-dropdown %s" className) ] children ]
+        RctS.div [ ClassName (sprintf "navbar-link %s" className) ] [ element ]
+        RctS.div [ ClassName (sprintf "navbar-dropdown %s" className) ] children ]
 
 let navbarDropDownItem theme isActive children =
     let className = getClassName theme false
@@ -232,7 +232,7 @@ let notification theme notificationData children =
         | Some Dark -> Some (Notification.Color IsDark) | Some Light -> Some (Notification.Color IsLight) | Some Black -> Some (Notification.Color IsBlack)
         | Some White -> Some (Notification.Color IsWhite)
         | None -> None
-    Notification.notification [ 
+    Notification.notification [
         match semantic with | Some semantic -> yield semantic | None -> ()
         match notificationData.NotificationSemantic with | Some Link -> yield Notification.CustomClass IS_LINK | _ -> ()
     ] [
@@ -275,7 +275,7 @@ let para theme paraData children =
         yield sprintf "is-size-%i" size
         yield sprintf "has-text-weight-%s" weight ]
     let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
-    Rct.p [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
+    RctS.p [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
 
 let progress theme useAlternativeClass progressData =
     let className = getClassName theme useAlternativeClass
@@ -300,17 +300,36 @@ let progress theme useAlternativeClass progressData =
         yield Progress.Max progressData.MaxValue
     ] []
 
+let radioInline theme radioData (key:Guid) text isChecked disabled onChange =
+    let radioData = theme.TransformRadioData radioData
+    let colour =
+        match radioData.RadioSemantic with
+        | Some Primary -> Some IsPrimary | Some Info -> Some IsInfo | Some Link -> Some IsLink
+        | Some Success -> Some IsSuccess | Some Warning -> Some IsWarning | Some Danger -> Some IsDanger
+        | Some Dark -> Some IsDark | Some Light -> Some IsLight | Some Black -> Some IsBlack | Some White -> Some IsWhite
+        | None -> None
+    let size = match radioData.RadioSize with | Large -> Some IsLarge | Medium -> Some IsMedium | Normal -> None | Small -> Some IsSmall
+    Checkradio.radioInline [
+        yield Checkradio.Id(key.ToString())
+        match size with | Some size -> yield Checkradio.Size size | None -> ()
+        if radioData.HasBackgroundColour then yield Checkradio.HasBackgroundColor
+        match colour with | Some colour -> yield Checkradio.Color colour | None -> ()
+        yield Checkradio.Checked isChecked
+        yield Checkradio.Disabled disabled
+        yield Checkradio.OnChange onChange
+    ] [ text ]
+
 // TODO-NMB-MEDIUM: "Genericize"?...
 let select theme values (defaultValue:string option) disabled (onChange:string -> unit) =
     let className = getClassName theme false
-    let options = values |> List.map (fun (value, text) -> Rct.option [ Value value ] [ str text ])
+    let options = values |> List.map (fun (value, text) -> RctS.option [ Value value ] [ str text ])
     Control.div [] [
         Select.select [
             Select.CustomClass className
             Select.Size IsSmall
             Select.Disabled disabled
         ] [
-            Rct.select [
+            RctS.select [
                 match defaultValue with | Some defaultValue -> yield DefaultValue defaultValue :> IHTMLProp | None -> ()
                 yield OnChange (fun ev -> !!ev.target?value |> onChange) :> IHTMLProp
             ] [ yield! options ] ] ]
@@ -320,7 +339,7 @@ let span theme spanData children =
     let customClasses = [
         match spanData.SpanClass with | Some Healthy -> yield "healthy" | Some Unhealthy -> yield "unhealthy" | None -> () ]
     let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
-    Rct.span [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
+    RctS.span [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ] children
 
 let tabs theme tabsData =
     let className = getClassName theme false
@@ -335,8 +354,8 @@ let tabs theme tabsData =
         match tabsData.TabsAlignment with | Centred -> yield "is-centered" | RightAligned -> yield "is-right" | FullWidth -> yield "is-fullwidth" | LeftAligned | Justified -> ()
     ]
     let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
-    Rct.div [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ]
-        [ Rct.ul [] [
+    RctS.div [ match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> () ]
+        [ RctS.ul [] [
             for tab in tabsData.Tabs do
                 yield Tabs.tab [ Tabs.Tab.IsActive tab.IsActive ] [ link theme tab.TabLinkType [ str tab.TabText ] ] ] ]
 
@@ -348,7 +367,7 @@ let table theme useAlternativeClass tableData children =
         if tableData.IsBordered then yield Table.IsBordered
         if tableData.IsNarrow then yield Table.IsNarrow
         if tableData.IsStriped then yield Table.IsStriped
-        if tableData.IsFullWidth then yield Table.IsFullwidth
+        if tableData.IsFullWidth then yield Table.IsFullWidth
     ] children
 
 let tag theme tagData children =
@@ -394,8 +413,9 @@ let textArea theme (key:Guid) text errorText helpInfo autoFocus disabled (onChan
 // TODO-NMB-MEDIUM: "Genericize"?...
 let textBox theme (key:Guid) text iconData isPassword helpErrorText helpInfo autoFocus disabled (onChange:string -> unit) onEnter =
     let className = getClassName theme false
+    let input = if isPassword then Input.password else Input.text
     Control.div [ Control.HasIconLeft ] [
-        yield Input.text [
+        yield input [
             match helpErrorText with | Some _ -> yield Input.Color IsDanger | None -> ()
             yield Input.CustomClass className
             yield Input.Size IsSmall

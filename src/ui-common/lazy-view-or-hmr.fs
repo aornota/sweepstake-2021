@@ -1,4 +1,4 @@
-module Aornota.UI.Common.LazyViewOrHMR
+module Aornota.Sweepstake2021.Ui.Common.LazyViewOrHMR
 
 open Elmish.React.Common
 

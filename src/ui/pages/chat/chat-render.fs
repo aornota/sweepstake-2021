@@ -1,20 +1,18 @@
-module Aornota.Sweepstake2018.UI.Pages.Chat.Render
+module Aornota.Sweepstake2021.Ui.Pages.Chat.Render
 
-open Aornota.Common.Markdown
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.Render.Markdown
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
-
-open Aornota.Sweepstake2018.Common.Domain.Chat
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.UI.Pages.Chat.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.Chat
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Ui.Common.Render.Markdown
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Pages.Chat.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Shared
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
 open System
 
@@ -41,7 +39,6 @@ let private semanticAndSortOrder authUserId (userId, userAuthDto) =
         | NotSignedIn -> Dark, 3
     | None -> Light, 5 // note: should never happen
 
-// #region renderChatMessage
 let private renderChatMessage theme authUserId (userDic:UserDic) dispatch (chatMessageId, chatMessage) =
     let renderChildren (UserName userName) messageText (timestamp:DateTimeOffset) = [
         let rightItem =
@@ -55,7 +52,7 @@ let private renderChatMessage theme authUserId (userDic:UserDic) dispatch (chatM
 #endif
             [ str timestampText ] |> para theme paraDefaultSmallest
         yield level true [
-            levelLeft [ levelItem [ [ bold userName ; str " says" ] |> para theme paraDefaultSmallest ] ]
+            levelLeft [ levelItem [ [ strong userName ; str " says" ] |> para theme paraDefaultSmallest ] ]
             levelRight [ levelItem [ rightItem ] ] ]
         yield messageText |> notificationContentFromMarkdown theme ]
     let userId, userAuthDto =
@@ -71,12 +68,11 @@ let private renderChatMessage theme authUserId (userDic:UserDic) dispatch (chatM
         divVerticalSpace 10
         notification theme { notificationDefault with NotificationSemantic = semantic |> Some ; OnDismissNotification = onDismissNotification } children
     ]
-// #endregion
 
 let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "Chat" ] |> para theme paraCentredSmall
+        yield [ strong "Chat" ] |> para theme paraCentredSmall
         yield hr theme false
         match usersProjection, state.ChatProjection with
         | Pending, _ | _, Pending ->
@@ -88,7 +84,7 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, has
             let (ChatMessageId newChatMessageKey), newMessageText = newChatMessageState.NewChatMessageId, newChatMessageState.NewMessageText
             let helpInfo = [
                 str "Chat messages are not persisted and will only be received by signed-in users. You can use "
-                [ str "Markdown syntax" ] |> link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
+                [ str "Markdown syntax" ] |> link theme (Internal (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
                 str " to format your message. A preview of your message will appear below." ; br; br ]
             let isSending, sendChatMessageInteraction =
                 match newChatMessageState.SendChatMessageStatus with
@@ -115,7 +111,7 @@ let render (useDefaultTheme, state, usersProjection:Projection<_ * UserDic>, has
                 if readyState.MoreChatMessagesPending then
                     [ br ; [ str "Retrieving more chat messages... " ; icon iconSpinnerPulseSmall ] |> para theme paraMore ]
                 else if readyState.HasMoreChatMessages then
-                    [ br ; [ [ str "More chat messages" ] |> link theme (ClickableLink (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
+                    [ br ; [ [ str "More chat messages" ] |> link theme (Internal (fun _ -> MoreChatMessages |> dispatch)) ] |> para theme paraMore ]
                 else []
             match errorText with
             | Some errorText ->

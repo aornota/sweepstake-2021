@@ -1,15 +1,14 @@
-module Aornota.Sweepstake2018.Common.Domain.Fixture
+module Aornota.Sweepstake2021.Common.Domain.Fixture
 
-open Aornota.Common.Revision
-open Aornota.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
 
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Squad
 
 open System
 
-type FixtureId = | FixtureId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> FixtureId
+type FixtureId = | FixtureId of guid : Guid with static member Create () = Guid.NewGuid () |> FixtureId
 
 type Role = | Home | Away
 
@@ -18,20 +17,18 @@ type Stage =
     | RoundOf16 of matchNumber : uint32
     | QuarterFinal of quarterFinalOrdinal : uint32
     | SemiFinal of semiFinalOrdinal : uint32
-    | ThirdPlacePlayOff
     | Final
 
 type Unconfirmed =
     | Winner of stage : Stage
     | RunnerUp of group : Group
-    | Loser of semiFinalOrdinal : uint32
+    | ThirdPlace of groups : Group list
 
 type Participant =
     | Confirmed of squadId : SquadId
     | Unconfirmed of unconfirmed : Unconfirmed
 
-type MatchEventId = | MatchEventId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> MatchEventId
+type MatchEventId = | MatchEventId of guid : Guid with static member Create () = Guid.NewGuid () |> MatchEventId
 
 type PenaltyOutcome =
     | Scored

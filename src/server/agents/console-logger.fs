@@ -1,4 +1,4 @@
-module Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
+module Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
 
 (* Broadcasts: N/A
    Subscribes: N/A *)

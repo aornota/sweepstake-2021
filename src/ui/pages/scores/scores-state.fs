@@ -1,6 +1,6 @@
-module Aornota.Sweepstake2018.UI.Pages.Scores.State
+module Aornota.Sweepstake2021.Ui.Pages.Scores.State
 
-open Aornota.Sweepstake2018.UI.Pages.Scores.Common
+open Aornota.Sweepstake2021.Ui.Pages.Scores.Common
 
 open Elmish
 

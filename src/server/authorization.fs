@@ -1,6 +1,6 @@
-module Aornota.Sweepstake2018.Server.Authorization
+module Aornota.Sweepstake2021.Server.Authorization
 
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.User
 
 type MetaToken = private | MetaToken
 

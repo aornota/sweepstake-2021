@@ -1,6 +1,6 @@
-module Aornota.Common.Delta
+module Aornota.Sweepstake2021.Common.Delta
 
-open Aornota.Common.Revision
+open Aornota.Sweepstake2021.Common.Revision
 
 type Delta<'a, 'b> = {
     Added : ('a * 'b) list

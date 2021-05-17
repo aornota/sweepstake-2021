@@ -1,11 +1,10 @@
-module Aornota.Sweepstake2018.Common.Domain.User
+module Aornota.Sweepstake2021.Common.Domain.User
 
-open Aornota.Common.Revision
+open Aornota.Sweepstake2021.Common.Revision
 
 open System
 
-type UserId = | UserId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> UserId
+type UserId = | UserId of guid : Guid with static member Create () = Guid.NewGuid () |> UserId
 
 type UserName = | UserName of userName : string
 type Password = | Password of password : string

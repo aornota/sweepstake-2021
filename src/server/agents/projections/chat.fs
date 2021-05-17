@@ -1,27 +1,25 @@
-module Aornota.Sweepstake2018.Server.Agents.Projections.Chat
+module Aornota.Sweepstake2021.Server.Agents.Projections.Chat
 
 (* Broadcasts: SendMsg
    Subscribes: Tick
                ConnectionsSignedOut | Disconnected *)
 
-open Aornota.Common.Delta
-open Aornota.Common.IfDebug
-open Aornota.Common.Markdown
-open Aornota.Common.Revision
-open Aornota.Common.UnexpectedError
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.Server.Common.DeltaHelper
-
-open Aornota.Sweepstake2018.Common.Domain.Chat
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Server.Agents.Broadcaster
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Agents.Ticker
-open Aornota.Sweepstake2018.Server.Authorization
-open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Signal
+open Aornota.Sweepstake2021.Common.Delta
+open Aornota.Sweepstake2021.Common.Domain.Chat
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Server.Agents.Broadcaster
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Agents.Ticker
+open Aornota.Sweepstake2021.Server.Authorization
+open Aornota.Sweepstake2021.Server.Common.DeltaHelper
+open Aornota.Sweepstake2021.Server.Connection
+open Aornota.Sweepstake2021.Server.Signal
 
 open System
 open System.Collections.Generic

@@ -1,9 +1,9 @@
-module Aornota.UI.Render.Common
+module Aornota.Sweepstake2021.Ui.Render.Common
 
-module Rct = Fable.Helpers.React
-open Fable.Helpers.React.Props
-open Fable.Import.React
-open Fable.PowerPack
+open Browser.Types
+
+open Fable.React
+open Fable.React.Props
 
 type Alignment = | Centred | LeftAligned | RightAligned | Justified | FullWidth
 
@@ -12,6 +12,9 @@ type DivData = {
     IsCentred : bool
     PadV : int option
     PadH : int option }
+
+let [<Literal>] private KEYBOARD_EVENT__CODE__ENTER = "Enter"
+let [<Literal>] private KEYBOARD_EVENT__CODE__ESCAPE = "Escape"
 
 let [<Literal>] CENTRED_CLASS = "centered" (* sic *)
 let [<Literal>] SPACE = " "
@@ -25,20 +28,18 @@ let private padStyle padV padH =
         | None, None -> "0 0"
     Style [ Padding padding ]
 
-let str text = Rct.str text
-
-let bold text = Rct.b [] [ str text ]
-
-let italic text = Rct.i [] [ str text ]
-
-let br = Rct.br []
+let str text = str text
+let strongEm text = strong [] [ em [] [ str text ] ]
+let strong text = strong [] [ str text ]
+let em text = em [] [ str text ]
+let br = br []
 
 let div divData children =
     let customClasses = [
         match divData.DivCustomClass with | Some divCustomClass -> yield divCustomClass | None -> ()
         if divData.IsCentred then yield CENTRED_CLASS ]
     let customClass = match customClasses with | _ :: _ -> Some (ClassName (String.concat SPACE customClasses)) | [] -> None
-    Rct.div [
+    div [
         match customClass with | Some customClass -> yield customClass :> IHTMLProp | None -> ()
         yield padStyle divData.PadV divData.PadH :> IHTMLProp
     ] children
@@ -53,8 +54,14 @@ let divEmpty = div divDefault []
 let onEnterPressed onEnter =
     OnKeyDown (fun (ev:KeyboardEvent) ->
         match ev with
-        | _ when ev.keyCode = Keyboard.Codes.enter ->
+        | _ when ev.code = KEYBOARD_EVENT__CODE__ENTER ->
             ev.preventDefault ()
             onEnter ()
         | _ -> ())
-
+let onEscapePressed onEscape =
+    OnKeyDown(fun (ev:KeyboardEvent) ->
+        match ev with
+        | _ when ev.code = KEYBOARD_EVENT__CODE__ESCAPE ->
+            ev.preventDefault()
+            onEscape()
+        | _ -> ())

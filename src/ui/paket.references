@@ -1,12 +1,18 @@
 group ui
 
+    Fable.Core
 	Elmish.Toastr
-	Fable.Core
-	Fable.Elmish.Debugger
-	Fable.Elmish.React
-	Fable.Elmish.HMR
-	FSharp.Core
-	Fulma
-    Fulma.Extensions
-
-	dotnet-fable
+    Fable.Browser.WebSocket
+    Fable.Elmish
+	Fable.Elmish.Browser
+    Fable.Elmish.Debugger
+    Fable.Elmish.HMR
+    Fable.Elmish.React
+    Fable.FontAwesome.Free
+    Fable.Promise
+    Fable.React
+    Fulma
+    Fulma.Extensions.Wikiki.Checkradio
+	Fulma.Extensions.Wikiki.PageLoader
+	Fulma.Extensions.Wikiki.Tooltip
+	Thoth.Json

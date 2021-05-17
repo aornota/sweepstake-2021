@@ -1,19 +1,17 @@
-module Aornota.Sweepstake2018.UI.Pages.Drafts.State
+module Aornota.Sweepstake2021.Ui.Pages.Drafts.State
 
-open Aornota.Common.IfDebug
-open Aornota.Common.Revision
-open Aornota.Common.UnexpectedError
-
-open Aornota.UI.Common.Notifications
-open Aornota.UI.Common.ShouldNeverHappen
-open Aornota.UI.Common.Toasts
-
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Ui.Common.Toasts
+open Aornota.Sweepstake2021.Ui.Pages.Drafts.Common
+open Aornota.Sweepstake2021.Ui.Shared
 
 open Elmish
 

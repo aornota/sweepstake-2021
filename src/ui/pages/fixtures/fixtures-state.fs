@@ -1,22 +1,19 @@
-module Aornota.Sweepstake2018.UI.Pages.Fixtures.State
+module Aornota.Sweepstake2021.Ui.Pages.Fixtures.State
 
-open Aornota.Common.IfDebug
-open Aornota.Common.Revision
-
-open Aornota.UI.Common.Notifications
-open Aornota.UI.Common.ShouldNeverHappen
-open Aornota.UI.Common.Toasts
-
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.JsonConverter
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Ui.Common.Toasts
+open Aornota.Sweepstake2021.Ui.Pages.Fixtures.Common
+open Aornota.Sweepstake2021.Ui.Shared
 
 open Elmish
-
-open Fable.Core.JsInterop
 
 open System
 
@@ -96,7 +93,7 @@ let private handleConfirmParticipantInput confirmParticipantInput (fixtureDic:Fi
         let squadId =
             if squadIdJson |> String.IsNullOrWhiteSpace then None
             else
-                try squadIdJson |> ofJson<SquadId> |> Some
+                try squadIdJson |> fromJson<SquadId> |> Some
                 with _ -> None
         let confirmParticipantState = { confirmParticipantState with SquadId = squadId }
         { state with ConfirmParticipantState = confirmParticipantState |> Some }, Cmd.none, true
@@ -124,7 +121,7 @@ let private handleAddMatchEventInput addMatchEventInput (fixtureDic:FixtureDic) 
         let playerId =
             if playerIdJson |> String.IsNullOrWhiteSpace then None
             else
-                try playerIdJson |> ofJson<PlayerId> |> Some
+                try playerIdJson |> fromJson<PlayerId> |> Some
                 with _ -> None
         let addMatchEvent = addMatchEventState.AddMatchEvent
         let newAddMatchEvent =
@@ -147,7 +144,7 @@ let private handleAddMatchEventInput addMatchEventInput (fixtureDic:FixtureDic) 
         let assistedBy =
             if playerIdJson |> String.IsNullOrWhiteSpace then None
             else
-                try playerIdJson |> ofJson<PlayerId> |> Some
+                try playerIdJson |> fromJson<PlayerId> |> Some
                 with _ -> None
         let addMatchEvent = addMatchEventState.AddMatchEvent
         let newAddMatchEvent =
@@ -178,7 +175,7 @@ let private handleAddMatchEventInput addMatchEventInput (fixtureDic:FixtureDic) 
         let savedBy =
             if playerIdJson |> String.IsNullOrWhiteSpace then None
             else
-                try playerIdJson |> ofJson<PlayerId> |> Some
+                try playerIdJson |> fromJson<PlayerId> |> Some
                 with _ -> None
         let addMatchEvent = addMatchEventState.AddMatchEvent
         let newAddMatchEvent =

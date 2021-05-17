@@ -1,6 +1,6 @@
-module Aornota.Server.Common.DeltaHelper
+module Aornota.Sweepstake2021.Server.Common.DeltaHelper
 
-open Aornota.Common.Delta
+open Aornota.Sweepstake2021.Common.Delta
 
 open System.Collections.Generic
 

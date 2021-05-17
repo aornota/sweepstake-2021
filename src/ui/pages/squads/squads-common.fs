@@ -1,14 +1,12 @@
-module Aornota.Sweepstake2018.UI.Pages.Squads.Common
+module Aornota.Sweepstake2021.Ui.Pages.Squads.Common
 
-open Aornota.Common.Revision
-
-open Aornota.UI.Common.Notifications
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.Notifications
 
 open System.Collections.Generic
 

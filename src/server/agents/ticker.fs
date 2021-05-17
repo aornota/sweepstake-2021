@@ -1,13 +1,12 @@
-module Aornota.Sweepstake2018.Server.Agents.Ticker
+module Aornota.Sweepstake2021.Server.Agents.Ticker
 
 (* Broadcasts: Tick
    Subscribes: N/A *)
 
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.Sweepstake2018.Server.Agents.Broadcaster
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Signal
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Server.Agents.Broadcaster
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Signal
 
 type private TickerInput =
     | Start of secondsPerTick : int<second/tick> * reply : AsyncReplyChannel<unit>

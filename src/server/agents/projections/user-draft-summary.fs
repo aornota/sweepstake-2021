@@ -1,23 +1,21 @@
-module Aornota.Sweepstake2018.Server.Agents.Projections.UserDraftSummary
+module Aornota.Sweepstake2021.Server.Agents.Projections.UserDraftSummary
 
 (* Broadcasts: SendMsg
    Subscribes: UserDraftsRead
                UserDraftEventWritten (UserDraftCreated | Drafted | Undrafted)
                ConnectionsSignedOut | Disconnected *)
 
-open Aornota.Common.Revision
-
-open Aornota.Server.Common.DeltaHelper
-
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Server.Agents.Broadcaster
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Authorization
-open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Events.UserDraftEvents
-open Aornota.Sweepstake2018.Server.Signal
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Server.Agents.Broadcaster
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Authorization
+open Aornota.Sweepstake2021.Server.Common.DeltaHelper
+open Aornota.Sweepstake2021.Server.Connection
+open Aornota.Sweepstake2021.Server.Events.UserDraftEvents
+open Aornota.Sweepstake2021.Server.Signal
 
 open System
 open System.Collections.Generic

@@ -1,11 +1,11 @@
-module Aornota.UI.Common.LocalStorage
+module Aornota.Sweepstake2021.Ui.Common.LocalStorage
 
-open Aornota.Common.Json
+open Aornota.Sweepstake2021.Common.Json
 
-open Fable.Import
+open Browser
 
 type Key = | Key of key : string
 
-let readJson (Key key) = key |> Browser.localStorage.getItem |> unbox |> Option.map (string >> Json)
-let writeJson (Key key) (Json json) = (key, json) |> Browser.localStorage.setItem
-let delete (Key key) = key |> Browser.localStorage.removeItem
+let readJson (Key key) = key |> localStorage.getItem |> unbox |> Option.map (string >> Json)
+let writeJson (Key key) (Json json) = (key, json) |> localStorage.setItem
+let delete (Key key) = key |> localStorage.removeItem

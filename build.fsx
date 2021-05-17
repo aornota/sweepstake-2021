@@ -1,153 +1,169 @@
-#r @"packages/build/FAKE/tools/FakeLib.dll"
+#r "paket: groupref build //"
+#if !FAKE
+// See https://github.com/ionide/ionide-vscode-fsharp/issues/839#issuecomment-396296095.
+#r "netstandard"
+#r "Facades/netstandard"
+#endif
+
+#load "./.fake/build.fsx/intellisense.fsx"
+#load "paket-files/build/CompositionalIT/fshelpers/src/FsHelpers/ArmHelper/ArmHelper.fs"
 
 open System
-open System.IO
+open System.Net
 
-open Fake
-open Fake.Azure.Kudu
+open Fake.Core
+open Fake.Core.TargetOperators
+open Fake.DotNet
+open Fake.IO
+open Fake.IO.Globbing.Operators
+open Fake.IO.FileSystemOperators
 
-let serverDir = "./src/server" |> FullName
-let uiDir = "./src/ui" |> FullName
-let publishDir = "./publish" |> FullName
+open Cit.Helpers.Arm
+open Cit.Helpers.Arm.Parameters
 
-let dotnetcliVersion = DotNetCli.GetDotNetSDKVersionFromGlobalJson ()
+open Microsoft.Azure.Management.ResourceManager.Fluent.Core
 
-let mutable dotnetExePath = "dotnet"
+type ArmOutput = { WebAppName : ParameterValue<string> ; WebAppPassword : ParameterValue<string> }
 
-let run' timeout cmd args dir =
-    if not (execProcess (fun info ->
-        info.FileName <- cmd
-        info.UseShellExecute <- cmd.Contains "yarn" && Console.OutputEncoding <> Text.Encoding.GetEncoding (850)
-        if not (String.IsNullOrWhiteSpace dir) then info.WorkingDirectory <- dir
-        info.Arguments <- args
-    ) timeout) then failwithf "Error while running '%s' with args: %s" cmd args
+type TimeoutWebClient() =
+    inherit WebClient()
+    override this.GetWebRequest(uri) =
+        let request = base.GetWebRequest(uri)
+        request.Timeout <- 30 * 60 * 1_000
+        request
 
-let run = run' System.TimeSpan.MaxValue
+let mutable private deploymentOutputs : ArmOutput option = None
 
-let runDotnet workingDir args =
-    let result = ExecProcess (fun info ->
-        info.FileName <- dotnetExePath
-        info.WorkingDirectory <- workingDir
-        info.Arguments <- args) TimeSpan.MaxValue
-    if result <> 0 then failwithf "dotnet %s failed" args
+let private serverDir = Path.getFullName "./src/server"
+let private uiDir = Path.getFullName "./src/ui"
+let private uiPublishDir = uiDir </> "publish"
+let private publishDir = Path.getFullName "./publish"
+let private publishPublicDir = publishDir </> "public"
 
-let platformTool tool winTool = (if isUnix then tool else winTool) |> ProcessHelper.tryFindFileOnPath |> function | Some t -> t | None -> failwithf "%s not found" tool
+let private platformTool tool winTool =
+    let tool = if Environment.isUnix then tool else winTool
+    match ProcessUtils.tryFindFileOnPath tool with
+    | Some t -> t
+    | None -> failwithf "%s not found in path. Please install it and make sure it's available from your path. See https://safe-stack.github.io/docs/quickstart/#install-pre-requisites for more info." tool
 
-let nodeTool = platformTool "node" "node.exe"
+let private yarnTool = platformTool "yarn" "yarn.cmd"
 
-let installUi yarnTool =
-    printfn "Node version:"
-    run nodeTool "--version" __SOURCE_DIRECTORY__
-    match yarnTool with
-    | Some yarnTool ->
-        printfn "Yarn version:"
-        run yarnTool "--version" __SOURCE_DIRECTORY__
-        run yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
-    | None -> ()
-    runDotnet uiDir "restore"
+let private runTool cmd args workingDir =
+    let arguments = args |> String.split ' ' |> Arguments.OfArgs
+    Command.RawCommand(cmd, arguments)
+    |> CreateProcess.fromCommand
+    |> CreateProcess.withWorkingDirectory workingDir
+    |> CreateProcess.ensureExitCode
+    |> Proc.run
+    |> ignore
 
-let build webpackFlags =
-    runDotnet serverDir "publish --configuration Release"
-    runDotnet uiDir (sprintf "fable webpack -- %s" webpackFlags)
+let private runDotNet cmd workingDir =
+    let result = DotNet.exec (DotNet.Options.withWorkingDirectory workingDir) cmd String.Empty
+    if result.ExitCode <> 0 then failwithf "'dotnet %s' failed in %s." cmd workingDir
 
-let publish () =
-    CreateDir publishDir
-    CopyFiles publishDir !! @".\src\server\bin\Release\netcoreapp2.0\*.*"
-    let uiDir = publishDir </> "ui"
-    CreateDir uiDir
-    CopyFile uiDir @".\src\ui\index.html"
-    let publicDir = uiDir </> "public"
-    CreateDir publicDir
-    let publicJsDir = publicDir </> "js"
-    CreateDir publicJsDir
-    CopyFiles publicJsDir !! @".\src\ui\public\js\*.js"
-    let publicStyleDir = publicDir </> "style"
-    CreateDir publicStyleDir
-    CopyFiles publicStyleDir !! @".\src\ui\public\style\*.css" 
-    let publicResourcesDir = publicDir </> "resources"
-    CreateDir publicResourcesDir
-    CopyFiles publicResourcesDir !! @".\src\ui\public\resources\*.*"
+let private openBrowser url =
+    Command.ShellCommand url
+    |> CreateProcess.fromCommand
+    |> CreateProcess.ensureExitCodeWithMessage "Unable to open browser."
+    |> Proc.run
+    |> ignore
 
-do if not isWindows then
-    // We have to set the FrameworkPathOverride so that dotnet SDK invocations know where to look for full-framework base class libraries.
-    let mono = platformTool "mono" "mono"
-    let frameworkPath = IO.Path.GetDirectoryName (mono) </> ".." </> "lib" </> "mono" </> "4.5"
-    setEnvironVar "FrameworkPathOverride" frameworkPath
+let private buildUi webpackFlags = runTool yarnTool (sprintf "webpack-cli %s" webpackFlags) __SOURCE_DIRECTORY__
+let private buildUiLocal () = buildUi "-p"
+let private buildUiAzure () = buildUi "-p --verbose" // note: need something to distinguish between "local" and "azure" production builds in webpack.config.js
+let private publishUi () = Shell.copyDir publishPublicDir uiPublishDir FileFilter.allFiles
 
-Target "install-dot-net-core" (fun _ -> dotnetExePath <- DotNetCli.InstallDotNetSDK dotnetcliVersion)
+Target.create "clean-ui-publish" (fun _ -> Shell.cleanDir uiPublishDir)
+Target.create "clean-publish" (fun _ -> Shell.cleanDir publishDir) // note: this will delete any .\persisted and .\secret folders in publishDir (though should not be running server from publishDir!)
 
-Target "clean" (fun _ ->
-    CleanDir (serverDir </> "bin")
-    DeleteFiles !! @".\src\server\obj\*.nuspec"
-    CleanDir (uiDir </> "bin")
-    DeleteFiles !! @".\src\ui\obj\*.nuspec"
-    CleanDir (uiDir </> "public"))
+Target.create "restore-ui" (fun _ ->
+    printfn "Yarn version:"
+    runTool yarnTool "--version" __SOURCE_DIRECTORY__
+    runTool yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    runDotNet "restore" uiDir)
 
-Target "copy-resources" (fun _ ->
-    let publicResourcesDir = uiDir </> @"public\resources"
-    CreateDir publicResourcesDir
-    // TODO-NMB-LOW: Get "favicon" working in Edge (cf. .\src\ui\index.html)?... CopyFiles publicResourcesDir !! @".\src\resources\ico\*.*"
-    CopyFiles publicResourcesDir !! @".\src\resources\images\*.*")
+Target.create "run" (fun _ ->
+    let server = async { runDotNet "watch run" serverDir }
+    let client = async { runTool yarnTool "webpack-dev-server" __SOURCE_DIRECTORY__ }
+    let browser = async {
+        do! Async.Sleep 2500
+        openBrowser "http://localhost:8080" }
+    Async.Parallel [ server ; client ; browser ] |> Async.RunSynchronously |> ignore)
 
-Target "install-server" (fun _ -> runDotnet serverDir "restore")
+Target.create "build-server" (fun _ -> runDotNet "build -c Release" serverDir)
+Target.create "build-ui" (fun _ -> buildUiLocal ())
+Target.create "build" ignore
 
-Target "install-ui-local" (fun _ -> installUi (Some (platformTool "yarn" "yarn.cmd")))
+Target.create "publish-server" (fun _ -> runDotNet (sprintf "publish -c Release -o \"%s\"" publishDir) serverDir)
+Target.create "publish-ui-local" (fun _ ->
+    buildUiLocal ()
+    publishUi ())
+Target.create "publish-ui-azure" (fun _ ->
+    buildUiAzure ()
+    publishUi ())
+Target.create "publish" ignore
+Target.create "publish-azure" ignore
 
-(* Note: Requires yarn to have been installed "globally" [via npm] to D:\home\tools as per https://github.com/projectkudu/kudu/issues/2176#issuecomment-328158475, e.g.:
-            - Kudu Services (https://sweepstake-2018.scm.azurewebsites.net/)...
-            - ...Debug console -> CMD...
-            - ...D:\home> npm config set prefix "D:\home\tools"...
-            - ...D:\home> npm i g yarn@1.5.1...
-            - ...D:\home> D:\home\tools\yarn.cmd --version *)
-// TEMP-NMB: Skip running yarn until resolve "Error while running 'D:\home\tools\yarn.cmd' with args: --version" exception (note: can always run manually via Kudu Services as required)...
-Target "install-ui-azure" (fun _ -> installUi None)
-// ...or not...
-//Target "install-ui-azure" (fun _ -> installUi (Some @"D:\home\tools\yarn.cmd"))
-// ...NMB-TEMP
+Target.create "arm-template" (fun _ ->
+    let armTemplate = "arm-template.json"
+    let environment = "sweepstake-2021"
+    let authCtx =
+        let subscriptionId = Guid("9ad207a4-28b9-48a4-b6ba-710c35034343") // azure-djnarration
+        let clientId = Guid("00000000-0000-0000-0000-000000000000") // sweepstake-2019 [Azure AD application]
+        Trace.tracefn "Deploying template '%s' to resource group '%s' in subscription '%O'..." armTemplate environment subscriptionId
+        authenticateDevice Trace.trace { ClientId = clientId ; TenantId = None } subscriptionId |> Async.RunSynchronously
+    let deployment =
+        let location = Region.UKSouth.Name
+        let pricingTier = "F1"
+        { DeploymentName = environment
+          ResourceGroup = New(environment, Region.Create location)
+          ArmTemplate = IO.File.ReadAllText(armTemplate)
+          Parameters =
+              Simple
+                  [ "environment", ArmString environment
+                    "location", ArmString location
+                    "pricingTier", ArmString pricingTier ]
+          DeploymentMode = Incremental }
+    deployment
+    |> deployWithProgress authCtx
+    |> Seq.iter (function
+        | DeploymentInProgress(state, operations) -> Trace.tracefn "State is %s; completed %d operations" state operations
+        | DeploymentError(statusCode, message) -> Trace.traceError (sprintf "Deployment error: %s -> '%s'" statusCode message)
+        | DeploymentCompleted d -> deploymentOutputs <- d))
 
-Target "install-local" DoNothing
-Target "install-azure" DoNothing
+Target.create "deploy-azure" (fun _ ->
+    let zipFile = "deploy.zip"
+    IO.File.Delete(zipFile)
+    Zip.zip publishDir zipFile !!(publishDir + @"\**\**")
+    let appName = deploymentOutputs.Value.WebAppName.value
+    let appPassword = deploymentOutputs.Value.WebAppPassword.value
+    let destinationUri = sprintf "https://%s.scm.azurewebsites.net/api/zipdeploy" appName
+    let client = new TimeoutWebClient(Credentials = NetworkCredential("$" + appName, appPassword))
+    Trace.tracefn "Uploading %s to %s..." zipFile destinationUri
+    client.UploadData(destinationUri, IO.File.ReadAllBytes(zipFile)) |> ignore)
 
-Target "build-local" (fun _ -> build "-p --verbose") // note: need something to distinguish between "local" and "azure" production builds in webpack.config.js
-Target "build-azure" (fun _ -> build "-p")
+Target.create "help" (fun _ ->
+    printfn "\nThese useful build targets can be run via 'fake build -t {target}':"
+    printfn "\n\trun -> builds, runs and watches [Debug] server and [non-production] ui (served via webpack-dev-server)"
+    printfn "\n\tbuild -> builds [Release] server and [production] ui (which writes output to .\\src\\ui\\publish)"
+    printfn "\tpublish -> builds [Release] server and [production] ui and copies output to .\\publish"
+    printfn "\n\tdeploy-azure -> builds [Release] server and [production] ui, copies output to .\\publish and deploys to Azure"
+    printfn "\n\thelp -> shows this list of build targets\n")
 
-Target "run" (fun _ ->
-    let server = async { runDotnet serverDir "watch run" }
-    let ui = async { runDotnet uiDir "fable webpack-dev-server" }
-    let openBrowser = async {
-        do! Async.Sleep 5000
-        Diagnostics.Process.Start "http://localhost:8080" |> ignore }
-    Async.Parallel [| server ; ui ; openBrowser |] |> Async.RunSynchronously |> ignore)
+"restore-ui" ==> "run"
+"restore-ui" ==> "clean-ui-publish"
 
-Target "clean-publish-local" (fun _ -> CleanDir publishDir)
-Target "clean-publish-azure" (fun _ -> CleanDir publishDir)
+"build-server" ==> "build"
+"clean-ui-publish" ==> "build-ui" ==> "build"
 
-Target "publish-local" (fun _ -> publish ())
+"clean-publish" ==> "publish-server" ==> "publish"
+"clean-ui-publish" ==> "publish-ui-local"
+"clean-publish" ==> "publish-ui-local" ==> "publish"
 
-Target "publish-and-stage-azure" (fun _ ->
-    publish ()
-    stageFolder (Path.GetFullPath publishDir) (fun _ -> true))
+"clean-publish" ==> "publish-server" ==> "publish-azure"
+"clean-ui-publish" ==> "publish-ui-azure"
+"clean-publish" ==> "publish-ui-azure" ==> "publish-azure"
 
-Target "publish-azure" kuduSync
+"publish-azure" ==> "arm-template" ==> "deploy-azure"
 
-Target "help" (fun _ ->
-    printfn "\nThe following build targets are defined:"
-    printfn "\n\tbuild ... builds [Release] server and ui [which writes output to .\\src\\ui\\public]"
-    printfn "\tbuild run ... builds and runs [Debug] server and ui [using webpack dev-server]"
-    printfn "\tbuild publish-local ... builds [Release] server and ui, then copies output to .\\publish\n"
-    printfn "\tbuild publish-azure ... builds [Release] server and ui, then uses Kudu to deploy to Azure...\n")
-
-"install-dot-net-core" ==> "install-server" ==> "install-local"
-"install-server" ==> "install-azure"
-"install-dot-net-core" ==> "install-ui-local" ==> "install-local"
-"install-dot-net-core" ==> "install-ui-azure" ==> "install-azure"
-"clean" ==> "install-server"
-"clean" ==> "copy-resources" ==> "install-ui-local"
-"copy-resources" ==> "install-ui-azure"
-"install-local" ==> "run"
-"install-local" ==> "build-local" ==> "publish-local"
-"clean-publish-local" ==> "publish-local"
-"install-azure" ==> "build-azure" ==> "publish-and-stage-azure" ==> "publish-azure"
-"clean-publish-azure" ==> "publish-and-stage-azure"
-
-RunTargetOrDefault "build-local"
+Target.runOrDefaultWithArguments "help"

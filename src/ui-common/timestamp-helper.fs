@@ -1,8 +1,7 @@
-module Aornota.UI.Common.TimestampHelper
+module Aornota.Sweepstake2021.Ui.Common.TimestampHelper
 
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
 
 open System
 
@@ -24,7 +23,7 @@ let dateAndTimeText (timestamp:DateTime) = sprintf "%s at %s" (timestamp |> date
 let ago (timestamp:DateTime) =
     let now = DateTime.Now
     let elapsed = now - timestamp
-    let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)   
+    let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)
     let elapsedDays = round (sameTimeToday - timestamp).TotalDays // note: use 'round' function since TotalDays could be something like 0.9999... (i.e. even when use of "same time" means that we'd expect it to be 1.0)
     let isFuture = timestamp > now && (timestamp - now).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running fast"
     match isFuture, (now.Year - timestamp.Year, now.Month - timestamp.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes, elapsed.TotalSeconds) with
@@ -51,11 +50,11 @@ let ago (timestamp:DateTime) =
 let startsIn (timestamp:DateTime) =
     let now = DateTime.Now
     let elapsed = timestamp - now
-    let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)   
+    let sameTimeToday = DateTime (now.Year, now.Month, now.Day, timestamp.Hour, timestamp.Minute, timestamp.Second)
     let elapsedDays = round (timestamp - sameTimeToday).TotalDays // note: use 'round' function since TotalDays could be something like 0.9999... (i.e. even when use of "same time" means that we'd expect it to be 1.0)
     let isPast = timestamp < now && (now - timestamp).TotalSeconds > 10. // note: a bit of leeway in case the system that provided the timestamp is "running slow"
     match isPast, (timestamp.Year - now.Year, timestamp.Month - now.Month, elapsedDays, elapsed.TotalHours, elapsed.TotalMinutes) with
-    | true, _ -> "has started", true // note: timestamp expected to be in the future - but do something sensible if not       
+    | true, _ -> "has started", true // note: timestamp expected to be in the future - but do something sensible if not
     | false, (_, _, days, _, _) when floor days = 1. -> "starts tomorrow", true
     | false, (_, _, _, _, minutes) when floor minutes = 1. -> "starts in 1 minute", true
     | false, (_, _, _, _, minutes) when floor minutes < float MINUTES_PER_HOUR -> sprintf "starts in %i minutes" (int minutes), true

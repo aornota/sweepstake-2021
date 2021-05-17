@@ -1,15 +1,13 @@
-module Aornota.Sweepstake2018.Server.WsMiddleware
+module Aornota.Sweepstake2021.Server.WsMiddleware
 
-open Aornota.Common.IfDebug
-open Aornota.Common.Json
-
-open Aornota.Server.Common.JsonConverter
-
-open Aornota.Sweepstake2018.Common.Literals
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.Server.Agents.Connections
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Connection
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Json
+open Aornota.Sweepstake2021.Common.Literals
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Server.Agents.Connections
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Common.JsonConverter
+open Aornota.Sweepstake2021.Server.Connection
 
 open System
 open System.IO
@@ -19,13 +17,13 @@ open System.Threading
 open System.Threading.Tasks
 
 open Microsoft.AspNetCore.Http
-    
+
 let private log category = (WsMiddleware, category) |> consoleLogger.Log
 
 let private encoding = Encoding.UTF8
 
 type WsMiddleware (next:RequestDelegate) =
-    let rec receive (ws:WebSocket) buffer (ms:MemoryStream) = async {
+    let rec receive (ws:WebSocket) (buffer:ArraySegment<byte>) (ms:MemoryStream) = async {
         let! result = ws.ReceiveAsync (buffer, CancellationToken.None) |> Async.AwaitTask
         ms.Write (buffer.Array, buffer.Offset, result.Count)
         if result.EndOfMessage |> not then return! ms |> receive ws buffer
@@ -45,9 +43,9 @@ type WsMiddleware (next:RequestDelegate) =
             ifDebugFakeErrorFailWith (sprintf "Fake error receiving message for %A" connectionId)
             if receiveResult.CloseStatus.HasValue then return receiveResult |> Some
             else
-                try // note: expect buffer to be deserializable to UiMsg              
+                try // note: expect buffer to be deserializable to UiMsg
                     sprintf "deserializing message for %A" connectionId |> Verbose |> log
-                    let uiMsg = receivedText |> Json |> ofJson<UiMsg>
+                    let uiMsg = receivedText |> Json |> fromJson<UiMsg>
                     ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A for %A" uiMsg connectionId)
                     sprintf "message deserialized for %A -> %A" connectionId uiMsg |> Verbose |> log
                     (connectionId, uiMsg) |> connections.HandleUiMsg
@@ -65,7 +63,7 @@ type WsMiddleware (next:RequestDelegate) =
                 do! Async.Sleep 1000 // note: just in case it helps
                 return! receiving (connectionId, ws) consecutiveReceiveFailureCount
             else return None }
-    member __.Invoke (ctx:HttpContext) = 
+    member __.Invoke (ctx:HttpContext) =
         async {
             if ctx.Request.Path = PathString WS_API_PATH then
                 match ctx.WebSockets.IsWebSocketRequest with
@@ -85,5 +83,5 @@ type WsMiddleware (next:RequestDelegate) =
                     connectionId |> connections.RemoveConnection
                     sprintf "web socket closed -> %A" connectionId |> Verbose |> log
                 | false -> ctx.Response.StatusCode <- 400
-            else ctx |> next.Invoke |> ignore 
+            else ctx |> next.Invoke |> ignore
         } |> Async.StartAsTask :> Task

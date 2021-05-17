@@ -1,41 +1,38 @@
-module Aornota.Sweepstake2018.UI.Pages.News.State
+module Aornota.Sweepstake2021.Ui.Pages.News.State
 
-open Aornota.Common.Delta
-open Aornota.Common.IfDebug
-open Aornota.Common.Json
-open Aornota.Common.Markdown
-open Aornota.Common.Revision
-open Aornota.Common.UnexpectedError
-
-open Aornota.UI.Common.LocalStorage
-open Aornota.UI.Common.Notifications
-open Aornota.UI.Common.ShouldNeverHappen
-open Aornota.UI.Common.Toasts
-
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Pages.News.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Delta
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Json
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.JsonConverter
+open Aornota.Sweepstake2021.Ui.Common.LocalStorage
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Ui.Common.Toasts
+open Aornota.Sweepstake2021.Ui.Pages.News.Common
+open Aornota.Sweepstake2021.Ui.Shared
 
 open System
 
 open Elmish
 
-open Fable.Core.JsInterop
-
-let [<Literal>] private NEWS_PREFERENCES_KEY = "sweepstake-2018-ui-news-preferences"
+let [<Literal>] private NEWS_PREFERENCES_KEY = "sweepstake-2021-ui-news-preferences"
 
 let private readPreferencesCmd =
     let readPreferences () = async {
-        return Key NEWS_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> ofJson<DateTimeOffset>) }
-    Cmd.ofAsync readPreferences () (Ok >> ReadPreferencesResult) (Error >> ReadPreferencesResult)
+        return Key NEWS_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> fromJson<DateTimeOffset>) }
+    Cmd.OfAsync.either readPreferences () (Ok >> ReadPreferencesResult) (Error >> ReadPreferencesResult)
 
 let private writePreferencesCmd state =
     let writePreferences (lastNewsSeen:DateTimeOffset) = async {
         do lastNewsSeen |> toJson |> Json |> writeJson (Key NEWS_PREFERENCES_KEY) }
     match state.LastNewsSeen with
-    | Some lastNewsSeen -> Cmd.ofAsync writePreferences lastNewsSeen (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
+    | Some lastNewsSeen -> Cmd.OfAsync.either writePreferences lastNewsSeen (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
     | None -> Cmd.none
 
 let initialize isCurrentPage readPreferences lastNewsSeen : State * Cmd<Input> =

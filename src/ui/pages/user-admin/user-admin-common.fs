@@ -1,10 +1,9 @@
-module Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
+module Aornota.Sweepstake2021.Ui.Pages.UserAdmin.Common
 
-open Aornota.UI.Common.Notifications
-
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.Notifications
 
 open System
 

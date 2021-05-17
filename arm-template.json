@@ -1,0 +1,64 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#"
+    , "contentVersion": "1.0.0.0"
+    , "parameters": {
+        "environment": {
+            "type": "string"
+        }
+        , "location": {
+            "type": "string"
+        }
+        , "pricingTier": {
+            "type": "string"
+        }
+    }
+    , "variables": {
+        "environment": "[toLower(parameters('environment'))]"
+    }
+    , "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms"
+            , "sku": {
+                "name": "[parameters('pricingTier')]"
+            }
+            , "name": "[variables('environment')]"
+            , "apiVersion": "2016-09-01"
+            , "location": "[parameters('location')]"
+            , "properties": {
+                "name": "[variables('environment')]"
+                , "perSiteScaling": false
+                , "reserved": false
+            }
+        }
+        , {
+            "type": "Microsoft.Web/sites"
+            , "name": "[variables('environment')]"
+            , "apiVersion": "2016-08-01"
+            , "location": "[parameters('location')]"
+            , "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('environment'))]"
+                , "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "public_path"
+                            , "value": "./public"
+                        }
+                    ]
+                }
+            }
+            , "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('environment'))]"
+            ]
+        }
+    ]
+    , "outputs": {
+        "webAppName": {
+            "type": "string"
+            , "value": "[variables('environment')]"
+        }
+        , "webAppPassword": {
+            "type": "string"
+            , "value": "[list(resourceId('Microsoft.Web/sites/config', variables('environment'), 'publishingcredentials'), '2014-06-01').properties.publishingPassword]"
+        }
+    }
+}

@@ -1,15 +1,13 @@
-module Aornota.Sweepstake2018.Common.Domain.News
+module Aornota.Sweepstake2021.Common.Domain.News
 
-open Aornota.Common.Markdown
-open Aornota.Common.Revision
-
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.Revision
 
 open System
 
-type PostId = | PostId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> PostId
+type PostId = | PostId of guid : Guid with static member Create () = Guid.NewGuid () |> PostId
 
 type PostType =
     | Standard

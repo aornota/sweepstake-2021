@@ -1,30 +1,29 @@
-module Aornota.Sweepstake2018.UI.Pages.News.Render
+module Aornota.Sweepstake2021.Ui.Pages.News.Render
 
-open Aornota.Common.Markdown
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.LazyViewOrHMR
-open Aornota.UI.Common.Render.Markdown
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
-
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.UI.Pages.News.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Ui.Common.LazyViewOrHMR
+open Aornota.Sweepstake2021.Ui.Common.Render.Markdown
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Pages.News.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Shared
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
 open System
 
-module Rct = Fable.Helpers.React
+module RctH = Fable.React.Helpers
 
 let [<Literal>] private REMOVED_MARKDOWN = "_This post has been removed_"
 
 let private renderAddPostModal (useDefaultTheme, addPostState:AddPostState) dispatch =
     let theme = getTheme useDefaultTheme
+    let title = [ [ strong "Add post" ] |> para theme paraCentredSmall ]
     let onDismiss = match addPostState.AddPostStatus with | Some AddPostPending -> None | Some _ | None -> (fun _ -> CancelAddPost |> AddPostInput |> dispatch) |> Some
     let isAddingPost, addPostInteraction =
         match addPostState.AddPostStatus with
@@ -37,7 +36,7 @@ let private renderAddPostModal (useDefaultTheme, addPostState:AddPostState) disp
     let (PostId newPostKey), newMessageText = addPostState.NewPostId, addPostState.NewMessageText
     let helpInfo = [
         str "News posts are persisted and public. You can use "
-        [ str "Markdown syntax" ] |> link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
+        [ str "Markdown syntax" ] |> link theme (Internal (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
         str " to format your message. A preview of your message will appear below." ; br; br ]
     let body = [
         match errorText with
@@ -50,10 +49,11 @@ let private renderAddPostModal (useDefaultTheme, addPostState:AddPostState) disp
             if String.IsNullOrWhiteSpace newMessageText |> not then
                 yield notification theme notificationBlack [ Markdown newMessageText |> notificationContentFromMarkdown theme ] ]
         yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Add post" ] |> button theme { buttonLinkSmall with Interaction = addPostInteraction } ] ]
-    cardModal theme [ [ bold "Add post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderEditPostModal (useDefaultTheme, editPostState:EditPostState) dispatch =
     let theme = getTheme useDefaultTheme
+    let title = [ [ strong "Edit post" ] |> para theme paraCentredSmall ]
     let onDismiss = match editPostState.EditPostStatus with | Some EditPostPending -> None | Some _ | None -> (fun _ -> CancelEditPost |> EditPostInput |> dispatch) |> Some
     let isEditingPost, editPostInteraction =
         match editPostState.EditPostStatus with
@@ -66,7 +66,7 @@ let private renderEditPostModal (useDefaultTheme, editPostState:EditPostState) d
     let (PostId postKey), messageText = editPostState.PostId, editPostState.MessageText
     let helpInfo = [
         str "News posts are persisted and public. You can use "
-        [ str "Markdown syntax" ] |> link theme (ClickableLink (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
+        [ str "Markdown syntax" ] |> link theme (Internal (fun _ -> ShowMarkdownSyntaxModal |> dispatch))
         str " to format your message. A preview of your message will appear below." ; br; br ]
     let body = [
         match errorText with
@@ -79,10 +79,11 @@ let private renderEditPostModal (useDefaultTheme, editPostState:EditPostState) d
             if String.IsNullOrWhiteSpace messageText |> not then
                 yield notification theme notificationBlack [ Markdown messageText |> notificationContentFromMarkdown theme ] ]
         yield field theme { fieldDefault with Grouped = RightAligned |> Some } [ [ str "Edit post" ] |> button theme { buttonLinkSmall with Interaction = editPostInteraction } ] ]
-    cardModal theme [ [ bold "Edit post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostState:RemovePostState) dispatch =
     let theme = getTheme useDefaultTheme
+    let title = [ [ strong "Remove post" ] |> para theme paraCentredSmall ]
     let postId = removePostState.PostId
     let post = if postId |> postDic.ContainsKey then postDic.[postId] |> Some else None
     let messageText =
@@ -100,7 +101,7 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
         | Some (RemovePostFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match removePostState.RemovePostStatus with | Some (RemovePostFailed errorText) -> errorText |> Some | Some RemovePostPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to remove this post?" ] |> para theme paraCentredSmaller
+        [ strong "Are you sure you want to remove this post?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -115,9 +116,8 @@ let private renderRemovePostModal (useDefaultTheme, postDic:PostDic, removePostS
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Remove post" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ bold "Remove post" ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
-// #region renderPost
 let private renderPost theme authUser userDic dispatch (postId, post) =
     let editOrRemovePost =
         match post.Removed, authUser with
@@ -126,8 +126,8 @@ let private renderPost theme authUser userDic dispatch (postId, post) =
             | Some newsPermissions ->
                 match newsPermissions.EditOrRemovePostPermission with
                 | Some userId when userId = post.UserId ->
-                    let editPost = [ [ str "Edit post" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink (fun _ -> postId |> ShowEditPostModal |> dispatch))
-                    let removePost = [ [ str "Remove post" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink (fun _ -> postId |> ShowRemovePostModal |> dispatch))
+                    let editPost = [ [ str "Edit post" ] |> para theme paraDefaultSmallest ] |> link theme (Internal (fun _ -> postId |> ShowEditPostModal |> dispatch))
+                    let removePost = [ [ str "Remove post" ] |> para theme paraDefaultSmallest ] |> link theme (Internal (fun _ -> postId |> ShowRemovePostModal |> dispatch))
                     (editPost, removePost) |> Some
                 | Some _ | None -> None
             | None -> None
@@ -149,7 +149,7 @@ let private renderPost theme authUser userDic dispatch (postId, post) =
                 | StandardDto messageText -> messageText
                 | MatchResultDto (messageText, _) -> messageText
         yield level true [
-            levelLeft [ levelItem [ [ bold userName ; str " posted" ] |> para theme paraDefaultSmallest ] ]
+            levelLeft [ levelItem [ [ strong userName ; str " posted" ] |> para theme paraDefaultSmallest ] ]
             levelRight [ levelItem [ rightItem ] ] ]
         yield messageText |> notificationContentFromMarkdown theme
         match editOrRemovePost with
@@ -163,7 +163,6 @@ let private renderPost theme authUser userDic dispatch (postId, post) =
         divVerticalSpace 10
         notification theme { notificationDefault with NotificationSemantic = semantic |> Some ; OnDismissNotification = onDismissNotification } children
     ]
-// #endregion
 
 let private addPost theme authUser dispatch =
     match authUser with
@@ -171,7 +170,7 @@ let private addPost theme authUser dispatch =
         match authUser.Permissions.NewsPermissions with
         | Some newsPermissions ->
             if newsPermissions.CreatePostPermission then
-                [ [ str "Add post" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink (fun _ -> ShowAddPostModal |> dispatch)) |> Some
+                [ [ str "Add post" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (Internal (fun _ -> ShowAddPostModal |> dispatch)) |> Some
             else None
         | None -> None
     | None -> None
@@ -179,7 +178,7 @@ let private addPost theme authUser dispatch =
 let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Projection<_ * UserDic>, hasModal, _:int<tick>) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "News" ] |> para theme paraCentredSmall
+        yield [ strong "News" ] |> para theme paraCentredSmall
         yield hr theme false
         match usersProjection, state.NewsProjection with
         | Pending, _ | _, Pending ->
@@ -192,7 +191,7 @@ let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Pr
                 if readyState.MorePostsPending then
                     [ br ; [ str "Retrieving more posts... " ; icon iconSpinnerPulseSmall ] |> para theme paraMore ]
                 else if readyState.HasMorePosts then
-                    [ br ; [ [ str "More posts" ] |> link theme (ClickableLink (fun _ -> MorePosts |> dispatch)) ] |> para theme paraMore ]
+                    [ br ; [ [ str "More posts" ] |> link theme (Internal (fun _ -> MorePosts |> dispatch)) ] |> para theme paraMore ]
                 else []
             match hasModal, readyState.AddPostState with
             | false, Some addPostState ->
@@ -206,7 +205,7 @@ let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Pr
             | false, Some removePostState ->
                 yield div divDefault [ lazyViewOrHMR2 renderRemovePostModal (useDefaultTheme, postDic, removePostState) (RemovePostInput >> dispatch) ]
             | _ -> ()
-            yield Rct.ofOption (addPost theme authUser dispatch)           
+            yield RctH.ofOption (addPost theme authUser dispatch)           
             yield! postDic
                 |> List.ofSeq
                 |> List.map (fun (KeyValue (postId, post)) -> (postId, post))

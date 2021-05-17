@@ -1,40 +1,42 @@
-module Aornota.Sweepstake2018.UI.Pages.Squads.Render
+module Aornota.Sweepstake2021.Ui.Pages.Squads.Render
 
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.LazyViewOrHMR
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.UI.Pages.Squads.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Ui.Common.LazyViewOrHMR
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Pages.Squads.Common
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
+open Aornota.Sweepstake2021.Common.Domain.Squad // note: after Aornota.Sweepstake2021.Ui.Render.Bulma to avoid collision with Icon.Forward
+open Aornota.Sweepstake2021.Ui.Shared // note: after Aornota.Sweepstake2021.Common.Domain.Squad to avoid collition with Squad[Only]Dto
 
 open System
 
-module Rct = Fable.Helpers.React
+module RctH = Fable.React.Helpers
 
-let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ]
+let private playerTypes = [ Goalkeeper ; Defender ; Midfielder ; Forward ] |> List.map (fun playerType -> playerType, Guid.NewGuid())
 
 let private playerTypeSortOrder playerType = match playerType with | Goalkeeper -> 1 | Defender -> 2 | Midfielder -> 3 | Forward -> 4
-let private playerTypeRadios selectedPlayerType disabledPlayerType disableAll dispatch =
+let private playerTypeRadios theme selectedPlayerType currentPlayerType disableAll dispatch =
     let onChange playerType = (fun _ -> playerType |> dispatch)
     playerTypes
-    |> List.sortBy playerTypeSortOrder
-    |> List.map (fun playerType ->
-        let isSelected = playerType |> Some = selectedPlayerType
-        let disabled = disableAll || playerType |> Some = disabledPlayerType
-        let onChange = if isSelected || disabled then ignore else playerType |> onChange
-        radioInline (playerType |> playerTypeText) isSelected disabled onChange)
-    |> List.collect id
+    |> List.sortBy (fun (playerType, _) -> playerType |> playerTypeSortOrder)
+    |> List.map (fun (playerType, key) ->
+        let selected, current = playerType |> Some = selectedPlayerType, playerType |> Some = currentPlayerType
+        let semantic =
+            if selected then Success
+            else if current then Light
+            else Link
+        let disabled = disableAll || current
+        let onChange = if selected || disabled then ignore else playerType |> onChange
+        let radioData = { radioDefaultSmall with RadioSemantic = semantic |> Some ; HasBackgroundColour = selected || current }
+        radioInline theme radioData key (playerType |> playerTypeText |> str) selected disabled onChange)
 
 let private nonWithdrawnCount squad =
     match squad with
@@ -52,6 +54,7 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
             let (SquadName squadName) = squad.SquadName
             sprintf "Add player/s for %s" squadName
         | None -> "Add player/s" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let onDismiss = match addPlayersState.AddPlayerStatus with | Some AddPlayerPending -> None | Some _ | None -> (fun _ -> CancelAddPlayers |> dispatch) |> Some
     let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
     let nonWithdrawnCount = squad |> nonWithdrawnCount
@@ -82,9 +85,9 @@ let private renderAddPlayersModal (useDefaultTheme, squadDic:SquadDic, addPlayer
             textBox theme newPlayerKey addPlayersState.NewPlayerNameText (iconMaleSmall |> Some) false addPlayersState.NewPlayerNameErrorText [] true isAddingPlayer
                 (NewPlayerNameTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
-            yield! playerTypeRadios (addPlayersState.NewPlayerType |> Some) None isAddingPlayer (NewPlayerTypeChanged >> dispatch) ]
+            yield! playerTypeRadios theme (addPlayersState.NewPlayerType |> Some) None isAddingPlayer (NewPlayerTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Add player" ] |> button theme { buttonLinkSmall with Interaction = addPlayerInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, changePlayerNameState:ChangePlayerNameState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -98,6 +101,7 @@ let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, cha
             let (PlayerName playerName) = player.PlayerName
             player.PlayerName |> Some, sprintf "Edit name for %s" playerName
         | None -> None, "Edit player name" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let onDismiss = match changePlayerNameState.ChangePlayerNameStatus with | Some ChangePlayerNamePending -> None | Some _ | None -> (fun _ -> CancelChangePlayerName |> dispatch) |> Some
     let playerNames = match squad with | Some squad -> squad.PlayerDic |> playerNames | None -> []
     let isChangingPlayerName, changePlayerNameInteraction, onEnter =
@@ -124,7 +128,7 @@ let private renderChangePlayerNameModal (useDefaultTheme, squadDic:SquadDic, cha
             textBox theme playerKey changePlayerNameState.PlayerNameText (iconMaleSmall |> Some) false changePlayerNameState.PlayerNameErrorText [] true isChangingPlayerName
                 (PlayerNameTextChanged >> dispatch) onEnter ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Edit name" ] |> button theme { buttonLinkSmall with Interaction = changePlayerNameInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, changePlayerTypeState:ChangePlayerTypeState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -138,6 +142,7 @@ let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, cha
             let (PlayerName playerName) = player.PlayerName
             player.PlayerType |> Some, sprintf "Change position for %s" playerName
         | None -> None, "Change player position" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let onDismiss = match changePlayerTypeState.ChangePlayerTypeStatus with | Some ChangePlayerTypePending -> None | Some _ | None -> (fun _ -> CancelChangePlayerType |> dispatch) |> Some
     let isChangingPlayerType, changePlayerTypeInteraction, onEnter =
         let changePlayerType = (fun _ -> ChangePlayerType |> dispatch)
@@ -158,9 +163,9 @@ let private renderChangePlayerTypeModal (useDefaultTheme, squadDic:SquadDic, cha
         yield br
         // TODO-NMB-MEDIUM: Finesse layout / alignment - and add labels?...
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
-            yield! playerTypeRadios changePlayerTypeState.PlayerType currentPlayerType isChangingPlayerType (PlayerTypeChanged >> dispatch) ]
+            yield! playerTypeRadios theme changePlayerTypeState.PlayerType currentPlayerType isChangingPlayerType (PlayerTypeChanged >> dispatch) ]
         yield field theme { fieldDefault with Grouped = Centred |> Some } [ [ str "Change position" ] |> button theme { buttonLinkSmall with Interaction = changePlayerTypeInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withdrawPlayerState:WithdrawPlayerState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -174,6 +179,7 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
             let (PlayerName playerName) = player.PlayerName
             sprintf "Withdraw %s" playerName
         | None -> "Withdraw player" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let confirmInteraction, onDismiss =
         let confirm = (fun _ -> ConfirmWithdrawPlayer |> dispatch)
         let cancel = (fun _ -> CancelWithdrawPlayer |> dispatch)
@@ -182,7 +188,7 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
         | Some (WithdrawPlayerFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match withdrawPlayerState.WithdrawPlayerStatus with | Some (WithdrawPlayerFailed errorText) -> errorText |> Some | Some WithdrawPlayerPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmaller
+        [ strong "Are you sure you want to withdraw this player?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -195,7 +201,7 @@ let private renderWithdrawPlayerModal (useDefaultTheme, squadDic:SquadDic, withd
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Withdraw player" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, eliminateSquadState:EliminateSquadState) dispatch =
     let theme = getTheme useDefaultTheme
@@ -207,6 +213,7 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
             let (SquadName squadName) = squad.SquadName
             sprintf "Eliminate %s" squadName
         | None -> "Eliminate team" // note: should never happen
+    let title = [ [ strong titleText ] |> para theme paraCentredSmall ]
     let confirmInteraction, onDismiss =
         let confirm = (fun _ -> ConfirmEliminateSquad |> dispatch)
         let cancel = (fun _ -> CancelEliminateSquad |> dispatch)
@@ -215,7 +222,7 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
         | Some (EliminateSquadFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match eliminateSquadState.EliminateSquadStatus with | Some (EliminateSquadFailed errorText) -> errorText |> Some | Some EliminateSquadPending | None -> None
     let warning = [
-        [ bold "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmaller
+        [ strong "Are you sure you want to eliminate this team?" ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -228,11 +235,12 @@ let private renderEliminateSquadModal (useDefaultTheme, squadDic:SquadDic, elimi
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str "Eliminate team" ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ bold titleText ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private renderFreePickModal (useDefaultTheme, squadDic:SquadDic, freePickState:FreePickState) dispatch =
     let theme = getTheme useDefaultTheme
     let draftPickText = freePickState.DraftPick |> draftPickText squadDic
+    let title = [ [ strong (sprintf "Pick %s" draftPickText) ] |> para theme paraCentredSmall ]
     let confirmInteraction, onDismiss =
         let confirm = (fun _ -> ConfirmFreePick |> dispatch)
         let cancel = (fun _ -> CancelFreePick |> dispatch)
@@ -241,7 +249,7 @@ let private renderFreePickModal (useDefaultTheme, squadDic:SquadDic, freePickSta
         | Some (FreePickFailed _) | None -> Clickable (confirm, None), cancel |> Some
     let errorText = match freePickState.FreePickStatus with | Some (FreePickFailed errorText) -> errorText |> Some | Some FreePickPending | None -> None
     let warning = [
-        [ bold (sprintf "Are you sure you want to pick %s?" draftPickText) ] |> para theme paraCentredSmaller
+        [ strong (sprintf "Are you sure you want to pick %s?" draftPickText) ] |> para theme paraCentredSmaller
         br
         [ str "Please note that this action is irreversible." ] |> para theme paraCentredSmallest ]
     let body = [
@@ -254,7 +262,7 @@ let private renderFreePickModal (useDefaultTheme, squadDic:SquadDic, freePickSta
         yield br
         yield field theme { fieldDefault with Grouped = Centred |> Some } [
             [ str (sprintf "Pick %s" draftPickText) ] |> button theme { buttonLinkSmall with Interaction = confirmInteraction } ] ]
-    cardModal theme [ [ bold (sprintf "Pick %s" draftPickText) ] |> para theme paraCentredSmall ] onDismiss body
+    cardModal theme (Some(title, onDismiss)) body
 
 let private group (squadDic:SquadDic) squadId = match squadId with | Some squadId when squadId |> squadDic.ContainsKey -> squadDic.[squadId].Group |> Some | Some _ | None -> None
 
@@ -264,13 +272,13 @@ let private defaultSquadId (squadDic:SquadDic) group =
 
 let private groupTab currentGroup dispatch group =
     let isActive = match currentGroup with | Some currentGroup when currentGroup = group -> true | Some _ | None -> false
-    { IsActive = isActive ; TabText = group |> groupText ; TabLinkType = ClickableLink (fun _ -> group |> ShowGroup |> dispatch ) }
+    { IsActive = isActive ; TabText = group |> groupText ; TabLinkType = Internal (fun _ -> group |> ShowGroup |> dispatch ) }
 
 let private squadTabs currentSquadId dispatch (squadDic:SquadDic) =
     let squadTab (squadId, squad) =
         let (SquadName squadName) = squad.SquadName
         let isActive = match currentSquadId with | Some currentSquadId when currentSquadId = squadId -> true | Some _ | None -> false
-        { IsActive = isActive ; TabText = squadName ; TabLinkType = ClickableLink (fun _ -> squadId |> ShowSquad |> dispatch ) }
+        { IsActive = isActive ; TabText = squadName ; TabLinkType = Internal (fun _ -> squadId |> ShowSquad |> dispatch ) }
     match currentSquadId |> group squadDic with
     | Some group ->
         let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
@@ -352,17 +360,15 @@ let private freePick theme draftId needsMorePicks draftPick dispatch =
     let pickType = match draftPick with | TeamPicked _ -> "team" | PlayerPicked _ -> "player"
     if needsMorePicks then
         let onClick = (fun _ -> (draftId, draftPick) |> ShowFreePickModal |> dispatch)
-        [ [ str (sprintf "Pick %s" pickType) ] |> para theme paraCentredSmallest ] |> link theme (ClickableLink onClick) |> Some
+        [ [ str (sprintf "Pick %s" pickType) ] |> para theme paraCentredSmallest ] |> link theme (Internal onClick) |> Some
     else None
 
-// #region customAgo
 let private customAgo (timestamp:DateTime) =
 #if TICK
     timestamp |> ago
 #else
     sprintf "on %s" (timestamp |> dateAndTimeText)
 #endif
-// #endregion
 
 let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pickedBy:PickedBy option) =
     match pickedBy with
@@ -370,8 +376,8 @@ let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pick
         let (UserName userName) = userId |> userName userDic
         let pickedBy =
             match draftOrdinal with
-            | Some draftOrdinal -> [ div divDefault [ bold userName ; str (sprintf " (%s)" (draftOrdinal |> draftTextLower)) ] ]
-            | None -> [ div divDefault [ bold userName ; str (sprintf " (%s)" (customAgo timestamp.LocalDateTime)) ] ]
+            | Some draftOrdinal -> [ div divDefault [ strong userName ; str (sprintf " (%s)" (draftOrdinal |> draftTextLower)) ] ]
+            | None -> [ div divDefault [ strong userName ; str (sprintf " (%s)" (customAgo timestamp.LocalDateTime)) ] ]
         let tagData = match authUser with | Some authUser when authUser.UserId = userId -> tagSuccess | Some _ | None -> tagPrimary
         pickedBy |> tag theme { tagData with IsRounded = false } |> Some
     | None -> None
@@ -379,14 +385,14 @@ let private pickedByTag theme (userDic:UserDic) (authUser:AuthUser option) (pick
 let private score (points:int<point>) (pickedByPoints:int<point> option) pickedByUserId (userDic:UserDic) =
     let pointsOnly =
         let pointsText = sprintf "%i" (int points)
-        if points > 0<point> then bold pointsText else if points < 0<point> then italic pointsText else str pointsText
+        if points > 0<point> then strong pointsText else if points < 0<point> then em pointsText else str pointsText
     match pickedByPoints, pickedByUserId with
     | Some pickedByPoints, Some pickedByUserId ->
         if points = pickedByPoints then pointsOnly
         else
             let (UserName userName) = pickedByUserId |> userName userDic
             let pickedByPointsText = sprintf "%i" (int pickedByPoints)
-            let pickedByPoints = if pickedByPoints > 0<point> then bold pickedByPointsText else if pickedByPoints < 0<point> then italic pickedByPointsText else str pickedByPointsText
+            let pickedByPoints = if pickedByPoints > 0<point> then strong pickedByPointsText else if pickedByPoints < 0<point> then em pickedByPointsText else str pickedByPointsText
             let pickedByUser = str (sprintf " for %s)" userName)
             div divDefault [ pointsOnly ; str " (" ; pickedByPoints ; pickedByUser ]
     | _ -> pointsOnly
@@ -411,7 +417,7 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
                     | _ -> false)
             if pendingFixtures.Length = 0 then
                 let onClick = (fun _ -> squadId |> ShowEliminateSquadModal |> dispatch)
-                [ [ str "Eliminate" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
+                [ [ str "Eliminate" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (Internal onClick) |> Some
             else None
         else None
     let draftLeft, draftRight =
@@ -435,26 +441,26 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
         table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
             thead [ 
                 tr false [
-                    th [ [ bold "Team"] |> para theme paraDefaultSmallest ]
+                    th [ [ strong "Team"] |> para theme paraDefaultSmallest ]
                     th []
-                    th [ [ bold "Seeding" ] |> para theme paraCentredSmallest ]
-                    th [ [ bold "Coach" ] |> para theme paraDefaultSmallest ]
+                    th [ [ strong "Seeding" ] |> para theme paraCentredSmallest ]
+                    th [ [ strong "Coach" ] |> para theme paraDefaultSmallest ]
                     th []
                     th []
-                    th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
-                    th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                    th [ [ strong "Picked by" ] |> para theme paraDefaultSmallest ]
+                    th [ [ strong "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                     th [] ] ]
             tbody [
                 tr false [
                     td [ [ str squadName ] |> para theme paraDefaultSmallest ]
-                    td [ Rct.ofOption eliminated ]
+                    td [ RctH.ofOption eliminated ]
                     td [ [ str (sprintf "%i" seeding) ] |> para theme paraCentredSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
-                    td [ Rct.ofOption draftLeft ]
-                    td [ Rct.ofOption draftRight ]
-                    td [ Rct.ofOption pickedByTag ]
+                    td [ RctH.ofOption draftLeft ]
+                    td [ RctH.ofOption draftRight ]
+                    td [ RctH.ofOption pickedByTag ]
                     td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
-                    td [ Rct.ofOption eliminate ] ] ] ] ]
+                    td [ RctH.ofOption eliminate ] ] ] ] ]
 
 let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic:UserDic, fixtureDic:FixtureDic, authUser) dispatch =
     let theme = getTheme useDefaultTheme
@@ -471,12 +477,12 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
     let editName playerId =
         if canEdit then
             let onClick = (fun _ -> (squadId, playerId) |> ShowChangePlayerNameModal |> dispatch)
-            [ [ str "Edit name" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
+            [ [ str "Edit name" ] |> para theme paraDefaultSmallest ] |> link theme (Internal onClick) |> Some
         else None
     let changePosition playerId =
         if canEdit then
             let onClick = (fun _ -> (squadId, playerId) |> ShowChangePlayerTypeModal |> dispatch)
-            [ [ str "Change position" ] |> para theme paraDefaultSmallest ] |> link theme (ClickableLink onClick) |> Some
+            [ [ str "Change position" ] |> para theme paraDefaultSmallest ] |> link theme (Internal onClick) |> Some
         else None
     let isWithdrawnAndDate player = match player.PlayerStatus with | PlayerStatus.Active -> false, None | Withdrawn dateWithdrawn -> true, dateWithdrawn
     let withdrawn player =
@@ -489,7 +495,7 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
         let isWithdrawn, _ = player |> isWithdrawnAndDate
         if canWithdraw && squad.Eliminated |> not && isWithdrawn |> not then
             let onClick = (fun _ -> (squadId, playerId) |> ShowWithdrawPlayerModal |> dispatch)
-            [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (ClickableLink onClick) |> Some
+            [ [ str "Withdraw" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] |> link theme (Internal onClick) |> Some
         else None
     let draftLeftAndRight playerId (player:Player) =
         let isPicked = match player.PickedBy with | Some _ -> true | None -> false
@@ -515,15 +521,15 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
         let score = score points pickedByPoints pickedByUserId userDic
         tr false [
             td [ [ str playerName ] |> para theme paraDefaultSmallest ]
-            td [ Rct.ofOption (editName playerId) ]
-            td [ Rct.ofOption (withdrawn player) ]
+            td [ RctH.ofOption (editName playerId) ]
+            td [ RctH.ofOption (withdrawn player) ]
             td [ [ str playerTypeText ] |> para theme paraCentredSmallest ]
-            td [ Rct.ofOption (changePosition playerId) ]
-            td [ Rct.ofOption draftLeft ]
-            td [ Rct.ofOption draftRight ]
-            td [ Rct.ofOption pickedBy ]
+            td [ RctH.ofOption (changePosition playerId) ]
+            td [ RctH.ofOption draftLeft ]
+            td [ RctH.ofOption draftRight ]
+            td [ RctH.ofOption pickedBy ]
             td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
-            td [ Rct.ofOption (withdraw playerId player) ] ]
+            td [ RctH.ofOption (withdraw playerId player) ] ]
     let players = playerDic |> List.ofSeq |> List.map (fun (KeyValue (playerId, player)) -> (playerId, player)) |> List.sortBy (fun (_, player) ->
         player.PlayerType |> playerTypeSortOrder, player.PlayerName)
     let playerRows = players |> List.map playerRow
@@ -532,15 +538,15 @@ let private renderPlayers (useDefaultTheme, playerDic:PlayerDic, squadId, squad,
             yield table theme false { tableDefault with IsNarrow = true ; IsFullWidth = true } [
                 thead [ 
                     tr false [
-                        th [ [ bold "Player" ] |> para theme paraDefaultSmallest ]
+                        th [ [ strong "Player" ] |> para theme paraDefaultSmallest ]
                         th []
                         th []
-                        th [ [ bold "Position" ] |> para theme paraCentredSmallest ]
+                        th [ [ strong "Position" ] |> para theme paraCentredSmallest ]
                         th []
                         th []
                         th []
-                        th [ [ bold "Picked by" ] |> para theme paraDefaultSmallest ]
-                        th [ [ bold "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
+                        th [ [ strong "Picked by" ] |> para theme paraDefaultSmallest ]
+                        th [ [ strong "Score" ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ]
                         th [] ] ]
                 tbody [ yield! playerRows ] ]
         else yield [ str "Player details coming soon" ] |> para theme paraCentredSmaller ]    
@@ -554,9 +560,9 @@ let private addPlayers theme squadId squad authUser dispatch =
         | Some squadPermissions ->
             if squadPermissions.AddOrEditPlayerPermission then
                 if nonWithdrawnCount < MAX_PLAYERS_PER_SQUAD  then
-                    [ [ str "Add player/s" ] |> para theme paraAddPlayers ] |> link theme (ClickableLink (fun _ -> squadId |> ShowAddPlayersModal |> dispatch)) |> Some
+                    [ [ str "Add player/s" ] |> para theme paraAddPlayers ] |> link theme (Internal (fun _ -> squadId |> ShowAddPlayersModal |> dispatch)) |> Some
                 else
-                    [ italic squadIsFullText ] |> para theme paraAddPlayers |> Some
+                    [ em squadIsFullText ] |> para theme paraAddPlayers |> Some
             else None
         | None -> None
     | _, _ -> None
@@ -564,7 +570,7 @@ let private addPlayers theme squadId squad authUser dispatch =
 let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:Projection<_ * SquadDic>, usersProjection:Projection<_ * UserDic>, fixturesProjection:Projection<_ * FixtureDic>, draftsProjection:Projection<_ * DraftDic * CurrentUserDraftDto option> option, hasModal) dispatch =
     let theme = getTheme useDefaultTheme
     columnContent [
-        yield [ bold "Squads" ] |> para theme paraCentredSmall
+        yield [ strong "Squads" ] |> para theme paraCentredSmall
         yield hr theme false
         match squadsProjection, usersProjection, fixturesProjection with
         | Pending, _, _ | _, Pending, _ | _, _, Pending ->
@@ -631,5 +637,5 @@ let render (useDefaultTheme, state, authUser:AuthUser option, squadsProjection:P
                 yield lazyViewOrHMR2 renderSquad (useDefaultTheme, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, fixtureDic, authUser) dispatch
                 yield br
                 yield lazyViewOrHMR2 renderPlayers (useDefaultTheme, squad.PlayerDic, currentSquadId, squad, currentDraft, pickedCounts, userDraftPickDic, pendingPicks, userDic, fixtureDic, authUser) dispatch
-                yield Rct.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
+                yield RctH.ofOption (addPlayers theme currentSquadId squad authUser dispatch)
             | Some _ | None -> () ] // note: should never happen

@@ -1,27 +1,25 @@
-module Aornota.Sweepstake2018.Server.Agents.Connections
+module Aornota.Sweepstake2021.Server.Agents.Connections
 
 (* Broadcasts: UserSignedIn | UserActivity | UserSignedOut
                ConnectionsSignedOut | Disconnected
    Subscribes: SendMsg *)
 
-open Aornota.Common.IfDebug
-open Aornota.Common.Json
-open Aornota.Common.UnexpectedError
-
-open Aornota.Server.Common.Helpers
-open Aornota.Server.Common.JsonConverter
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.Server.Agents
-open Aornota.Sweepstake2018.Server.Agents.Broadcaster
-open Aornota.Sweepstake2018.Server.Agents.ConsoleLogger
-open Aornota.Sweepstake2018.Server.Authorization
-open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Jwt
-open Aornota.Sweepstake2018.Server.Signal
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Json
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Server.Agents
+open Aornota.Sweepstake2021.Server.Agents.Broadcaster
+open Aornota.Sweepstake2021.Server.Agents.ConsoleLogger
+open Aornota.Sweepstake2021.Server.Authorization
+open Aornota.Sweepstake2021.Server.Common.Helpers
+open Aornota.Sweepstake2021.Server.Common.JsonConverter
+open Aornota.Sweepstake2021.Server.Connection
+open Aornota.Sweepstake2021.Server.Jwt
+open Aornota.Sweepstake2021.Server.Signal
 
 open System
 open System.Collections.Generic

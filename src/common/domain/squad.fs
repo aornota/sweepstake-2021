@@ -1,22 +1,19 @@
-module Aornota.Sweepstake2018.Common.Domain.Squad
+module Aornota.Sweepstake2021.Common.Domain.Squad
 
-open Aornota.Common.Revision
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Revision
 
 open System
 
-type SquadId = | SquadId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> SquadId
+type SquadId = | SquadId of guid : Guid with static member Create () = Guid.NewGuid () |> SquadId
 
 type SquadName = | SquadName of squadName : string
 type CoachName = | CoachName of coachName : string
 
 type Seeding = | Seeding of seeding : int
 
-type PlayerId = | PlayerId of guid : Guid with
-    static member Create () = Guid.NewGuid () |> PlayerId
+type PlayerId = | PlayerId of guid : Guid with static member Create () = Guid.NewGuid () |> PlayerId
 
 type PlayerName = | PlayerName of playerName : string
 

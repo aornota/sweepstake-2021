@@ -1,14 +1,12 @@
-module Aornota.Sweepstake2018.UI.Pages.News.Common
+module Aornota.Sweepstake2021.Ui.Pages.News.Common
 
-open Aornota.Common.Revision
-
-open Aornota.UI.Common.Notifications
-
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Shared
 
 open System
 open System.Collections.Generic

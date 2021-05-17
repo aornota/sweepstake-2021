@@ -1,4 +1,4 @@
-module Aornota.Common.Revision
+module Aornota.Sweepstake2021.Common.Revision
 
 type Rvn = | Rvn of rvn : int
 

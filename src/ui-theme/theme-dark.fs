@@ -1,6 +1,6 @@
-module Aornota.UI.Theme.Dark
+module Aornota.Sweepstake2021.Ui.Theme.Dark
 
-open Aornota.UI.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Common
 
 let private transformSemantic semantic = match semantic with | Black -> White | Dark -> Light | Light -> Dark | White -> Black | _ -> semantic
 
@@ -31,9 +31,9 @@ let themeDark = {
     TransformPageLoaderData = (fun pageLoaderData -> { pageLoaderData with PageLoaderSemantic = transformSemantic pageLoaderData.PageLoaderSemantic })
     TransformParaData = (fun paraData -> { paraData with ParaColour = transformParaColour paraData.ParaColour })
     TransformProgressData = (fun progressData -> { progressData with ProgressSemantic = transformSemanticOption progressData.ProgressSemantic })
+    TransformRadioData = (fun radioData -> { radioData with RadioSemantic = transformSemanticOption radioData.RadioSemantic })
     TransformSpanData = (fun spanData -> { spanData with SpanClass = transformSpanClassOption spanData.SpanClass })
     TransformTableData = id
     TransformTabsData = id
     TransformTagData = (fun tagData -> { tagData with TagSemantic = transformSemanticOption tagData.TagSemantic })
     TransformTooltipData = (fun tooltipData -> { tooltipData with TooltipSemantic = transformSemanticOption tooltipData.TooltipSemantic }) }
-

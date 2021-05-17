@@ -1,17 +1,16 @@
-module Aornota.UI.Common.Notifications
+module Aornota.Sweepstake2021.Ui.Common.Notifications
 
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Render.Bulma
-open Aornota.UI.Render.Common
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Render.Bulma
-open Aornota.UI.Theme.Shared
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Render.Common
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Render.Bulma
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
 open System
 
-module Rct = Fable.Helpers.React
+module RctH = Fable.React.Helpers
 
 type NotificationId = | NotificationId of guid : Guid with
     static member Create () = Guid.NewGuid () |> NotificationId
@@ -46,7 +45,7 @@ let private render theme source dispatch notificationMessage =
         notification theme notificationData [
             level true [
                 levelLeft [ levelItem [ para theme { paraDefaultSmallest with Weight = Bold } [ str sourceAndTypeText ] ] ]
-                Rct.ofOption timestamp ]
+                RctH.ofOption timestamp ]
             para theme { paraDefaultSmallest with Weight = SemiBold } [ str notificationMessage.Text ] ]
     ]
 

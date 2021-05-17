@@ -1,49 +1,47 @@
-module Aornota.Sweepstake2018.UI.Program.State
+module Aornota.Sweepstake2021.Ui.Program.State
 
-open Aornota.Common.Delta
-open Aornota.Common.IfDebug
-open Aornota.Common.Json
-open Aornota.Common.Revision
-open Aornota.Common.UnexpectedError
-open Aornota.Common.UnitsOfMeasure
-
-open Aornota.UI.Common.LocalStorage
-open Aornota.UI.Common.Notifications
-open Aornota.UI.Common.ShouldNeverHappen
-open Aornota.UI.Common.TimestampHelper
-open Aornota.UI.Common.Toasts
-open Aornota.UI.Theme.Common
-open Aornota.UI.Theme.Shared
-
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.Literals
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Common.WsApi.UiMsg
-open Aornota.Sweepstake2018.UI.Pages
-open Aornota.Sweepstake2018.UI.Pages.Chat.Common
-open Aornota.Sweepstake2018.UI.Pages.DraftAdmin.Common
-open Aornota.Sweepstake2018.UI.Pages.Drafts.Common
-open Aornota.Sweepstake2018.UI.Pages.Fixtures.Common
-open Aornota.Sweepstake2018.UI.Pages.News.Common
-open Aornota.Sweepstake2018.UI.Pages.Scores.Common
-open Aornota.Sweepstake2018.UI.Pages.Squads.Common
-open Aornota.Sweepstake2018.UI.Pages.UserAdmin.Common
-open Aornota.Sweepstake2018.UI.Program.Common
-open Aornota.Sweepstake2018.UI.Shared
+open Aornota.Sweepstake2021.Common.Delta
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.IfDebug
+open Aornota.Sweepstake2021.Common.Json
+open Aornota.Sweepstake2021.Common.Literals
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnexpectedError
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Common.WsApi.UiMsg
+open Aornota.Sweepstake2021.Ui.Common.JsonConverter
+open Aornota.Sweepstake2021.Ui.Common.LocalStorage
+open Aornota.Sweepstake2021.Ui.Common.Notifications
+open Aornota.Sweepstake2021.Ui.Common.ShouldNeverHappen
+open Aornota.Sweepstake2021.Ui.Common.TimestampHelper
+open Aornota.Sweepstake2021.Ui.Common.Toasts
+open Aornota.Sweepstake2021.Ui.Pages
+open Aornota.Sweepstake2021.Ui.Pages.Chat.Common
+open Aornota.Sweepstake2021.Ui.Pages.DraftAdmin.Common
+open Aornota.Sweepstake2021.Ui.Pages.Drafts.Common
+open Aornota.Sweepstake2021.Ui.Pages.Fixtures.Common
+open Aornota.Sweepstake2021.Ui.Pages.News.Common
+open Aornota.Sweepstake2021.Ui.Pages.Scores.Common
+open Aornota.Sweepstake2021.Ui.Pages.Squads.Common
+open Aornota.Sweepstake2021.Ui.Pages.UserAdmin.Common
+open Aornota.Sweepstake2021.Ui.Program.Common
+open Aornota.Sweepstake2021.Ui.Shared
+open Aornota.Sweepstake2021.Ui.Theme.Common
+open Aornota.Sweepstake2021.Ui.Theme.Shared
 
 open System
 
+open Browser
+open Browser.Types
+
 open Elmish
 
-open Fable.Core.JsInterop
-open Fable.Import
-module Brw = Fable.Import.Browser
-
-let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2018-ui-app-preferences"
+let [<Literal>] private APP_PREFERENCES_KEY = "sweepstake-2019-ui-app-preferences"
 
 #if TICK
 let [<Literal>] private WIFF_INTERVAL = 30.<second>
@@ -51,14 +49,14 @@ let [<Literal>] private WIFF_INTERVAL = 30.<second>
 
 let [<Literal>] private LAST_ACTIVITY_THROTTLE = 10.<second>
 
-let private setBodyClass useDefaultTheme = Browser.document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
+let private setBodyClass useDefaultTheme = document.body.className <- getThemeClass (getTheme useDefaultTheme).ThemeClass
 
 let private readPreferencesCmd =
     let readPreferences () = async {
         (* TEMP-NMB...
         do! ifDebugSleepAsync 20 100 *)
-        return Key APP_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> ofJson<Preferences>) }
-    Cmd.ofAsync readPreferences () (Ok >> ReadingPreferencesInput >> AppInput) (Error >> ReadingPreferencesInput >> AppInput)
+        return Key APP_PREFERENCES_KEY |> readJson |> Option.map (fun (Json json) -> json |> fromJson<Preferences>) }
+    Cmd.OfAsync.either readPreferences () (Ok >> ReadingPreferencesInput >> AppInput) (Error >> ReadingPreferencesInput >> AppInput)
 
 let private writePreferencesCmd state =
     let writePreferences uiState = async {
@@ -73,34 +71,32 @@ let private writePreferencesCmd state =
             | ReadingPreferences | Connecting _ | ServiceUnavailable | AutomaticallySigningIn _ | Unauth _ -> None
         let preferences = { UseDefaultTheme = uiState.UseDefaultTheme ; SessionId = uiState.SessionId ; LastPage = lastPage ; User = user }
         do preferences |> toJson |> Json |> writeJson (Key APP_PREFERENCES_KEY) }
-    Cmd.ofAsync writePreferences state (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
+    Cmd.OfAsync.either writePreferences state (Ok >> WritePreferencesResult) (Error >> WritePreferencesResult)
 
-// #region: initializeWsSub
 let private initializeWsSub dispatch =
-    let receiveServerMsg (wsMessage:Brw.MessageEvent) =
+    let receiveServerMsg (wsMessage:MessageEvent) =
         try // note: expect wsMessage.data to be deserializable to ServerMsg
-            let serverMsg = wsMessage.data |> unbox |> ofJson<ServerMsg>
+            let serverMsg = wsMessage.data |> unbox |> fromJson<ServerMsg>
             ifDebugFakeErrorFailWith (sprintf "Fake error deserializing %A" serverMsg)
             serverMsg |> HandleServerMsg |> dispatch
         with exn -> exn.Message |> DeserializeServerMsgError |> WsError |> dispatch
     let wsUrl =
 #if AZURE
-        "wss://sweepstake-2018.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
+        "wss://sweepstake-2019.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
 #else
         sprintf "ws://localhost:%i" WS_PORT
 #endif
     let wsApiUrl = sprintf "%s%s" wsUrl WS_API_PATH
     try
-        let ws = Brw.WebSocket.Create wsApiUrl
+        let ws = WebSocket.Create wsApiUrl
         ws.onopen <- (fun _ -> ws |> ConnectingInput |> AppInput |> dispatch)
         ws.onerror <- (fun _ -> wsApiUrl |> WsOnError |> WsError |> dispatch)
         ws.onmessage <- receiveServerMsg
         ()
     with _ -> wsApiUrl |> WsOnError |> WsError |> dispatch
-// #endregion
 
-let private sendMsg (ws:Brw.WebSocket) (uiMsg:UiMsg) =
-    if ws.readyState <> ws.OPEN then uiMsg |> SendMsgWsNotOpenError |> WsError |> Cmd.ofMsg
+let private sendMsg (ws:WebSocket) (uiMsg:UiMsg) =
+    if ws.readyState <> WebSocketState.OPEN then uiMsg |> SendMsgWsNotOpenError |> WsError |> Cmd.ofMsg
     else
         try
             ifDebugFakeErrorFailWith "Fake sendMsg error"
@@ -209,7 +205,7 @@ let private defaultChangePasswordState mustChangePasswordReason changePasswordSt
 
 let private defaultAuthState (authUser:AuthUser) currentPage (unauthPageStates:UnauthPageStates option) (unauthProjections:UnauthProjections option) state =
     let currentPage = match currentPage with | Some currentPage -> currentPage | None -> AuthPage ChatPage
-    let newsState, newsCmd = 
+    let newsState, newsCmd =
         match unauthPageStates with
         | Some unauthPageStates -> unauthPageStates.NewsState, Cmd.none
         | None -> News.State.initialize (currentPage = UnauthPage NewsPage) true None
@@ -311,14 +307,13 @@ let private handleServerUiMsgError serverUiMsgError state =
     | DeserializeUiMsgError errorText ->
         state |> addDebugError (sprintf "Server DeserializeUiMsgError -> %s" errorText) ("The web server was unable to process a message<br><br>Please try refreshing the page" |> Some)
 
-// #region: handleConnected
 let private handleConnected ws (serverStarted:DateTimeOffset) otherConnectionCount signedInUserCount user lastPage state =
     let toastCmd =
 #if DEBUG
         let serverStarted = ago serverStarted.LocalDateTime
         let otherConnections = if otherConnectionCount > 0 then sprintf "<strong>%i</strong>" otherConnectionCount else sprintf "%i" otherConnectionCount
         let signedInUsers = if signedInUserCount > 0 then sprintf "<strong>%i</strong>" signedInUserCount else sprintf "%i" signedInUserCount
-        sprintf "Server started: %s<br>Other web socket connections: %s<br>Signed-in users: %s" serverStarted otherConnections signedInUsers |> infoToastCmd
+        sprintf "Server started: %s<br>Other web socket connections: %s<br>Signed in users: %s" serverStarted otherConnections signedInUsers |> infoToastCmd
 #else
         Cmd.none
 #endif
@@ -335,7 +330,6 @@ let private handleConnected ws (serverStarted:DateTimeOffset) otherConnectionCou
             let state, cmd = state |> defaultUnauthState lastPage None None None
             state, Cmd.batch [ cmd ; showSignInCmd ]
     state, Cmd.batch [ cmd ; toastCmd ]
-// #endregion
 
 let private handleSignInResult (result:Result<AuthUser,SignInCmdError<string>>) unauthState state =
     match unauthState.SignInState, result with
@@ -421,7 +415,6 @@ let private handleAutoSignOut autoSignOutReason authState state =
     let state, cmd = state |> defaultUnauthState currentUnauthPage (authState.UnauthPageStates |> Some) (authState.UnauthProjections |> Some) None
     state, Cmd.batch [ cmd ; state |> writePreferencesCmd ; "You have been automatically signed out" |> toastCmd ]
 
-// #region User/s
 let private user ((userUnauthDto, userAuthDto):UserDto) : User = userUnauthDto.UserName, userAuthDto
 
 let private userDicUnauth (userUnauthDtos:UserUnauthDto list) =
@@ -473,9 +466,7 @@ let private applyUsersDeltaAuth currentRvn deltaRvn (delta:Delta<UserId, UserDto
         if doNotExist.Length = 0 then delta.Removed |> List.iter (userDic.Remove >> ignore) |> Ok
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> userDic |> Ok)
-// #endregion
 
-// #region Squad/s
 let private player (playerDto:PlayerDto) = { PlayerName = playerDto.PlayerName ; PlayerType = playerDto.PlayerType ; PlayerStatus = playerDto.PlayerStatus ; PickedBy = playerDto.PickedBy }
 
 let private squad (squadDto:SquadDto) =
@@ -537,9 +528,7 @@ let private applyPlayersDelta currentRvn deltaRvn (delta:Delta<PlayerId, PlayerD
         if doNotExist.Length = 0 then delta.Removed |> List.iter (playerDic.Remove >> ignore) |> Ok
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> playerDic |> Ok)
-// #endregion
 
-// #region Fixture/s
 let private fixture (fixtureDto:FixtureDto) =
     { Rvn = fixtureDto.Rvn ; Stage = fixtureDto.Stage ; HomeParticipant = fixtureDto.HomeParticipant ; AwayParticipant = fixtureDto.AwayParticipant ; KickOff = fixtureDto.KickOff
       MatchResult = fixtureDto.MatchResult }
@@ -568,9 +557,7 @@ let private applyFixturesDelta currentRvn deltaRvn (delta:Delta<FixtureId, Fixtu
         if doNotExist.Length = 0 then delta.Removed |> List.iter (fixtureDic.Remove >> ignore) |> Ok
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> fixtureDic |> Ok)
-// #endregion
 
-// #region Draft/s
 let private draft (draftDto:DraftDto) = { Rvn = draftDto.Rvn ; DraftOrdinal = draftDto.DraftOrdinal ; DraftStatus = draftDto.DraftStatus ; ProcessingDetails = draftDto.ProcessingDetails }
 
 let private draftDic (draftDtos:DraftDto list) =
@@ -597,7 +584,6 @@ let private applyDraftsDelta currentRvn deltaRvn (delta:Delta<DraftId, DraftDto>
         if doNotExist.Length = 0 then delta.Removed |> List.iter (draftDic.Remove >> ignore) |> Ok
         else doNotExist |> RemovedDoNotExist |> Error)
     |> Result.bind (fun _ -> draftDic |> Ok)
-// #endregion
 
 let private handleServerAppMsg serverAppMsg state =
     match serverAppMsg, state.AppState, state.ConnectionState with
@@ -717,7 +703,7 @@ let private handleServerAppMsg serverAppMsg state =
                     let squadDic = squadDtos |> squadDic
                     state, (initialRvn, squadDic) |> Ready
                 | Error (OtherError errorText) ->
-                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed                   
+                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed
             let unauthProjections = { unauthProjections with SquadsProjection = squadsProjection }
             let unauthState = { unauthState with UnauthProjections = unauthProjections }
             { state with AppState = Unauth unauthState }, Cmd.none
@@ -729,7 +715,7 @@ let private handleServerAppMsg serverAppMsg state =
         | Pending ->
             let state, squadsProjection =
                 match result with
-                | Ok squadDtos ->               
+                | Ok squadDtos ->
                     let squadDic = squadDtos |> squadDic
                     state, (initialRvn, squadDic) |> Ready
                 | Error (OtherError errorText) ->
@@ -851,7 +837,7 @@ let private handleServerAppMsg serverAppMsg state =
                     let fixtureDic = fixtureDtos |> fixtureDic
                     state, (initialRvn, fixtureDic) |> Ready
                 | Error (OtherError errorText) ->
-                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed                   
+                    state |> addNotificationMessage (errorText |> dangerDismissableMessage), Failed
             let unauthProjections = { unauthProjections with FixturesProjection = fixturesProjection }
             let unauthState = { unauthState with UnauthProjections = unauthProjections }
             { state with AppState = Unauth unauthState }, Cmd.none
@@ -981,8 +967,8 @@ let private handleServerAppMsg serverAppMsg state =
                     if pendingRvn <= rvn then None, (userDraftPick, priorityChange) |> Some else changePriorityPending, lastPriorityChanged
                 | _ -> changePriorityPending, lastPriorityChanged
             let draftsState = { draftsState with RemovalPending = removalPending ; ChangePriorityPending = changePriorityPending ; LastPriorityChanged = lastPriorityChanged }
-            let unauthPageStates = { unauthPageStates with SquadsState = squadsState }           
-            let authPageStates = { authPageStates with DraftsState = draftsState }           
+            let unauthPageStates = { unauthPageStates with SquadsState = squadsState }
+            let authPageStates = { authPageStates with DraftsState = draftsState }
             let authProjections = { authProjections with DraftsProjection = (changeRvn, draftDic, currentUserDraftDto) |> Ready }
             let authState = { authState with UnauthPageStates = unauthPageStates ; AuthPageStates = authPageStates ; AuthProjections = authProjections }
             { state with AppState = Auth authState }, Cmd.none
@@ -1342,7 +1328,6 @@ let private handleAppInput appInput state =
         let state, cmd = state |> shouldNeverHappen (sprintf "Unexpected AppInput when %A -> %A" state.AppState appInput)
         state, cmd, false
 
-// #region transition
 let transition input state =
     let state, cmd, isUserNonApiActivity =
         match input with
@@ -1395,4 +1380,3 @@ let transition input state =
         | _, _ ->
             state.AppState, Cmd.none
     { state with AppState = appState }, Cmd.batch [ cmd ; userNonApiActivityCmd ]
-// #endregion

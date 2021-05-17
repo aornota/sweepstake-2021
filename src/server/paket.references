@@ -1,13 +1,9 @@
 group server
 
-    Fable.JsonConverter
 	FSharp.Core
-	Giraffe
 	Microsoft.AspNetCore
 	Microsoft.AspNetCore.StaticFiles
-    Microsoft.AspNetCore.WebSockets
-    Newtonsoft.Json
+	Microsoft.AspNetCore.WebSockets
     jose-jwt
     TaskBuilder.fs
-    
-	Microsoft.DotNet.Watcher.Tools
+    Thoth.Json.Net

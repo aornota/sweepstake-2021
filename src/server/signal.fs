@@ -1,23 +1,23 @@
-module Aornota.Sweepstake2018.Server.Signal
+module Aornota.Sweepstake2021.Server.Signal
 
-open Aornota.Common.Markdown
-open Aornota.Common.Revision
-open Aornota.Common.UnitsOfMeasure
 
-open Aornota.Sweepstake2018.Common.Domain.Core
-open Aornota.Sweepstake2018.Common.Domain.Draft
-open Aornota.Sweepstake2018.Common.Domain.Fixture
-open Aornota.Sweepstake2018.Common.Domain.News
-open Aornota.Sweepstake2018.Common.Domain.Squad
-open Aornota.Sweepstake2018.Common.Domain.User
-open Aornota.Sweepstake2018.Common.WsApi.ServerMsg
-open Aornota.Sweepstake2018.Server.Connection
-open Aornota.Sweepstake2018.Server.Events.DraftEvents
-open Aornota.Sweepstake2018.Server.Events.FixtureEvents
-open Aornota.Sweepstake2018.Server.Events.NewsEvents
-open Aornota.Sweepstake2018.Server.Events.SquadEvents
-open Aornota.Sweepstake2018.Server.Events.UserDraftEvents
-open Aornota.Sweepstake2018.Server.Events.UserEvents
+open Aornota.Sweepstake2021.Common.Domain.Core
+open Aornota.Sweepstake2021.Common.Domain.Draft
+open Aornota.Sweepstake2021.Common.Domain.Fixture
+open Aornota.Sweepstake2021.Common.Domain.News
+open Aornota.Sweepstake2021.Common.Domain.Squad
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Markdown
+open Aornota.Sweepstake2021.Common.Revision
+open Aornota.Sweepstake2021.Common.UnitsOfMeasure
+open Aornota.Sweepstake2021.Common.WsApi.ServerMsg
+open Aornota.Sweepstake2021.Server.Connection
+open Aornota.Sweepstake2021.Server.Events.DraftEvents
+open Aornota.Sweepstake2021.Server.Events.FixtureEvents
+open Aornota.Sweepstake2021.Server.Events.NewsEvents
+open Aornota.Sweepstake2021.Server.Events.SquadEvents
+open Aornota.Sweepstake2021.Server.Events.UserDraftEvents
+open Aornota.Sweepstake2021.Server.Events.UserEvents
 
 open System
 

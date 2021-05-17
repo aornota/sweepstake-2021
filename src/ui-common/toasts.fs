@@ -1,4 +1,4 @@
-module Aornota.UI.Common.Toasts
+module Aornota.Sweepstake2021.Ui.Common.Toasts
 
 open Elmish
 open Elmish.Toastr

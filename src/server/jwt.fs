@@ -1,10 +1,8 @@
-module Aornota.Sweepstake2018.Server.Jwt
+module Aornota.Sweepstake2021.Server.Jwt
 
-open Aornota.Common.Json
-
-open Aornota.Server.Common.JsonConverter
-
-open Aornota.Sweepstake2018.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Domain.User
+open Aornota.Sweepstake2021.Common.Json
+open Aornota.Sweepstake2021.Server.Common.JsonConverter
 
 open System.IO
 open System.Security.Cryptography
@@ -32,6 +30,6 @@ let toJwt (userId:UserId, permissions:Permissions) =
 
 let fromJwt (Jwt jwt) =
     try
-        let userId, permissions = jwt |> decode |> ofJson<UserId * Permissions>
+        let userId, permissions = jwt |> decode |> fromJson<UserId * Permissions>
         (userId, permissions) |> Ok
     with | exn -> exn.Message |> Error
