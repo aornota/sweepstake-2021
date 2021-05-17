@@ -94,10 +94,10 @@ It's not a perfect algorithm by any means. But it's the best I've been able to c
 For a more detailed example, here are the [first and second draft details](http://aornota.github.io/sweepstake.2015/draft.html) for the world-famous Rugby World Cup 2015 sweepstake."""
 
 let [<Literal>] PAYOUTS_MARKDOWN = """##### **Payouts:**
-+ **£60** for first place
-+ **£30** for second place
-+ **£20** for third place
-+ **£10** for the [_木製スプーン_](https://translate.google.co.uk/#view=home&op=translate&sl=auto&tl=en&text=%E6%9C%A8%E8%A3%BD%E3%82%B9%E3%83%97%E3%83%BC%E3%83%B3)"""
++ **£TBC** for first place
++ **$TBC** for second place
++ **£TBC** for third place
++ **£TBC** for the wooden spoon"""
 
 let [<Literal>] MARKDOWN_SYNTAX_MARKDOWN = """# Markdown syntax
 ### A very quick introduction
