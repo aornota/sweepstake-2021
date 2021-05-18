@@ -82,7 +82,7 @@ let private initializeWsSub dispatch =
         with exn -> exn.Message |> DeserializeServerMsgError |> WsError |> dispatch
     let wsUrl =
 #if AZURE
-        "wss://sweepstake-2019.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
+        "wss://sweepstake-2021.azurewebsites.net:443" // note: WS_PORT irrelevant for Azure (since effectively "internal")
 #else
         sprintf "ws://localhost:%i" WS_PORT
 #endif

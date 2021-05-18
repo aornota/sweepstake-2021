@@ -3,7 +3,7 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>netcoreapp3.1</TargetFramework>
-        <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
+        <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
