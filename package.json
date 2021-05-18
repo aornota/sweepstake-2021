@@ -1,6 +1,6 @@
 {
     "name": "sweepstake-2021",
-    "version": "pre-α",
+    "version": "α",
     "description": "The world-famous Euro 2020 sweepstake. https://sweepstake-2021.azurewebsites.net/",
     "repository": "git@github.com:aornota/sweepstake-2021.git",
     "author": "dj narration",

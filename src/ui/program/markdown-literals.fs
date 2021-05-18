@@ -137,4 +137,4 @@ And here's a Matt Miles quote [from _Dark Mountain_ issue 11]:
 > our front doors, because they have nowhere else to go. On a planet dominated by the movements of
 > human beings, we are our own indicator species.
 ---
-Made possible thanks to [Marked.js](https://marked.js.org/#/README.md) and [Maxime Mangel](https://github.com/MangelMaxime/Fulma/blob/master/docs/src/Libs/Fable.Import.Marked.fs)."""
+Made possible thanks to [Marked.js](https://marked.js.org/) and [Maxime Mangel](https://github.com/MangelMaxime/Fulma/blob/master/docs/src/Libs/Fable.Import.Marked.fs)."""
