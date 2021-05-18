@@ -478,7 +478,7 @@ let private createInitialDraftsEventsIfNecessary = async {
         [] |> drafts.OnDraftsEventsRead
         [] |> drafts.OnUserDraftsEventsRead
 
-        // TODO-NMB: Confirm draft deadlines...
+        // TODO-NMB-2021: Confirm draft deadlines...
 
         let draft1Id, draft1Ordinal = Guid "00000000-0000-0000-0000-000000000001" |> DraftId, DraftOrdinal 1
         let draft1Starts, draft1Ends = (2021, 06, 01, 21, 30) |> dateTimeOffsetUtc, (2021, 06, 07, 17, 00) |> dateTimeOffsetUtc

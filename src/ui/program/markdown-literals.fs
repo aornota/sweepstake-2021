@@ -88,7 +88,7 @@ It's not a perfect algorithm by any means. But it's the best I've been able to c
 
 For a more detailed example, here are the [first and second draft details](http://aornota.github.io/sweepstake.2016/draft.html) for the world-famous Euro 2016 sweepstake."""
 
-// TODO-NMB: Confirm payouts...
+// TODO-NMB-2021: Confirm payouts...
 
 let [<Literal>] PAYOUTS_MARKDOWN = """##### **Payouts:**
 + **£TBC** for first place

@@ -27,6 +27,7 @@ let private renderStandings (useDefaultTheme, users:(UserId * UserName) list, sq
                 let paraPayout = { paraDefaultSmallest with ParaAlignment = RightAligned }
                 let payout =
                     match rank, tieCount with
+                    // TODO-NMB-2021: Confirm payouts...
                     | 1, 1 -> 65. |> Some
                     | 1, 2 -> 50. |> Some
                     | 1, 3 -> 40. |> Some
@@ -39,11 +40,12 @@ let private renderStandings (useDefaultTheme, users:(UserId * UserName) list, sq
                     | 3, 2 -> 10. |> Some
                     | 3, _ -> None // note: unlikely to happen
                     | rank, 1 when rank = userCount -> 10. |> Some
-                    | rank, 2 when rank = userCount -> 5. |> Some
-                    | rank, _ when rank = userCount -> None // note: unlikely to happen
+                    | rank, 2 when rank = userCount - 1 -> 5. |> Some
+                    | rank, n when rank = userCount - (n - 1) -> None // note: unlikely to happen
                     | _ -> None
                 match payout with
-                | Some payout -> [ str (sprintf "£%.2f" payout) ] |> para theme paraPayout |> Some
+                // TODO-NMB-2021: Show payouts...
+                | Some payout -> [ str "£TBC" (* TEMP-NMB-2021...(sprintf "£%.2f" payout) *) ] |> para theme paraPayout |> Some
                 | None -> None
             let rankText = if tieCount > 1 then sprintf "=%i." rank else sprintf "%i." rank
             let rankChange =
