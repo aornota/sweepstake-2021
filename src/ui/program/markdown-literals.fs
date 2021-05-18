@@ -92,7 +92,7 @@ For a more detailed example, here are the [first and second draft details](http:
 
 let [<Literal>] PAYOUTS_MARKDOWN = """##### **Payouts:**
 + **£TBC** for first place
-+ **$TBC** for second place
++ **£TBC** for second place
 + **£TBC** for third place
 + **£TBC** for the wooden spoon
 
