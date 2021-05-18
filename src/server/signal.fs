@@ -1,6 +1,5 @@
 module Aornota.Sweepstake2021.Server.Signal
 
-
 open Aornota.Sweepstake2021.Common.Domain.Core
 open Aornota.Sweepstake2021.Common.Domain.Draft
 open Aornota.Sweepstake2021.Common.Domain.Fixture
@@ -26,7 +25,7 @@ type UserRead = { UserId : UserId ; Rvn : Rvn ; UserName : UserName ; UserType :
 type NewsRead = { PostId : PostId ; Rvn : Rvn ; UserId : UserId ; PostType : PostType ; MessageText : Markdown ; Timestamp : DateTimeOffset ; Removed : bool }
 
 type PlayerRead = { PlayerId : PlayerId ; PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
-type SquadRead = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayersRead : PlayerRead list }
+type SquadRead = { SquadId : SquadId ; Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding option ; CoachName : CoachName ; Eliminated : bool ; PlayersRead : PlayerRead list }
 
 type MatchEventRead = { MatchEventId : MatchEventId ; MatchEvent : MatchEvent }
 type FixtureRead =

@@ -23,7 +23,7 @@ type UserDic = Dictionary<UserId, User>
 type Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus ; PickedBy : PickedBy option }
 type PlayerDic = Dictionary<PlayerId, Player>
 
-type Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
+type Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding option ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
 type SquadDic = Dictionary<SquadId, Squad>
 
 type Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset ; MatchResult : MatchResult option }
@@ -52,6 +52,7 @@ let userType (userDic:UserDic) userId =
 let userNames (userDic:UserDic) = userDic |> List.ofSeq |> List.map (fun (KeyValue (_, (userName, _))) -> userName)
 
 let squadName (squadDic:SquadDic) squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId].SquadName else SquadName UNKNOWN
+let seedingText seeding = match seeding with | Some (Seeding seeding) when seeding <= 12 -> sprintf "%i" seeding | _ -> "N/A"
 
 let playerName (squadDic:SquadDic) (squadId, playerId) =
     if squadId |> squadDic.ContainsKey then

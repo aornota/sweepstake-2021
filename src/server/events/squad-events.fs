@@ -6,7 +6,7 @@ open Aornota.Sweepstake2021.Common.Domain.Squad
 open System
 
 type SquadEvent =
-    | SquadCreated of squadId : SquadId * squadName : SquadName * group : Group * seeding : Seeding * coachName : CoachName
+    | SquadCreated of squadId : SquadId * squadName : SquadName * group : Group * seeding : Seeding option * coachName : CoachName
     | PlayerAdded of squadId : SquadId * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
     | PlayerNameChanged of squadId : SquadId * playerId : PlayerId * playerName : PlayerName
     | PlayerTypeChanged of squadId : SquadId * playerId : PlayerId * playerType : PlayerType

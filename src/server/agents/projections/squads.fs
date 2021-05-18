@@ -42,7 +42,7 @@ type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; Play
 type private PlayerDic = Dictionary<PlayerId, Player>
 
 type private Squad =
-    { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
+    { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding option ; CoachName : CoachName ; Eliminated : bool ; PlayerDic : PlayerDic ; PickedBy : PickedBy option }
 type private SquadDic = Dictionary<SquadId, Squad>
 
 type private Projectee = { LastRvn : Rvn }

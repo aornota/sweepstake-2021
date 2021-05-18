@@ -27,7 +27,7 @@ type private SquadsInput =
     | Start of reply : AsyncReplyChannel<unit>
     | Reset of reply : AsyncReplyChannel<unit>
     | OnSquadsEventsRead of squadsEvents : (SquadId * (Rvn * SquadEvent) list) list
-    | HandleCreateSquadCmd of token : CreateSquadToken * auditUserId : UserId * squadId : SquadId * squadName : SquadName * group : Group * seeding : Seeding * coachName : CoachName
+    | HandleCreateSquadCmd of token : CreateSquadToken * auditUserId : UserId * squadId : SquadId * squadName : SquadName * group : Group * seeding : Seeding option * coachName : CoachName
         * reply : AsyncReplyChannel<Result<SquadName, AuthCmdError<string>>>
     | HandleAddPlayerCmd of token : AddOrEditPlayerToken * auditUserId : UserId * squadId : SquadId * currentRvn : Rvn * playerId : PlayerId * playerName : PlayerName * playerType : PlayerType
         * reply : AsyncReplyChannel<Result<Rvn * PlayerName, AuthCmdError<string>>>
@@ -43,7 +43,7 @@ type private SquadsInput =
 type private Player = { PlayerName : PlayerName ; PlayerType : PlayerType ; PlayerStatus : PlayerStatus }
 type private PlayerDic = Dictionary<PlayerId, Player>
 
-type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding ; CoachName : CoachName ; Eliminated : bool ; Players : Dictionary<PlayerId, Player> }
+type private Squad = { Rvn : Rvn ; SquadName : SquadName ; Group : Group ; Seeding : Seeding option ; CoachName : CoachName ; Eliminated : bool ; Players : Dictionary<PlayerId, Player> }
 type private SquadDic = Dictionary<SquadId, Squad>
 
 let private log category = (Entity Entity.Squads, category) |> consoleLogger.Log

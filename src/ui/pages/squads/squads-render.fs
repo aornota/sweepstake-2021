@@ -268,7 +268,7 @@ let private group (squadDic:SquadDic) squadId = match squadId with | Some squadI
 
 let private defaultSquadId (squadDic:SquadDic) group =
     let groupSquads = squadDic |> List.ofSeq |> List.map (fun (KeyValue (squadId, squad)) -> squadId, squad) |> List.filter (fun (_, squad) -> squad.Group = group)
-    match groupSquads |> List.sortBy (fun (_, squad) -> squad.SquadName) with | (squadId, _) :: _ -> squadId |> Some | [] -> None
+    match groupSquads with | (squadId, _) :: _ -> squadId |> Some | [] -> None
 
 let private groupTab currentGroup dispatch group =
     let isActive = match currentGroup with | Some currentGroup when currentGroup = group -> true | Some _ | None -> false
@@ -401,7 +401,7 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
     let theme = getTheme useDefaultTheme
     let pickedTeamCount, _, _ = pickedCounts
     let needsTeam = pickedTeamCount < MAX_TEAM_PICKS
-    let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
+    let (SquadName squadName), (CoachName coachName) = squad.SquadName, squad.CoachName
     let canEliminate =
         match authUser with
         | Some authUser -> match authUser.Permissions.SquadPermissions with | Some squadPermissions -> squadPermissions.EliminateSquadPermission | None -> false
@@ -454,7 +454,7 @@ let private renderSquad (useDefaultTheme, squadId, squad, currentDraft, pickedCo
                 tr false [
                     td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                     td [ RctH.ofOption eliminated ]
-                    td [ [ str (sprintf "%i" seeding) ] |> para theme paraCentredSmallest ]
+                    td [ [ str (squad.Seeding |> seedingText) ] |> para theme paraCentredSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
                     td [ RctH.ofOption draftLeft ]
                     td [ RctH.ofOption draftRight ]

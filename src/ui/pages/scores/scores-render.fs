@@ -277,7 +277,7 @@ let private score (points:int<point>) (pickedByPoints:int<point> option) pickedB
 let private renderSweepstakerSquad (useDefaultTheme, userId, squadId, squad, draftOrdinal, timestamp, userDic:UserDic, fixtureDic:FixtureDic) =
     let theme = getTheme useDefaultTheme
     div divCentred [
-        let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
+        let (SquadName squadName), (CoachName coachName) = squad.SquadName, squad.CoachName
         let eliminated = if squad.Eliminated then [ [ str "Eliminated" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme paraDefaultSmallest |> Some else None
         let points, pickedByPoints = teamPoints fixtureDic squadId (timestamp |> Some)
         let score = score points pickedByPoints (userId |> Some) userDic
@@ -294,7 +294,7 @@ let private renderSweepstakerSquad (useDefaultTheme, userId, squadId, squad, dra
                 tr false [
                     td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                     td [ RctH.ofOption eliminated ]
-                    td [ [ str (sprintf "%i" seeding) ] |> para theme paraCentredSmallest ]
+                    td [ [ str (squad.Seeding |> seedingText) ] |> para theme paraCentredSmallest ]
                     td [ [ str coachName ] |> para theme paraDefaultSmallest ]
                     td [ RctH.ofOption ((draftOrdinal, timestamp) |> pickedIn theme) ]
                     td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ] ] ] ]
@@ -352,14 +352,14 @@ let private renderBestTeams (useDefaultTheme, unpickedOnly, squadDic:SquadDic, u
     let theme = getTheme useDefaultTheme
     div divCentred [
         let squadRow (squad, points, pickedByPoints, pickedByUserId) =
-            let (SquadName squadName), (CoachName coachName), (Seeding seeding) = squad.SquadName, squad.CoachName, squad.Seeding
+            let (SquadName squadName), (CoachName coachName) = squad.SquadName, squad.CoachName
             let eliminated = if squad.Eliminated then [ [ str "Eliminated" ] |> tag theme { tagWarning with IsRounded = false } ] |> para theme paraDefaultSmallest |> Some else None
             let pickedByTag = if unpickedOnly |> not then squad.PickedBy |> pickedByTag theme userDic authUser else None
             let score = score points pickedByPoints pickedByUserId userDic
             tr false [
                 td [ [ str squadName ] |> para theme paraDefaultSmallest ]
                 td [ RctH.ofOption eliminated ]
-                td [ [ str (sprintf "%i" seeding) ] |> para theme paraCentredSmallest ]
+                td [ [ str (squad.Seeding |> seedingText) ] |> para theme paraCentredSmallest ]
                 td [ [ str coachName ] |> para theme paraDefaultSmallest ]
                 td [ RctH.ofOption pickedByTag ]
                 td [ [ score ] |> para theme { paraDefaultSmallest with ParaAlignment = RightAligned } ] ]
@@ -498,7 +498,7 @@ let render (useDefaultTheme, state, authUser:AuthUser option, usersProjection:Pr
                     | _ :: _ ->
                         yield lazyViewOrHMR renderSweepstakerPlayers (useDefaultTheme, currentUserId, players, userDic, fixtureDic)
                     | [] -> ()
-                | None -> yield [ str "Coming soon" ] |> para theme paraCentredSmaller // note: should never happen*
+                | None -> yield [ br ; str "Coming soon" ] |> para theme paraCentredSmaller // note: should never happen
             | Best best ->
                 let best = match best with | Some best -> best | None -> Teams
                 let bestTabs = bestTabs best (ShowBest >> dispatch)

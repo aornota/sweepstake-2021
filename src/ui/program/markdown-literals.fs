@@ -1,58 +1,53 @@
 module Aornota.Sweepstake2021.Ui.Program.Markdown.Literals
 
-// TODO-NMB: Review...
+let [<Literal>] SCORING_SYSTEM_MARKDOWN = """Each sweepstake team will consist of a **team/coach**, **1 goalkeeper** and **10 outfield players**.
 
-let [<Literal>] SCORING_SYSTEM_MARKDOWN = """##### **Please note:**
-
-The scoring system is slightly different from [that used](http://aornota.github.io/sweepstake.2015/scoring.html) for the world-famous Rugby World Cup 2015 sweepstake:
-+ **team/coach** points - for **winning** or **drawing** matches; and per **bonus point** earned - are a little higher
-+ **player** points - for being named **man-of-the-match**; and for scoring a **try** - are now higher for **forwards** than for **backs**
-
-(There are no changes to points relating to penalty kicks, conversions or drop goals as I can only recall two instances of forwards attempting these: a
-[piss-poor effort](https://www.youtube.com/watch?v=XH-aV_36WVM) from Sergio Parisse; and a [comedy conversion](https://www.youtube.com/watch?v=x5b0yMxQ088) from Johnny Redelinghuys.)
-
-These changes are intended to address the [dominance of backs](http://aornota.github.io/sweepstake.2015/index.html#Top%20teams/coaches) in the "top scorer" charts last time.
-
-##### **Scoring system:**
-
-Each sweepstake team will consist of a **team/coach**, **8 forwards** and **7 backs**.
+(Although outfield players have been categorized as defenders, midfielders or forwards, you can choose any combination you like, e.g. if you want to go for eight defenders and two
+midfielders - the no-longer-fashionable [except in Northern Ireland] 8-2-0 formation - please do.)
 
 The **team/coach** will score (or lose) points for:
-+ **winning** a match: _**12**_ or _**10**_ or _**8**_ (see below)
-+ **drawing** a match: _**6**_ or _**5**_ or _**4**_ (see below)
-+ per **bonus point** earned: _**4**_ or _**3**_ or _**2**_ (see below)
-+ the team scoring a **penalty try**: _**6**_
-+ a team player receiving a **yellow card**: _**-2**_
-+ a team player receiving a **red card**: _**-4**_
++ **winning** a match: **20** or **16** or **12** (see below)
++ **drawing** a match: **8** or **6** or **4** (see below)
++ a team player receiving a **yellow card**: **-1**
++ a team player receiving a **red card**: **-3**
 
 (If a player receives a second yellow card in a match, the two yellow cards will be scored as a red card instead; however, if a player receives a yellow card followed by a "straight"
 red card, both cards will be scored.)
 
-Where multiple possible scores are given above, the score will depend on whether the team and their opponents are in the top 8 seeds:
-+ if the team **is** a top 8 seed but their opponents are **not**, the **lowest** score will apply
-+ if the team is **not** a top 8 seed but their opponents **are**, the **highest** score will apply
-+ if **both** teams are top 8 seeds - or if **neither** team is - the **middle** score will apply
+Where multiple possible scores are given above, the score will depend on whether the team and their opponents are in the top 12 seeds:
++ if the team **is** a top 12 seed but their opponents are **not**, the **lowest** score will apply
++ if the team is **not** a top 12 seed but their opponents **are**, the **highest** score will apply
++ if **both** teams are top 12 seeds - or if **neither** team is - the **middle** score will apply
 
-The top 8 seeds are (in order): New Zealand; England; Australia; Ireland; Scotland; France; South Africa; and Wales.
+The top 12 seeds are (in order): Belgium; Italy; England; Germany; Spain; Ukraine; France; Poland; Switzerland; Croatia; Netherlands; and Russia.
 
-The remaining teams are: Argentina; Canada; Fiji; Georgia; Italy; Japan; Namibia; Russia; Samoa; Tonga; United States; and Uruguay.
+The remaining teams are: Austria; Czech Republic; Denmark; Finland; Hungary; North Macedonia; Portugal; Scotland; Slovakia; Sweden; Turkey; and Wales.
 
-The team can earn _up to two_ bonus points (weighted as outlined above) for:
-+ scoring 4 or more tries in a match
-+ losing by 7 points or fewer
+**All players** will score (or lose) points for:
++ being named **man-of-the-match**: **15**
++ **scoring** a **goal** or a **penalty**: **12**
++ **assisting** a **goal**: **3** (note that a goal cannot be assisted by the same player who scored the goal)
++ **missing** a **penalty**: **-6**
++ **scoring** an **own goal**: **-6**
++ receiving a **yellow card**: **-2**
++ receiving a **red card**: **-6**
 
-The **forwards** and **backs** will score (or lose) points for:
-+ being named **man-of-the-match**: _**13**_ for **forwards** and _**10**_ for **backs**
-+ scoring a **try**: _**12**_ for **forwards** and _**9**_ for **backs**
-+ kicking a **drop goal** or **penalty**: _**3**_
-+ kicking a **conversion**: _**2**_
-+ _missing_ a **conversion**: _**-1**_
-+ _missing_ a **penalty**: _**-2**_
-+ receiving a **yellow card**: _**-3**_
-+ receiving a **red card**: _**-6**_
+(A penalty will be considered as "missed" irrespective of whether the goalkeeper touched the ball. And again, if a player receives a second yellow card in a match, the two yellow cards
+will be scored as a red card instead; however, if a player receives a yellow card followed by a "straight" red card, both cards will be scored.)
 
-(If penalties or conversions are retaken for any reason, only the outcome of the final attempt will be scored. And again, if a player receives a second yellow card in a match, the two
-yellow cards will be scored as a red card instead; however, if a player receives a yellow card followed by a "straight" red card, both cards will be scored.)"""
+In addition, **goalkeepers** will score points for:
++ keeping a **clean sheet**: **12**
++ **saving** a **penalty**: **12**
+
+Note that outfield players can also score "goalkeeper" points if they end up playing in goal. (It probably won't happen - but you never know...)
+
+(If more than one goalkeeper features for a team in a match, the "clean sheet" points will be awarded to whichever goalkeeper played more "regulation" minutes; if they played the same
+amount of minutes, the points will be shared. A penalty will only be considered as "saved" if the goalkeeper touched the ball.)
+
+Information about assists and such will be nicked from <https://www.whoscored.com/>.
+
+As always, points can only be scored for goals / penalties / assists / &c. during normal time and extra time. **Penalty shootouts do not contribute to the scoring** [except to the extent 
+that they determine who wins the match] - well, unless a player manages to get booked or sent-off during the shootout. Stranger things have happened..."""
 
 let [<Literal>] DRAFT_ALGORITHM_MARKDOWN = """This is not the easiest thing to explain - so let's try a simplified example:
 
@@ -91,13 +86,17 @@ And for the third round, **neph** and **rosie** have uncontested picks (Saki and
 ---
 It's not a perfect algorithm by any means. But it's the best I've been able to come up with...
 
-For a more detailed example, here are the [first and second draft details](http://aornota.github.io/sweepstake.2015/draft.html) for the world-famous Rugby World Cup 2015 sweepstake."""
+For a more detailed example, here are the [first and second draft details](http://aornota.github.io/sweepstake.2016/draft.html) for the world-famous Euro 2016 sweepstake."""
+
+// TODO-NMB: Confirm payouts...
 
 let [<Literal>] PAYOUTS_MARKDOWN = """##### **Payouts:**
 + **£TBC** for first place
 + **$TBC** for second place
 + **£TBC** for third place
-+ **£TBC** for the wooden spoon"""
++ **£TBC** for the wooden spoon
+
+_Payouts will be confirmed once the number of participating sweepstakers is known._"""
 
 let [<Literal>] MARKDOWN_SYNTAX_MARKDOWN = """# Markdown syntax
 ### A very quick introduction
@@ -112,7 +111,7 @@ This is part of the same paragraph.
 
 But this is a new paragraph.
 
-This is a picture by the wonderful Gregory Kondos:
+This is a picture by the wonderful Gregory Kondos (RIP):
 
 ![Text if image not found...](https://tinyurl.com/y76sbjyr "Sacremento River with 32 Palms")
 
@@ -120,6 +119,7 @@ This is a list of Mdou Moctar albums:
 
 | Name | Released |   |
 |:-----|---------:|:-:|
+| [_Afrique Victime_](https://mdoumoctar.bandcamp.com/album/afrique-victime) | May 2021 | ![](https://tinyurl.com/435x7vay) |
 | [_Ilana: The Creator_](https://mdoumoctar.bandcamp.com/album/ilana-the-creator) | March 2019 | ![](https://tinyurl.com/y3285qgd "Like ZZ Top freaking out with Eddie Van Halen in 1975") |
 | [_Blue Stage Session_](https://mdoumoctar.bandcamp.com/album/mdou-moctar-blue-stage-session) | January 2019 | ![](https://tinyurl.com/y6roz6yn "Live in Detroit") |
 | [_Sousoume Tamachek_](https://mdoumoctar.bandcamp.com/album/sousoume-tamachek) | September 2017 | ![](https://tinyurl.com/ybjew7oo "Quite possibly my favourite album") |

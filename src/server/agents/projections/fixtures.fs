@@ -37,7 +37,7 @@ type private MatchEventDic = Dictionary<MatchEventId, MatchEvent>
 type private Fixture = { Rvn : Rvn ; Stage : Stage ; HomeParticipant : Participant ; AwayParticipant : Participant ; KickOff : DateTimeOffset ; MatchEventDic : MatchEventDic }
 type private FixtureDic = Dictionary<FixtureId, Fixture>
 
-type private SquadDic = Dictionary<SquadId, Seeding>
+type private SquadDic = Dictionary<SquadId, Seeding option>
 
 type private Projectee = { LastRvn : Rvn }
 type private ProjecteeDic = Dictionary<ConnectionId, Projectee>
@@ -101,41 +101,38 @@ let private cards (matchEventDic:MatchEventDic) =
             pair, cards)
 
 let private teamScoreEvents fixture role forSquadId againstSquadId (cards:((SquadId * PlayerId) * Card list) list) matchOutcome (squadDic:SquadDic) =
-    let seeding squadId = if squadId |> squadDic.ContainsKey then squadDic.[squadId] |> Some else None
-    match forSquadId |> seeding, againstSquadId |> seeding with
-    | Some forSeeding, Some againstSeeding ->
-        let matchResult =
-            match matchOutcome.PenaltyShootoutOutcome with
-            | Some penaltyShootoutOutcome ->
-                if penaltyShootoutOutcome.HomeScore > penaltyShootoutOutcome.AwayScore then HomeWin else AwayWin
-            | None ->
-                if matchOutcome.HomeGoals > matchOutcome.AwayGoals then HomeWin
-                else if matchOutcome.HomeGoals < matchOutcome.AwayGoals then AwayWin
-                else Draw
-        let forIsTop16, againstIsTop16 = forSeeding <= Seeding 16, againstSeeding <= Seeding 16
-        let matchResultEvent =
-            match role, matchResult with
-            | Home, HomeWin | Away, AwayWin ->
-                let points = match forIsTop16, againstIsTop16 with | true, false -> 12<point> | false, true -> 20<point> | _ -> 16<point>
-                [ MatchWon, points ]
-            | _, Draw ->
-                match fixture.Stage with
-                | Group _ ->
-                    let points = match forIsTop16, againstIsTop16 with | true, false -> 4<point> | false, true -> 8<point> | _ -> 6<point>
-                    [ MatchDrawn, points ]
-                | _ -> [] // note: no draws for knockout matches
-            | Home, AwayWin | Away, HomeWin -> []
-        let cardEvents =
-            cards |> List.collect (fun ((squadId, playerId), cards) ->
-                if squadId = forSquadId then
-                    cards |> List.map (fun card ->
-                        match card with
-                        | Yellow -> (playerId, Yellow) |> PlayerCard, -1<point>
-                        | SecondYellow -> (playerId, SecondYellow) |> PlayerCard, -2<point>
-                        | Red -> (playerId, Red) |> PlayerCard, -3<point>)
-                else [])
-        matchResultEvent @ cardEvents
-    | _ -> [] // note: should never happen
+    let isTop12 squadId = if squadId |> squadDic.ContainsKey then match squadDic.[squadId] with | Some seeding -> seeding <= Seeding 12 | None -> false else false
+    let forIsTop12, againstIsTop12 = forSquadId |> isTop12, againstSquadId |> isTop12
+    let matchResult =
+        match matchOutcome.PenaltyShootoutOutcome with
+        | Some penaltyShootoutOutcome ->
+            if penaltyShootoutOutcome.HomeScore > penaltyShootoutOutcome.AwayScore then HomeWin else AwayWin
+        | None ->
+            if matchOutcome.HomeGoals > matchOutcome.AwayGoals then HomeWin
+            else if matchOutcome.HomeGoals < matchOutcome.AwayGoals then AwayWin
+            else Draw
+    let matchResultEvent =
+        match role, matchResult with
+        | Home, HomeWin | Away, AwayWin ->
+            let points = match forIsTop12, againstIsTop12 with | true, false -> 12<point> | false, true -> 20<point> | _ -> 16<point>
+            [ MatchWon, points ]
+        | _, Draw ->
+            match fixture.Stage with
+            | Group _ ->
+                let points = match forIsTop12, againstIsTop12 with | true, false -> 4<point> | false, true -> 8<point> | _ -> 6<point>
+                [ MatchDrawn, points ]
+            | _ -> [] // note: no draws for knockout matches
+        | Home, AwayWin | Away, HomeWin -> []
+    let cardEvents =
+        cards |> List.collect (fun ((squadId, playerId), cards) ->
+            if squadId = forSquadId then
+                cards |> List.map (fun card ->
+                    match card with
+                    | Yellow -> (playerId, Yellow) |> PlayerCard, -1<point>
+                    | SecondYellow -> (playerId, SecondYellow) |> PlayerCard, -2<point>
+                    | Red -> (playerId, Red) |> PlayerCard, -3<point>)
+            else [])
+    matchResultEvent @ cardEvents
 
 let private playerScoreEvents forSquadId (cards:((SquadId * PlayerId) * Card list) list) (matchEventDic:MatchEventDic) =
     let nonCardEvents =

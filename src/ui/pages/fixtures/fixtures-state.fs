@@ -18,7 +18,7 @@ open Elmish
 open System
 
 let initialize () : State * Cmd<Input> =
-    { CurrentFixturesFilter = KnockoutFixtures ; LastGroup = None ; ConfirmParticipantState = None ; AddMatchEventState = None ; RemoveMatchEventState = None }, Cmd.none
+    { CurrentFixturesFilter = AllFixtures ; LastGroup = None ; ConfirmParticipantState = None ; AddMatchEventState = None ; RemoveMatchEventState = None }, Cmd.none
 
 let private shouldNeverHappenCmd debugText = debugText |> shouldNeverHappenText |> debugDismissableMessage |> AddNotificationMessage |> Cmd.ofMsg
 
