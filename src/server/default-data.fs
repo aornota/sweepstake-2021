@@ -392,7 +392,7 @@ let private createInitialFixturesEventsIfNecessary = async {
 
         // Round-of-16
         let runnerUpAVsRunnerUpBKO = (2021, 06, 26, 16, 00) |> dateTimeOffsetUtc
-        let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 38u, RoundOf16 38u, Unconfirmed (RunnerUp GroupA), Unconfirmed (RunnerUp GroupD), runnerUpAVsRunnerUpBKO) |> fixtures.HandleCreateFixtureCmdAsync)
+        let! result = nephTokens.CreateFixtureToken |> ifToken (fun token -> (token, nephId, fixtureId 38u, RoundOf16 38u, Unconfirmed (RunnerUp GroupA), Unconfirmed (RunnerUp GroupB), runnerUpAVsRunnerUpBKO) |> fixtures.HandleCreateFixtureCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateFixtureCmdAsync (match %i)" 38u)
 
         let winnerAVsRunnerUpCKO = (2021, 06, 26, 19, 00) |> dateTimeOffsetUtc
