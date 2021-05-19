@@ -1,9 +1,9 @@
 {
 	"editor.fontSize": 12
 	, "files.exclude": {
-		".fable/": true
+		".config/": true
+		, ".fable/": true
 		, ".fake/": true
-		, ".ionide/": true
 		, ".paket/": true
 		, "node_modules": true
 		, "packages/": true
