@@ -392,7 +392,7 @@ let private currentDraftSummary useDefaultTheme authUser (_, draft:Draft) (curre
                     match stillRequired with
                     | Some _ ->
                         [
-                            str "Please select teams/coaches, forwards and backs (as required) on the "
+                            str "Please select teams/coaches, goalkeepers and outfield players (as required) on the "
                             [ str "Squads" ] |> link theme (Internal (fun _ -> SquadsPage |> UnauthPage |> ShowPage |> dispatch))
                             str " page. You can prioritize your selections on the "
                             [ str "Drafts" ] |> link theme (Internal (fun _ -> DraftsPage |> AuthPage |> ShowPage |> dispatch))
