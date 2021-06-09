@@ -478,30 +478,22 @@ let private createInitialDraftsEventsIfNecessary = async {
         [] |> drafts.OnDraftsEventsRead
         [] |> drafts.OnUserDraftsEventsRead
 
-        // TODO-NMB-2021: Confirm draft deadlines...
-
         let draft1Id, draft1Ordinal = Guid "00000000-0000-0000-0000-000000000001" |> DraftId, DraftOrdinal 1
-        let draft1Starts, draft1Ends = (2021, 06, 01, 21, 30) |> dateTimeOffsetUtc, (2021, 06, 07, 17, 00) |> dateTimeOffsetUtc
+        let draft1Starts, draft1Ends = (2021, 06, 02, 17, 30) |> dateTimeOffsetUtc, (2021, 06, 07, 17, 00) |> dateTimeOffsetUtc
         let draft1Type = (draft1Starts, draft1Ends) |> Constrained
         let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft1Id, draft1Ordinal, draft1Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft1Id draft1Ordinal)
 
         let draft2Id, draft2Ordinal = Guid "00000000-0000-0000-0000-000000000002" |> DraftId, DraftOrdinal 2
-        let draft2Starts, draft2Ends = (2021, 06, 07, 21, 30) |> dateTimeOffsetUtc, (2021, 06, 09, 17, 00) |> dateTimeOffsetUtc
+        let draft2Starts, draft2Ends = (2021, 06, 07, 17, 15) |> dateTimeOffsetUtc, (2021, 06, 09, 17, 00) |> dateTimeOffsetUtc
         let draft2Type = (draft2Starts, draft2Ends) |> Constrained
         let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft2Id, draft2Ordinal, draft2Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft2Id draft2Ordinal)
 
         let draft3Id, draft3Ordinal = Guid "00000000-0000-0000-0000-000000000003" |> DraftId, DraftOrdinal 3
-        let draft3Starts, draft3Ends = (2021, 06, 09, 21, 30) |> dateTimeOffsetUtc, (2021, 06, 10, 17, 00) |> dateTimeOffsetUtc
-        let draft3Type = (draft3Starts, draft3Ends) |> Constrained
+        let draft3Type = Unconstrained
         let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft3Id, draft3Ordinal, draft3Type) |> drafts.HandleCreateDraftCmdAsync)
         result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft3Id draft3Ordinal)
-
-        let draft4Id, draft4Ordinal = Guid "00000000-0000-0000-0000-000000000004" |> DraftId, DraftOrdinal 4
-        let draft4Type = Unconstrained
-        let! result = nephTokens.ProcessDraftToken |> ifToken (fun token -> (token, nephId, draft4Id, draft4Ordinal, draft4Type) |> drafts.HandleCreateDraftCmdAsync)
-        result |> logShouldSucceed (sprintf "HandleCreateDraftCmdAsync (%A %A)" draft4Id draft4Ordinal)
 
         // Note: Reset Drafts agent [to pendingAllRead] so that it handles subsequent DraftsEventsRead event (&c.) appropriately (i.e. from readPersistedEvents).
         "resetting Drafts agent" |> Info |> log
