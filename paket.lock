@@ -807,7 +807,7 @@ GITHUB
       Microsoft.Rest.ClientRuntime.Azure.Authentication (2.3.2)
 GROUP server
 STORAGE: NONE
-RESTRICTION: == net50
+RESTRICTION: == net5.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
     Fable.Core (3.2.9)
